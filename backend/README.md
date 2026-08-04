@@ -1,358 +1,202 @@
-# AI Orchestrator
+# AI Orchestrator Backend
 
-A production-oriented Local AI Orchestrator built with FastAPI and Ollama.
+A local AI orchestration backend built with FastAPI and Ollama.
 
-Unlike a traditional chatbot, this project intelligently processes incoming requests, determines the user's intent, detects whether tools are required, selects the most appropriate local LLM, and returns optimized responses while collecting detailed metrics.
+This service processes incoming chat requests, detects intent, decides whether a tool call is needed, routes the request to the best local LLM, maintains session memory, logs performance metrics, and returns structured responses.
 
----
+## Key Features
 
-# Features
+- Intent-aware request processing
+- Prompt optimization and normalization
+- Tool detection and execution
+- Model routing based on intent
+- Streaming and non-streaming chat responses
+- Session memory support
+- PostgreSQL request logging
+- Local Ollama model integration
 
-## Intelligent Request Processing
+## Architecture Overview
 
-- Intent Classification
-- Prompt Normalization
-- Clarification Detection
-- Entity Extraction
-- Tool Detection
-- Web Requirement Detection
-- Structured JSON Output
+1. Incoming request arrives at `/chat` or `/chat/stream`
+2. The processor analyzes the message with `qwen2.5:1.5b`
+3. If a tool is required, the tool executes directly and returns a result
+4. Otherwise, the router selects a model from the registry
+5. The selected model receives the user message plus session history
+6. The assistant response is returned and stored in memory
+7. Request metrics are logged to PostgreSQL
 
-Processor Model:
+## Supported Models
 
-```
-qwen2.5:1.5b
-```
+The model registry currently maps intents to local Ollama models:
 
----
+- `general` → `qwen3:8b`
+- `coding` → `qwen2.5-coder:7b`
+- `study` → `gemma4:e4b`
+- `reasoning` → `deepseek-r1:8b`
+- Processor → `qwen2.5:1.5b`
 
-## Model Routing
+## Requirements
 
-Automatically routes requests to the most suitable model.
+- Python 3.11+
+- PostgreSQL
+- Ollama running locally
 
-Example routing:
+## Installation
 
-| Intent | Model |
-|---------|-------|
-| General | Qwen3 |
-| Coding | Qwen2.5-Coder |
-| Study | Gemma |
-| Reasoning | DeepSeek |
-
----
-
-## Tool Calling
-
-Supports direct tool execution without invoking a large language model.
-
-Currently implemented:
-
-- Calculator
-- Date & Time
-
-Example:
-
-User
-
-```
-250 * 450
+```bash
+cd backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-Processor
+## Environment Variables
 
-```
-needs_tool = true
-tool = calculator
-```
+Create a `.env` file in `backend/` or set these variables in your environment:
 
-Result
+- `OLLAMA_URL` - Ollama server URL (default: `http://localhost:11434`)
+- `APP_NAME` - application name (default: `AI Orchestrator`)
+- `OLLAMA_KEEP_ALIVE` - Ollama keep-alive setting (default: `10s`)
+- `DATABASE_URL` - Async PostgreSQL URL, e.g. `postgresql+asyncpg://user:pass@host:5432/dbname`
 
-```
-112500
-```
+## Run Locally
 
-The LLM is skipped completely, reducing latency from minutes to only a few seconds.
-
----
-
-## Conversation Memory
-
-Stores conversation history during a session and provides previous messages as context to the selected model.
-
-Current implementation:
-
-- In-memory conversation history
-
-Planned:
-
-- Database-backed memory
-- Memory summarization
-- Long-term memory retrieval
-
----
-
-## PostgreSQL Logging
-
-Every request is logged with useful metrics including:
-
-- Original prompt
-- Optimized prompt
-- Intent
-- Confidence
-- Selected model
-- Processor latency
-- Generation latency
-- Total latency
-- Prompt tokens
-- Completion tokens
-- Response length
-- Tokens/sec
-- CPU usage
-- Context usage
-- Model load time
-
----
-
-## Streaming Responses
-
-Supports streaming responses from Ollama for real-time generation.
-
----
-
-# Architecture
-
-```
-                    User
-                      │
-                      ▼
-            Request Processor
-            (qwen2.5:1.5B)
-                      │
-     ┌────────────────┴─────────────────┐
-     │                                  │
-Intent Classification         Prompt Normalization
-     │                                  │
-     ├──────────────┐                   │
-     │              │                   │
-Tool Detection   Web Detection          │
-     │                                  │
-     ▼                                  ▼
- Tool Service                        Router
-     │                                 │
-     │                           Select Best Model
-     │                                 │
-     ├──────── Yes ─────────────────────┘
-     │
-Execute Calculator /
-DateTime Tool
-     │
-Return Result
-     │
-     └──────── No ─────────────────────►
-                              Selected LLM
-                       (Qwen3 / Gemma / DeepSeek)
-                                       │
-                               Memory Service
-                                       │
-                                Response Logger
-                                       │
-                                 PostgreSQL
-                                       │
-                                    Response
+```bash
+cd backend
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
----
+## API Endpoints
 
-# Project Structure
+### Health
 
+```http
+GET /health
 ```
-ai-orchestrator/
-│
+
+Response:
+
+- `status`: `running`
+- `ollama`: `online` or `offline`
+
+### Root
+
+```http
+GET /
+```
+
+Response:
+
+- `status`: `running`
+
+### Models
+
+```http
+GET /models
+```
+
+Returns available Ollama models from the local runtime.
+
+### Chat
+
+```http
+POST /chat
+```
+
+Request body:
+
+```json
+{
+  "message": "Hello, what can you do?"
+}
+```
+
+Response schema:
+
+- `success`
+- `session_id`
+- `intent`
+- `model`
+- `latency_ms`
+- `response`
+
+### Streaming Chat
+
+```http
+POST /chat/stream
+```
+
+Returns streamed text chunks from the selected Ollama model.
+
+### Conversation Creation
+
+```http
+POST /conversations
+```
+
+Returns a new `conversation_id` for session tracking.
+
+## Project Structure
+
+```text
+backend/
 ├── app/
-│   ├── main.py
 │   ├── config.py
-│   ├── router.py
+│   ├── main.py
 │   ├── ollama_client.py
+│   ├── router.py
 │   ├── schemas.py
-│   │
 │   ├── processor/
 │   │   ├── processor.py
 │   │   └── system_prompt.py
-│   │
 │   ├── database/
 │   │   ├── database.py
 │   │   ├── session.py
 │   │   ├── models.py
 │   │   └── init_db.py
-│   │
 │   ├── services/
 │   │   ├── chat_service.py
 │   │   ├── database_service.py
 │   │   ├── memory_service.py
 │   │   └── tool_service.py
-│   │
 │   ├── tools/
 │   │   ├── base_tool.py
-│   │   ├── registry.py
 │   │   ├── calculator.py
 │   │   ├── datetime_tool.py
-│   │   └── planner.py
-│   │
+│   │   ├── planner.py
+│   │   └── registry.py
 │   └── utils/
 │       └── logger.py
-│
 ├── logs/
-│   └── requests.jsonl
-│
 ├── requirements.txt
-├── README.md
-└── run.py
+└── README.md
 ```
 
----
+## Tool Support
 
-# Current Tech Stack
+The backend currently includes:
 
-Backend
+- `calculator`
+- `datetime` / `date & time`
 
-- FastAPI
-- Python
+If the processor flags `needs_tool`, the tool executes directly and bypasses the LLM.
 
-LLM Runtime
+## Notes
 
-- Ollama
+- The processor uses `qwen2.5:1.5b` to analyze and classify incoming text.
+- The router maps detected intents to a local Ollama model.
+- Conversation memory is stored in memory for the current session.
+- Request metadata is saved to PostgreSQL using SQLAlchemy and `asyncpg`.
 
-Database
+## Roadmap
 
-- PostgreSQL
-- SQLAlchemy
+- Database-backed memory and retrieval
+- Memory summarization
+- Retrieval-augmented generation (RAG)
+- Additional tool integrations
+- Docker support and production deployment
+- Authentication, monitoring, and rate limiting
 
-Local Models
+## License
 
-- Qwen3
-- Gemma
-- Qwen2.5-Coder
-- DeepSeek
-- Qwen2.5:1.5B (Processor)
-
----
-
-# Current Progress
-
-## Core Infrastructure
-
-- ✅ FastAPI Backend
-- ✅ Ollama Integration
-- ✅ Processor
-- ✅ Model Router
-- ✅ Conversation Memory
-- ✅ PostgreSQL Logging
-- ✅ Streaming Responses
-
----
-
-## Processor
-
-- ✅ Intent Classification
-- ✅ Prompt Normalization
-- ✅ Clarification Detection
-- ✅ Entity Extraction
-- ✅ Tool Detection
-- ✅ Web Requirement Detection
-
----
-
-## Tools
-
-- ✅ Tool Registry
-- ✅ Tool Service
-- ✅ Calculator
-- ✅ Date & Time
-
----
-
-## Metrics
-
-- ✅ Request Latency
-- ✅ Generation Latency
-- ✅ Prompt Tokens
-- ✅ Completion Tokens
-- ✅ CPU Usage
-- ✅ Tokens Per Second
-- ✅ Context Usage
-- ✅ Model Load Time
-
----
-
-# Roadmap
-
-## Phase 2 — Intelligence
-
-- Better Conversation Memory
-- Database-backed Memory
-- Memory Summarization
-- Context Retrieval
-- Self-improving Router
-
----
-
-## Phase 3 — Knowledge
-
-- Retrieval-Augmented Generation (RAG)
-- Vector Database
-- Embedding Models
-- Document Ingestion
-- Local Knowledge Base
-
----
-
-## Phase 4 — Automation
-
-- Web Search
-- File Reader
-- File Writer
-- API Tools
-- Email Tools
-- Weather Tool
-- Currency Converter
-- Unit Converter
-- n8n Integration
-- MCP Integration
-
----
-
-## Phase 5 — Production
-
-- Docker
-- Authentication
-- Rate Limiting
-- Monitoring
-- Benchmarking
-- Response Caching
-- Frontend Dashboard
-
----
-
-# Project Vision
-
-The goal of this project is to build a production-quality Local AI Orchestrator rather than a simple chatbot.
-
-The orchestrator should:
-
-- Understand user intent
-- Normalize prompts
-- Detect and execute tools
-- Route requests to the best local LLM
-- Integrate external knowledge through Web Search and RAG
-- Support multi-tool planning and orchestration
-- Maintain conversation context
-- Collect detailed performance metrics
-- Operate entirely with local models
-
-Ultimately, it will function as a modular AI gateway capable of coordinating multiple language models, tools, and knowledge sources through a single intelligent orchestration pipeline.
-
----
-
-# License
-
-This project is intended for learning, experimentation, and research into AI orchestration systems.
+This repository is intended for experimentation, learning, and research in local AI orchestration.
