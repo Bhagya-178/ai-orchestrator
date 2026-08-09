@@ -17,9 +17,9 @@ class ToolService:
         tool = self.registry.get(tool_name)
 
         if tool is None:
-            return {
-                "success": False,
-                "error": f"Tool '{tool_name}' not found."
-            }
+            # Unknown tool (e.g. the classifier hallucinated a name): not
+            # a real execution, so signal "no tool" so the pipeline falls
+            # back to the LLM instead of answering with this error.
+            return None
 
         return await tool.execute(**kwargs)

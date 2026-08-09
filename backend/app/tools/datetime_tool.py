@@ -46,6 +46,13 @@ class DateTimeTool(BaseTool):
                 "result": now.strftime("%Y-%m-%d %H:%M:%S"),
             }
 
+        elif output_format == "year":
+            return {
+                "success": True,
+                "tool": self.name,
+                "result": now.strftime("%Y"),
+            }
+
         return {
             "success": False,
             "tool": self.name,

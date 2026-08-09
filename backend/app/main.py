@@ -15,7 +15,7 @@ from app.schemas import (
     ModelsResponse,
 )
 
-from app.services.chat_service import chat_service
+from app.services.chat_pipeline import chat_pipeline
 from app.ollama_client import ollama
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +24,6 @@ from app.database.session import get_db
 
 
 import uuid
-session_id = str(uuid.uuid4())
 
 
 
@@ -59,15 +58,19 @@ async def chat(
 
     message = request.message.strip()
 
-    result = await chat_service.chat(
-        session_id=str(uuid.uuid4()),
+    # Use the client's session_id when provided so a conversation can be
+    # resumed across requests; otherwise start a new one.
+    request_session_id = request.session_id or str(uuid.uuid4())
+
+    result = await chat_pipeline.chat(
+        session_id=request_session_id,
         message=message,
         db=db,
     )
 
     return ChatResponse(
         success=True,
-        session_id=session_id,
+        session_id=request_session_id,
         intent=result["intent"],
         model=result["model"],
         latency_ms=result["latency_ms"],
@@ -75,14 +78,20 @@ async def chat(
     )
 
 @app.post("/chat/stream")
-async def stream_chat(request: ChatRequest):
+async def stream_chat(
+    request: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+):
 
     message = request.message.strip()
 
+    request_session_id = request.session_id or str(uuid.uuid4())
+
     return StreamingResponse(
-        chat_service.stream_chat(
-            session_id=str(uuid.uuid4()),
-            message=message
+        chat_pipeline.stream_chat(
+            session_id=request_session_id,
+            message=message,
+            db=db,
         ),
         media_type="text/plain"
     )

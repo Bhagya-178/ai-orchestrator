@@ -62,3 +62,22 @@ class RequestLog(Base):
     # Response
     response_length = Column(Integer)
     done_reason = Column(String)
+
+
+class ConversationMessage(Base):
+
+    __tablename__ = "conversation_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # A single session_id holds the whole conversation thread.
+    session_id = Column(String, index=True)
+
+    # "user" | "assistant"
+    role = Column(String)
+    content = Column(Text)
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+    )

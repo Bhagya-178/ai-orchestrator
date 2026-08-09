@@ -190,6 +190,21 @@ This pairs with intent: general, task_type: conversation.
           needs_tool: true, tool_name: "datetime",
           tool_args: {"format": "time"}
 
+PRIORITY RULE: a question asking for the CURRENT time, date, day, or
+year ALWAYS sets needs_tool: true, tool_name: "datetime". Never answer
+it conversationally yourself — even though "current-time/date questions"
+are listed under general intent in STEP 2, they still require the tool.
+
+  Input:  "What day is it today?"
+  Output: intent: "general", task_type: "conversation",
+          needs_tool: true, tool_name: "datetime",
+          tool_args: {"format": "date"}
+
+  Input:  "What year is it?"
+  Output: intent: "general", task_type: "conversation",
+          needs_tool: true, tool_name: "datetime",
+          tool_args: {"format": "date"}
+
 If neither case applies — any conceptual, coding, or open-ended question,
 even about math or dates in the abstract — set:
 needs_tool: false, tool_name: "", tool_args: {}
