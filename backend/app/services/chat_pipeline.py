@@ -135,6 +135,7 @@ class ChatPipeline:
         # 5. Memory: build the message list sent to the model.
         #    Phase 2: summarization / retrieval land here, once.
         optimized_message = processed["optimized_prompt"]
+        await memory_service.maybe_summarize(db, session_id)
         history = await memory_service.get_history(db, session_id)
         messages = history + [{"role": "user", "content": optimized_message}]
 

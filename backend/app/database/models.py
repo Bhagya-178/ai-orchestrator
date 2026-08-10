@@ -81,3 +81,30 @@ class ConversationMessage(Base):
         DateTime,
         default=datetime.utcnow,
     )
+
+
+class SessionSummary(Base):
+    """Rolling summary for a session (Phase 2).
+
+    Oldest turns are folded into a single summary row once the session
+    grows, so the model context stays bounded instead of replaying the
+    whole history every turn.
+    """
+
+    __tablename__ = "session_summaries"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # One summary per session.
+    session_id = Column(String, unique=True, index=True)
+
+    summary = Column(Text, default="")
+
+    # id of the last raw message folded into the summary.
+    last_summarized_message_id = Column(Integer, default=0)
+
+    updated_at = Column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+    )

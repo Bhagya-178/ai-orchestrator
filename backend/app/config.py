@@ -11,3 +11,6 @@ OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "10s")
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 PROCESSOR_MODEL="qwen2.5:1.5b"
+
+# Phase 2 - model used to fold old conversation turns into a rolling summary.
+SUMMARY_MODEL = os.getenv("SUMMARY_MODEL", "qwen2.5:1.5b")
