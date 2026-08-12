@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import uuid4
 
 from sqlalchemy import (
     Column,
@@ -7,7 +8,9 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    ForeignKey,
 )
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from app.database.database import Base
 
@@ -61,7 +64,6 @@ class RequestLog(Base):
 
     # Response
     response_length = Column(Integer)
-    done_reason = Column(String)
 
 
 class ConversationMessage(Base):
@@ -108,3 +110,31 @@ class SessionSummary(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
+
+
+class Document(Base):
+    """Uploaded document for RAG."""
+
+    __tablename__ = "documents"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    filename = Column(String, index=True)
+    content_type = Column(String)
+    file_size = Column(Integer)
+    session_id = Column(String, index=True)  # optional: associate with chat session
+    doc_metadata = Column(JSONB, default={})  # extra info: pages, author, etc.
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class DocumentChunk(Base):
+    """Text chunk with embedding reference."""
+
+    __tablename__ = "document_chunks"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), index=True)
+    chunk_index = Column(Integer)
+    content = Column(Text)
+    qdrant_point_id = Column(String, unique=True, index=True)  # reference to Qdrant
+    chunk_metadata = Column(JSONB, default={})  # page_num, section, etc.
+    created_at = Column(DateTime, default=datetime.utcnow)

@@ -17,6 +17,7 @@ SCHEMA (return exactly these fields):
   "clarification_questions": [],
   "entities": [],
   "requires_web": false,
+  "needs_rag": false,
   "needs_tool": false,
   "tool_name": "",
   "tool_args": {},
@@ -103,6 +104,9 @@ Disambiguation — comparison:
 Disambiguation — design/architecture:
   "Explain microservices" -> study
   "Design microservices for 1 million users" -> reasoning
+Disambiguation — documents and uploads:
+  "What is in the PDF?", "Summarize my document", "Search the file for X" 
+  -> study (task_type: summarization)
 
 Technical vocabulary alone (backend, API, database, architecture) never
 by itself implies coding or reasoning — apply the rules above.
@@ -155,8 +159,51 @@ anything explicitly time-sensitive/newer than general knowledge.
 Otherwise false.
 
 ====================================================
+STEP 5.3 — NEEDS_RAG (Document Search Detection)
+====================================================
+needs_rag: true ONLY when the user explicitly asks to search, retrieve,
+find, query, read, explain, or summarize their uploaded documents, files,
+PDFs, or any content they have provided.
+
+TRIGGER PATTERNS (set needs_rag: true):
+- Direct file references: "in my document", "in my file", "in the PDF",
+  "in my upload", "inside the document", "inside the file"
+- Query patterns: "search my documents", "find in my files", "look in the PDF",
+  "what is in", "explain the document", "summarize the file"
+- Explicit calls: "extract from", "get from", "retrieve from", "read from" (user's docs)
+- Compound patterns: ANY mention of uploaded content + ANY action verb:
+  Examples:
+    "Explain the questions in the PDF"
+    "What does my document say about X?"
+    "Summarize the uploaded file"
+    "Find X inside my document"
+    "Extract the main points from the PDF"
+
+NEVER set needs_rag: true for:
+- Abstract/conceptual questions ("What is RAG?", "How does RAG work?")
+- No reference to user's uploaded content
+- General knowledge questions unrelated to documents
+
+Examples:
+  Input:  "Explain the questions that inside the day 1 python programming pdf that document is uploaded"
+  Output: needs_rag: true, intent: study, task_type: summarization
+  Reason: References specific document + action verb "explain"
+  
+  Input:  "Search my documents for implementation details"
+  Output: needs_rag: true, intent: study
+  
+  Input:  "What is RAG?"
+  Output: needs_rag: false (conceptual, no document reference)
+  
+  Input:  "Summarize my document"
+  Output: needs_rag: true, intent: study, task_type: summarization
+
+====================================================
 STEP 5.5 — TOOL SELECTION
 ====================================================
+IMPORTANT: tool selection (needs_tool) and RAG detection (needs_rag)
+are INDEPENDENT. A user might ask to search documents (needs_rag: true)
+while also asking a math question (needs_tool: true). Both can be set.
 tool_name MUST be one of exactly these three values: "calculator",
 "datetime", or "" (empty string). Any other value is invalid.
 

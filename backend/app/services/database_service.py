@@ -46,7 +46,6 @@ class DatabaseService:
             completion_tokens=data["completion_tokens"],
 
             response_length=data["response_length"],
-            done_reason=data["done_reason"],
         )
 
         db.add(log)

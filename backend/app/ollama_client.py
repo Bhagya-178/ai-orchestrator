@@ -137,7 +137,7 @@ class OllamaClient:
         "prompt": "",
         "keep_alive": 0,
     }
- 
+
          async with httpx.AsyncClient(timeout=self.timeout) as client:
 
             response = await client.post(
@@ -146,6 +146,22 @@ class OllamaClient:
         )
 
             response.raise_for_status()
+
+    async def embeddings(self, model: str, prompt: str) -> dict:
+        """Generate embeddings for a single text."""
+        payload = {
+            "model": model,
+            "prompt": prompt,
+        }
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.post(
+                f"{OLLAMA_URL}/api/embeddings",
+                json=payload,
+            )
+
+        response.raise_for_status()
+        return response.json()
 
 
 ollama = OllamaClient()

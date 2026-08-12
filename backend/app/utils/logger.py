@@ -54,7 +54,6 @@ def log_request(data: dict):
 
         # Response
         "response_length": data.get("response_length"),
-        "done_reason": data.get("done_reason"),
     }
 
     with open(LOG_FILE, "a", encoding="utf-8") as f:

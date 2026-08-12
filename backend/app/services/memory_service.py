@@ -197,6 +197,12 @@ class MemoryService:
         except Exception:
             # Summarizer unavailable? Keep the raw history; never fail the turn.
             return
+        finally:
+            # Unload summary model to free VRAM/RAM on RTX 4050
+            try:
+                await ollama.unload_model(SUMMARY_MODEL)
+            except Exception:
+                pass
 
         summary = response.get("message", {}).get("content", "").strip()
         if not summary:

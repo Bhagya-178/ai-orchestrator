@@ -24,6 +24,7 @@ from app.router import router
 from app.services.database_service import database_service
 from app.services.memory_service import memory_service
 from app.services.metrics import build_request_data
+from app.services.rag_service import rag_service
 from app.services.tool_service import ToolService
 from app.utils.logger import log_request
 
@@ -49,7 +50,6 @@ class ChatPipeline:
 
     async def chat(self, session_id: str, message: str, db) -> dict[str, Any]:
         """Run a full non-streaming turn and return the result dict."""
-        session_id = session_id or str(uuid.uuid4())
 
         async for event in self._turn(session_id, message.strip(), db):
             if event["type"] == "clarification":
@@ -69,7 +69,6 @@ class ChatPipeline:
 
     async def stream_chat(self, session_id: str, message: str, db) -> AsyncGenerator[str, None]:
         """Run a streaming turn, yielding response tokens as they arrive."""
-        session_id = session_id or str(uuid.uuid4())
 
         async for event in self._turn(session_id, message.strip(), db):
             if event["type"] == "clarification":
@@ -110,7 +109,12 @@ class ChatPipeline:
             return
 
         # 3. Tools execute directly and bypass the LLM entirely.
-        tool_result = await self._execute_tool(processed)
+        # NOTE: Skip tool execution if needs_rag is true, because tools like
+        # "calculator" might be falsely detected; RAG queries should go through
+        # the full pipeline so the LLM can use the retrieved context.
+        tool_result = None
+        if not processed.get("needs_rag", False):
+            tool_result = await self._execute_tool(processed)
 
         if tool_result is not None:
             # Persist the tool exchange too, so "what did I just ask?" style
@@ -132,9 +136,62 @@ class ChatPipeline:
         routing, routing_latency_ms = await self._run_router(processed)
         model = routing["model"]
 
+        # Phase 3: RAG retrieval (between router and memory)
+        rag_context = ""
+        
+        # 1. Check if processor detected that user wants to search documents
+        needs_rag = processed.get("needs_rag", False)
+        
+        # 2. Get the documents for the current session.
+        # This ensures we only search this user's files and don't leak other users' files.
+        session_docs = await rag_service.list_documents(db, session_id)
+        
+        # 3. Decide if we should run a vector search
+        should_search_rag = False
+        if needs_rag and session_docs:
+            # User explicitly asked to search documents AND they have documents
+            should_search_rag = True
+        elif session_docs and processed.get("intent") in ("study", "reasoning"):
+            # They have documents and the intent suggests they might benefit from context
+            should_search_rag = True
+
+        if should_search_rag and session_docs:
+            doc_ids = [str(d.id) for d in session_docs]
+            rag_results = await rag_service.search(
+                query=processed["optimized_prompt"],
+                limit=5,
+                score_threshold=0.3,
+                document_ids=doc_ids,
+            )
+            
+            # Fallback for queries which don't semantically match document contents
+            if not rag_results:
+                print(f"[RAG DEBUG] No chunks met semantic threshold. Fetching raw chunks directly from Postgres.")
+                rag_results = await rag_service.get_raw_chunks(db, doc_ids, limit=5)
+                
+            print(f"[RAG DEBUG] needs_rag={needs_rag}, query={processed['optimized_prompt']}, results={len(rag_results)}")
+            for r in rag_results:
+                print(f"[RAG DEBUG] hit: doc={r['document_id'][:8]}, chunk={r['chunk_index']}, score={r['score']:.3f}, content={r['content'][:80]}")
+            if rag_results:
+                rag_context = "\n\n".join(
+                    f"[Document {r['document_id'][:8]}, Page {r['page_num']}]\n{r['content']}"
+                    for r in rag_results
+                )
+
         # 5. Memory: build the message list sent to the model.
         #    Phase 2: summarization / retrieval land here, once.
         optimized_message = processed["optimized_prompt"]
+        if rag_context:
+            optimized_message = (
+                "You have been provided with the following context from the user's documents. "
+                "Please use this context to answer the question. If the answer is not contained "
+                "in the context, say so.\n\n"
+                "--- START OF CONTEXT ---\n"
+                f"{rag_context}\n"
+                "--- END OF CONTEXT ---\n\n"
+                f"Question:\n{optimized_message}"
+            )
+            
         await memory_service.maybe_summarize(db, session_id)
         history = await memory_service.get_history(db, session_id)
         messages = history + [{"role": "user", "content": optimized_message}]
@@ -158,6 +215,12 @@ class ChatPipeline:
                 break
 
         generation_latency_ms = round((time.perf_counter() - gen_start) * 1000, 2)
+
+        # Unload the main model to free VRAM/RAM on RTX 4050
+        try:
+            await ollama.unload_model(model)
+        except Exception:
+            pass
 
         # 7. Persist the conversation turn.
         await memory_service.add_message(db, session_id, "user", message)

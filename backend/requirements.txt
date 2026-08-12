@@ -7,3 +7,7 @@ sqlalchemy
 asyncpg
 alembic
 psutil
+qdrant-client
+pymupdf
+python-docx
+python-multipart

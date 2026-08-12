@@ -76,5 +76,4 @@ def build_request_data(
         "prompt_tokens": prompt_eval_count,
         "completion_tokens": eval_count,
         "response_length": len(response),
-        "done_reason": ollama_response.get("done_reason"),
     }

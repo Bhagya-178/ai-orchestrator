@@ -39,11 +39,16 @@ class RequestProcessor:
                 "clarification_questions": [],
                 "entities": [],
                 "requires_web": False,
+                "needs_rag": False,
                 "needs_tool": True,
                 "tool_name": detected["tool_name"],
                 "tool_args": detected["tool_args"],
                 "reason": f"Deterministic tool detection matched {detected['tool_name']}.",
             }
+
+        # Deterministic RAG detection: if the message clearly asks about
+        # uploaded documents, set needs_rag=True immediately without LLM.
+        needs_rag = tool_detector.detect_rag(message)
 
         # Otherwise let the classifier LLM decide.
         response = await ollama.chat(
@@ -83,6 +88,7 @@ class RequestProcessor:
                 "clarification_questions": [],
                 "entities": [],
                 "requires_web": False,
+                "needs_rag": needs_rag,
                 "needs_tool": False,
                 "tool_name": "",
                 "tool_args": {},
@@ -99,6 +105,7 @@ class RequestProcessor:
         result.setdefault("clarification_questions", [])
         result.setdefault("entities", [])
         result.setdefault("requires_web", False)
+        result.setdefault("needs_rag", needs_rag)  # Use deterministic detection
         result.setdefault("needs_tool", False)
         result.setdefault("tool_name", "")
         result.setdefault("tool_args", {})
@@ -122,6 +129,9 @@ class RequestProcessor:
 
         if not isinstance(result["requires_web"], bool):
             result["requires_web"] = False
+
+        if not isinstance(result["needs_rag"], bool):
+            result["needs_rag"] = False
 
         if not isinstance(result["needs_tool"], bool):
             result["needs_tool"] = False
@@ -151,6 +161,11 @@ class RequestProcessor:
             result["tool_args"] = detected["tool_args"]
             result["intent"] = detected["intent"]
             result["task_type"] = detected["task_type"]
+
+        # Safety net for RAG: re-run deterministic RAG detection on
+        # the normalized prompt in case the LLM missed it.
+        if not result.get("needs_rag"):
+            result["needs_rag"] = tool_detector.detect_rag(result["optimized_prompt"])
 
         return result
 

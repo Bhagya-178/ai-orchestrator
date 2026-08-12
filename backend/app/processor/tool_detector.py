@@ -16,6 +16,24 @@ from typing import Any
 class ToolDetector:
     """Pattern-match messages that must trigger a built-in tool."""
 
+    # --- RAG / Document Search Patterns ----------------------------- #
+    # High-confidence patterns for document/file search queries
+    _RAG_PATTERNS: list[str] = [
+        # Direct file/document references with action verbs
+        r"\b(?:search|find|look|extract|get|retrieve|read|explain|summarize|show|tell|list|display|what|tell)\b.*\b(?:in|from|inside|within|within|throughout|through)\b.*\b(?:my|the|this)\b.*\b(?:document|file|pdf|upload|paper|article)",
+        r"\b(?:in|inside|within|throughout)\b.*\b(?:my|the|this|your)\b.*\b(?:document|file|pdf|upload|paper|article|content)",
+        # Specific PDF/file mentions with question
+        r"(?:document|file|pdf|upload).*(?:say|contain|explain|have|show|list|include)",
+        # "Explain/summarize the X document/file"
+        r"(?:explain|summarize|read|extract|find|search|what.*(?:in|from)).*\b(?:document|file|pdf|upload)",
+        # Document metadata queries
+        r"(?:questions?|content|details?|information|summary|overview).*(?:in|from|inside).*\b(?:document|file|pdf|upload)",
+    ]
+
+    _RAG_COMPILED: list[re.Pattern[str]] = [
+        re.compile(p, re.IGNORECASE) for p in _RAG_PATTERNS
+    ]
+
     # --- Datetime phrase patterns (anchored so conceptual questions
     # like "explain how time works" never match). ------------------- #
     # Every pattern is end-anchored ($) so only direct "what is the
@@ -99,6 +117,19 @@ class ToolDetector:
             return calculator_hit
 
         return None
+
+    def detect_rag(self, message: str) -> bool:
+        """Return True if the message clearly asks to search/query uploaded documents."""
+        text = (message or "").strip().lower()
+        if not text:
+            return False
+
+        # Check if any RAG pattern matches
+        for pattern in self._RAG_COMPILED:
+            if pattern.search(text):
+                return True
+
+        return False
 
     # ------------------------------------------------------------------
     def _detect_datetime(self, text: str) -> dict[str, Any] | None:
