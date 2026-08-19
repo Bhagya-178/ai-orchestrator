@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
 import { ChatMessage, UploadedDocument, Conversation } from "../types";
 import { streamChat } from "../api/chat";
 import { createConversation } from "../api/conversations";
@@ -13,17 +13,41 @@ interface ChatContextType {
   activeDocument: UploadedDocument | null;
   setActiveDocument: (doc: UploadedDocument | null) => void;
   currentConversationId: string;
-  setCurrentConversationId: (id: string) => void;
+  loadConversation: (id: string) => Promise<void>;
   clearChat: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
+
+import { getChatMessages } from "../api/chat";
+import { listDocuments } from "../api/documents";
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeDocument, setActiveDocument] = useState<UploadedDocument | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<string>("default-session");
+
+  const loadConversation = useCallback(async (id: string) => {
+    setCurrentConversationId(id);
+    if (id === "default-session" || id.length < 10) {
+      setMessages([]);
+      setActiveDocument(null);
+      return;
+    }
+    
+    // Load past messages
+    const history = await getChatMessages(id);
+    setMessages(history);
+
+    // Load past documents
+    const docs = await listDocuments(id);
+    if (docs && docs.length > 0) {
+      setActiveDocument(docs[0]);
+    } else {
+      setActiveDocument(null);
+    }
+  }, []);
 
   const clearChat = useCallback(() => {
     setMessages([]);
@@ -76,12 +100,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           );
         },
         (metadata) => {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const md = metadata as any;
           setMessages(prev => 
             prev.map(msg => 
               msg.id === assistantId ? { 
                 ...msg, 
-                model: metadata.model,
-                latencyMs: metadata.latency_ms
+                model: md.model,
+                latencyMs: md.latency_ms
               } : msg
             )
           );
@@ -109,7 +135,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         activeDocument,
         setActiveDocument,
         currentConversationId,
-        setCurrentConversationId,
+        loadConversation,
         clearChat
       }}
     >

@@ -12,11 +12,11 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-import fitz  # pymupdf
+import pymupdf
 from docx import Document as DocxDocument
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models as qdrant_models
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import (
@@ -140,7 +140,7 @@ class RAGService:
     def _parse_pdf(self, file_path: str) -> list[dict]:
         """Extract text from PDF with page numbers."""
         chunks = []
-        doc = fitz.open(file_path)
+        doc = pymupdf.open(file_path)
         try:
             for page_num, page in enumerate(doc, 1):
                 text = page.get_text().strip()
@@ -541,15 +541,30 @@ class RAGService:
             # Continue to Postgres cleanup even if Qdrant fails.
 
         # Delete from Postgres (cascades to chunks)
-        result = await db.execute(
-            select(Document).where(Document.id == document_id)
-        )
-        doc = result.scalars().first()
-        if doc:
-            await db.delete(doc)
+        try:
+            doc_uuid = uuid.UUID(document_id)
+            # Delete chunks first to avoid foreign key constraint violation
+            await db.execute(
+                delete(DocumentChunk).where(DocumentChunk.document_id == doc_uuid)
+            )
+            result = await db.execute(
+                select(Document).where(Document.id == doc_uuid)
+            )
+            doc = result.scalars().first()
+            if doc:
+                await db.delete(doc)
+                await db.commit()
+                return True
+            # If doc not found but chunks deleted, we still commit
             await db.commit()
-            return True
-        return False
+            return False
+        except ValueError:
+            # Invalid UUID
+            return False
+        except Exception as e:
+            logger.error("Failed to delete document from Postgres: %s", e)
+            await db.rollback()
+            return False
 
 
 rag_service = RAGService()

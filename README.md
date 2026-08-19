@@ -1,292 +1,249 @@
-# AI Orchestrator Backend
+<div align="center">
+  <h1>🤖 AI Orchestrator</h1>
+  <p><i>A local multi-model LLM orchestration platform that automatically routes user requests to specialized models while integrating deterministic tools, RAG, conversation memory, streaming, and observability.</i></p>
 
-A local AI orchestration backend built with FastAPI and Ollama.
+  [![Next.js](https://img.shields.io/badge/Next.js-15-black?logo=next.js)](https://nextjs.org/)
+  [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+  [![Ollama](https://img.shields.io/badge/Ollama-Local_LLMs-white?logo=ollama)](#)
+  [![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-red?logo=qdrant)](#)
+  [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Database-blue?logo=postgresql)](#)
+</div>
 
-This service processes incoming chat requests, detects intent, decides whether a tool call is needed, routes the request to the best local LLM, maintains session memory, logs performance metrics, and returns structured responses — all through a single orchestration pipeline.
+---
 
-## Key Features
+## ⚡ The Problem
 
-- Intent-aware request processing
-- Prompt optimization and normalization
-- Deterministic + LLM tool detection and execution
-- **Automatic document search detection** — detects when users ask questions about uploaded documents
-- **RAG (Retrieval-Augmented Generation)** — token-based chunking and semantic search over user documents
-- Model routing based on intent
-- Streaming and non-streaming chat responses from one shared code path
-- PostgreSQL-backed session memory
-- PostgreSQL request logging and performance metrics
-- Local Ollama model integration with Qdrant vector database
+**A single general-purpose LLM is not necessarily the best model for every task.** 
 
-## Architecture Overview
+Different models perform better on different workloads (e.g., DeepSeek for reasoning, Qwen Coder for programming). However, asking users to manually select a model for every single prompt creates unnecessary friction and complexity. Furthermore, using massive heavyweight models for simple arithmetic or basic queries wastes immense inference time and computational resources.
 
-Both `/chat` and `/chat/stream` consume the **same** `_turn()` event stream from the `ChatPipeline` service, so every stage below is implemented once and used by both endpoints:
+## 🎯 The Solution
 
-1. **Processor** — the message is analyzed by `qwen2.5:1.5b` for intent, task type, entities, and prompt optimization. Deterministic detection runs first and short-circuits the LLM for: calculator (`25 * 16`), datetime (`what time is it?`), and **document search** (`explain the PDF`, `find X in my document`)
-2. **Clarification** — if the processor flags `needs_clarification`, questions are returned and no model call is made
-3. **Tools** — if a tool is required (calculator/datetime), it executes directly and returns a result, bypassing the LLM entirely. RAG queries skip tool execution to retrieve context first
-4. **RAG Retrieval** *(Phase 3 — NEW)* — if `needs_rag=true`, the system retrieves semantically similar 512-token chunks from user's uploaded documents using Qdrant + embeddings. Retrieved context is injected into the prompt
-5. **Router** — a model is selected from the registry based on the detected intent
-6. **Memory** — the selected model receives the user message plus the session's history from Postgres (long sessions are folded into a rolling `session_summaries` row, so only the summary + most recent turns are sent)
-7. **Generation** — the model streams its reply with document context; the final chunk carries Ollama metrics
-8. **Persistence** — the turn is saved to memory
-9. **Metrics** — request metadata is logged to PostgreSQL
+**AI Orchestrator** introduces a seamless orchestration layer for local LLMs. 
 
-Extension points are marked in the pipeline (`chat_pipeline.py` docstring) for upcoming phases:
+The orchestration pipeline analyzes incoming requests and uses a lightweight classifier (`qwen2.5:1.5b`) for model selection when LLM inference is required. It then autonomously routes the request to a highly-specialized heavyweight model. The pipeline is further extended with deterministic Python tools and Retrieval-Augmented Generation (RAG), ensuring calculations bypass LLM inference entirely and document queries retrieve semantic context automatically.
 
-- Phase 2 memory summarization / retrieval → stage 6 (Memory) — IN PROGRESS
-- Phase 3 RAG / vector retrieval → stage 4 (between Tools ↔ Router) — **✅ SHIPPED**
-- Phase 4 multi-tool planning → stage 3 (Tools)
-- Phase 5 response caching → stage 7 (Generation)
+### Intent Routing Pipeline
 
-## Supported Models
+```text
+                    User Query
+                        │
+                        ▼
+                ┌───────────────┐
+                │ Intent Router │
+                │ qwen2.5:1.5b  │
+                └───────┬───────┘
+                        │
+      ┌─────────┬───────┴───────┬─────────┐
+      │         │               │         │
+      ▼         ▼               ▼         ▼
+   General    Coding        Reasoning   Study
+      │         │               │         │
+      ▼         ▼               ▼         ▼
+    qwen3  qwen2.5-coder  deepseek-r1   gemma4
+```
 
-The model registry maps intents to local Ollama models:
+### RAG Pipeline
 
-- `general` → `qwen3:8b`
-- `coding` → `qwen2.5-coder:7b`
-- `study` → `gemma4:e4b`
-- `reasoning` → `deepseek-r1:8b`
-- Processor → `qwen2.5:1.5b`
+When documents (PDF, DOCX, TXT) are uploaded to a chat, they are automatically embedded without the user needing to type specific commands:
 
-## Requirements
+```text
+ Uploaded File ──► Parse & Chunk ──► BGE-M3 Embeddings ──► Qdrant Vector DB
+                                                                │
+                                                                ▼
+                                                        Relevant Chunks
+                                                                │
+ User Query ────────────────────────────────────────────────────┼──► Target LLM
+```
 
-- Python 3.11+
+## 🏗️ System Architecture
+
+```text
+                         Chat Request
+                              │
+                              ▼
+                       Chat Pipeline
+                              │
+                              ▼
+                         Processor
+                       (qwen2.5:1.5b)
+                              │
+                 ┌────────────┴────────────┐
+                 ▼                         ▼
+               Tool?                    LLM Task
+                 │                         │
+                 ▼                         ▼
+            Python Tool               Model Router
+                 │                         │
+                 │            ┌────────────┼────────────┐
+                 │            ▼            ▼            ▼
+                 │           RAG         Memory    Target Model
+                 │            │            │            │
+                 │            └────────────┼────────────┘
+                 │                         │
+                 │                         ▼
+                 │                       Ollama
+                 │                         │
+                 └────────────┬────────────┘
+                              │
+                              ▼
+                           Response
+```
+
+### Request Lifecycle
+1. **Processor Phase:** `qwen2.5:1.5b` analyzes the prompt to determine the *intent* (General, Coding, Study, Reasoning).
+2. **Deterministic Tools:** If the prompt is a direct math equation or time query, Python computes deterministic operations locally after request analysis, avoiding heavyweight model inference and improving numerical reliability.
+3. **Model Router:** If LLM inference is required, the orchestrator selects the appropriate specialized model based on the detected intent.
+4. **RAG Retrieval:** If a document was uploaded, the prompt is vectorized with `bge-m3`, cross-referenced in Qdrant, and relevant chunks are appended to the system context.
+5. **Streaming Response:** The output streams back to the UI in real-time via Server-Sent Events (SSE), with request and performance metrics persisted in PostgreSQL.
+
+---
+
+## ✨ Key Features
+
+| Feature | How it works |
+|---|---|
+| **Intelligent Routing** | `qwen2.5:1.5b` performs lightweight intent classification and determines the appropriate specialized model for Coding, Reasoning, Study, or General conversation. |
+| **Deterministic Tools** | Math equations (`25 * 16`) and datetime queries are evaluated natively in Python, avoiding heavyweight model inference and eliminating LLM arithmetic hallucinations. |
+| **Automatic RAG** | Upload files directly into the chat. The system vectorizes them and fetches semantic context automatically when relevant to your prompt. |
+| **Conversation Context Management** | Historical conversations are summarized and selectively retrieved to reduce unnecessary context tokens while preserving relevant conversation history. |
+| **Local & Privacy-First** | Models and application data run locally through Ollama, PostgreSQL, and Qdrant without requiring a third-party LLM API. |
+| **Observability** | PostgreSQL-backed metrics record request latency, selected models, tool execution, and pipeline activity for debugging. |
+
+---
+
+## 🔬 Engineering Decisions
+
+### Why a lightweight routing model?
+Instead of sending every request directly to a heavyweight model, the system first performs intent classification using `qwen2.5:1.5b`. This separates request classification from task execution and allows specialized models to handle workloads they are better suited for.
+
+### Why deterministic tools?
+Arithmetic and datetime operations do not require probabilistic language generation. Executing them directly in Python improves reliability and avoids unnecessary LLM inference.
+
+### Why RAG?
+Passing an entire document into every prompt increases context size and inference cost. The system instead converts documents into embeddings and retrieves only semantically relevant chunks from Qdrant.
+
+### Why local inference?
+Ollama allows the system to run open-source models locally, avoiding dependency on external LLM APIs and providing greater control over data and model execution.
+
+### Why PostgreSQL + Qdrant?
+PostgreSQL stores structured application data such as conversations, messages, and metrics, while Qdrant is optimized for vector similarity search. Separating these responsibilities keeps the data layer aligned with each workload.
+
+---
+
+## 🧰 Tech Stack
+
+### Backend
+- Python 3.12
+- FastAPI
+- Pydantic
+- SQLAlchemy
 - PostgreSQL
-- Ollama running locally
 
-## Installation
+### AI / ML
+- Ollama
+- Qwen
+- DeepSeek
+- Gemma
+- BGE-M3
+- Qdrant
+- Retrieval-Augmented Generation (RAG)
+
+### Frontend
+- Next.js 15
+- React
+- TypeScript
+- Tailwind CSS
+
+### Infrastructure
+- Server-Sent Events (SSE)
+
+---
+
+## ⚠️ Current Limitations
+
+- Local inference performance depends heavily on available CPU/GPU memory.
+- Model routing accuracy depends on the classifier's intent classification.
+- RAG quality depends on document parsing, chunking, and embedding quality.
+- The current deployment is optimized for local/single-user usage rather than large-scale concurrent workloads.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+Ensure you have the following installed on your local machine:
+- [Node.js 18+](https://nodejs.org/)
+- [Python 3.11+](https://www.python.org/)
+- [PostgreSQL](https://www.postgresql.org/)
+- [Qdrant](https://qdrant.tech/) (Running via Docker or native)
+- [Ollama](https://ollama.com/) (Running locally)
+
+**Required Ollama Models:**
+Pull the required models before starting:
+```bash
+ollama pull qwen3:8b
+ollama pull qwen2.5-coder:7b
+ollama pull gemma4:e4b
+ollama pull deepseek-r1:8b
+ollama pull qwen2.5:1.5b
+ollama pull bge-m3
+```
+
+### 1. Start the Backend (FastAPI)
 
 ```bash
 cd backend
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\activate  # On Windows
+# source .venv/bin/activate # On Mac/Linux
+
 pip install -r requirements.txt
 ```
 
-## Environment Variables
-
-Create a `.env` file in `backend/` or set these variables in your environment:
-
-- `OLLAMA_URL` - Ollama server URL (default: `http://localhost:11434`)
-- `APP_NAME` - application name (default: `AI Orchestrator`)
-- `OLLAMA_KEEP_ALIVE` - Ollama keep-alive setting (default: `10s`)
-- `DATABASE_URL` - Async PostgreSQL URL, e.g. `postgresql+asyncpg://user:pass@host:5432/dbname`
-- `QDRANT_URL` - Qdrant vector database URL (default: `http://localhost:6333`)
-- `QDRANT_COLLECTION` - Collection name for document embeddings (default: `documents`)
-- `EMBEDDING_MODEL` - Ollama embedding model for RAG (default: `bge-m3`)
-
-## Run Locally
+Create a `.env` file in the `backend/` directory with your database connection strings (see `backend/README.md` for defaults). 
 
 ```bash
-cd backend
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-## API Endpoints
+### 2. Start the Frontend (Next.js 15)
 
-### Health
-
-```http
-GET /health
+```bash
+cd frontend
+npm install
+npm run dev
 ```
 
-Response:
+Visit [http://localhost:3000](http://localhost:3000) in your browser. The frontend will automatically connect to your running backend API.
 
-- `status`: `running`
-- `ollama`: `online` or `offline`
+---
 
-### Root
-
-```http
-GET /
-```
-
-Response:
-
-- `status`: `running`
-
-### Models
-
-```http
-GET /models
-```
-
-Returns available Ollama models from the local runtime.
-
-### Chat
-
-```http
-POST /chat
-```
-
-Request body:
-
-```json
-{
-  "message": "Hello, what can you do?",
-  "session_id": "optional-existing-session"
-}
-```
-
-Response schema:
-
-- `success`
-- `session_id`
-- `intent`
-- `model`
-- `latency_ms`
-- `response`
-
-### Streaming Chat
-
-```http
-POST /chat/stream
-```
-
-Returns streamed text chunks from the selected Ollama model. Runs through the same pipeline stages as `/chat` (tools, RAG retrieval, routing, memory, metrics included).
-
-### Document Upload (RAG)
-
-```http
-POST /documents/upload
-```
-
-Upload a PDF, DOCX, or TXT file for semantic search.
-
-Request: multipart/form-data with `file` and `session_id`
-
-Response:
-- `document_id`: UUID of uploaded document
-- `filename`: Name of the file
-- `content_type`: MIME type
-- `file_size`: Size in bytes
-- `total_chunks`: Number of 512-token chunks created
-
-### List Documents
-
-```http
-GET /documents?session_id=<session_id>
-```
-
-List all documents uploaded in a session.
-
-### Delete Document
-
-```http
-DELETE /documents/{document_id}
-```
-
-Delete a document and all its chunks from Qdrant.
-
-### Conversation Creation
-
-```http
-POST /conversations
-```
-
-Returns a new `conversation_id` for session tracking.
-
-## Project Structure
+## 📂 Project Structure
 
 ```text
-backend/
-├── app/
-│   ├── config.py
-│   ├── main.py
-│   ├── ollama_client.py
-│   ├── registry.py
-│   ├── router.py
-│   ├── schemas.py
-│   ├── processor/
-│   │   ├── processor.py
-│   │   ├── system_prompt.py
-│   │   └── tool_detector.py
-│   ├── database/
-│   │   ├── database.py
-│   │   ├── init_db.py
-│   │   ├── models.py
-│   │   └── session.py
-│   ├── services/
-│   │   ├── chat_pipeline.py
-│   │   ├── database_service.py
-│   │   ├── memory_service.py
-│   │   ├── metrics.py
-│   │   ├── rag_service.py
-│   │   └── tool_service.py
-│   ├── tools/
-│   │   ├── base_tool.py
-│   │   ├── calculator.py
-│   │   ├── datetime_tool.py
-│   │   └── registry.py
-│   └── utils/
-│       └── logger.py
-├── logs/
-├── requirements.txt
-└── README.md
+ai-orchestrator/
+│
+├── backend/                  # FastAPI Python Server
+│   ├── app/
+│   │   ├── database/         # PostgreSQL DB (SQLAlchemy/Alembic)
+│   │   ├── processor/        # Intent detection & system prompts
+│   │   ├── services/         # RAG, Chat Pipeline, Memory, Metrics
+│   │   └── tools/            # Deterministic tools (Calculator, Datetime)
+│   └── README.md             
+│
+├── frontend/                 # Next.js React Application
+│   ├── app/
+│   │   ├── components/       # UI Components (Chat, Documents, Sidebar)
+│   │   └── lib/              # API abstractions & React Contexts
+│   └── README.md             
+│
+└── README.md                 # Project Overview
 ```
 
-## Tool Support
+---
 
-The backend includes three deterministic detectors:
-
-### Built-in Tools
-- `calculator` — arithmetic expressions: `25 * 16`, `100 / 4`, `15% of 200`
-- `datetime` — current time/date queries: `what time is it?`, `what's the date today?`
-
-### Document Search (RAG)
-The processor detects document search queries automatically:
-- **Patterns triggered:**
-  - `"explain the X document"` / `"explain the PDF"`
-  - `"search my documents for X"` / `"find X in my files"`
-  - `"what is in my document?"` / `"summarize the PDF"`
-  - `"extract X from the file"` / `"what does the document say?"`
-
-Tool requests and document searches are detected deterministically (so the small classifier model can never misroute them) and again as a safety net on the LLM's normalized prompt. If the processor flags `needs_tool`, the tool executes directly and bypasses the LLM. If `needs_rag=true`, the document context is retrieved and injected into the generation prompt.
-
-## Notes
-
-- The processor uses `qwen2.5:1.5b` to analyze and classify incoming text.
-- Deterministic detection (calculator, datetime, document search) runs BEFORE the LLM to avoid misclassification.
-- The router maps detected intents to a local Ollama model based on `VALID_INTENTS`.
-- **RAG Pipeline:**
-  - Documents are split into **512-token chunks** (not characters) for optimal LLM performance (~2KB per chunk)
-  - Chunks overlap by 64 tokens (~256 characters) for context continuity
-  - Embeddings are generated using `bge-m3` model and stored in Qdrant
-  - Top 5 semantic matches (score > 0.3) are retrieved and injected into the prompt
-  - Fallback: If no semantic matches, raw chunks are returned
-- Conversation memory is stored in PostgreSQL, so history survives server restarts and can be reloaded for any session.
-- Request metadata (latency, tokens/sec, context usage, CPU) is saved to PostgreSQL using SQLAlchemy and `asyncpg`.
-- If the processor call fails, the pipeline degrades to a plain `general` turn instead of crashing the request.
-
-## Roadmap & Current Status
-
-**Shipped (current state):**
-
-- ✅ Unified `ChatPipeline` shared by `/chat` and `/chat/stream` (single `_turn()` code path)
-- ✅ Intent-aware processing with deterministic + LLM tool detection
-- ✅ Tool execution (calculator, datetime) that bypasses the LLM
-- ✅ Intent-based model routing
-- ✅ PostgreSQL-backed session memory (history survives restarts)
-- ✅ Rolling conversation summarization (Phase 2) — long sessions fold old turns into a `session_summaries` row and prune the raw rows, keeping the model context bounded
-- ✅ **Phase 3 RAG with token-based chunking** — deterministic document search detection, semantic retrieval, and prompt injection
-- ✅ **Document upload endpoints** (`/documents/upload`, `/documents`, `/documents/{document_id}`)
-- ✅ Request logging & metrics to PostgreSQL (latency, tokens/sec, context usage, CPU)
-
-**In progress / next up:**
-
-- 🔜 Phase 2 retrieval refinement — relevance-based turn selection (replace fixed window with semantic matching)
-- 🔜 Multi-turn RAG context — carry retrieved chunks across follow-up questions in same session
-- 🔜 RAG quality metrics — track retrieval precision/recall
-
-**Planned:**
-
-- Phase 4 — multi-tool planning (stage 3)
-- Phase 5 — response caching (stage 7)
-- Additional tool integrations (web search, API calls)
-- Docker support and production deployment
-- Authentication, monitoring, and rate limiting
-- Hybrid search (semantic + keyword BM25)
-
-## License
-
-This repository is intended for experimentation, learning, and research in local AI orchestration.
+<div align="center">
+  <p>Built for exploration and mastery in Local AI orchestration.</p>
+</div>

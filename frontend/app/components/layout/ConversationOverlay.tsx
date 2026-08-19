@@ -60,14 +60,14 @@ export default function ConversationOverlay() {
               clearChat();
               closeSidebar();
             }}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-black/5 hover:bg-black/10 rounded-lg transition-colors w-full mr-2"
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 rounded-lg transition-colors w-full mr-2"
           >
             <Plus className="w-4 h-4" />
             New Chat
           </button>
           <button 
             onClick={closeSidebar}
-            className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-black/5 rounded-lg transition-colors"
+            className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg transition-colors"
           >
             <X className="w-4 h-4" />
           </button>

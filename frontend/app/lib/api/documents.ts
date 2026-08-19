@@ -26,9 +26,12 @@ export async function uploadDocument(file: File, sessionId: string): Promise<Upl
 }
 
 export async function listDocuments(sessionId: string): Promise<UploadedDocument[]> {
-  const res = await fetch(`http://localhost:8000/documents?session_id=${sessionId}`);
+  const res = await fetch(`http://localhost:8000/documents?session_id=${sessionId}`, {
+    cache: 'no-store'
+  });
   if (!res.ok) return [];
   const data = await res.json();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data.documents || []).map((doc: any) => ({
     id: doc.id,
     filename: doc.filename,

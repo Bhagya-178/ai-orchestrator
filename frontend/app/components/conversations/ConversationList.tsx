@@ -1,40 +1,60 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getConversations } from "@/app/lib/api/conversations";
+import { getConversations, deleteConversation } from "@/app/lib/api/conversations";
 import { Conversation } from "@/app/lib/types";
 import { useChat } from "@/app/lib/context/ChatContext";
+import { Trash2 } from "lucide-react";
 
 export default function ConversationList({ onSelect }: { onSelect: () => void }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const { currentConversationId, setCurrentConversationId } = useChat();
+  const { currentConversationId, loadConversation, clearChat } = useChat();
+
+  const loadConversations = () => getConversations().then(setConversations);
 
   useEffect(() => {
-    getConversations().then(setConversations);
+    loadConversations();
   }, []);
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (confirm("Delete this conversation?")) {
+      await deleteConversation(id);
+      loadConversations();
+      if (currentConversationId === id) {
+        clearChat();
+      }
+    }
+  };
 
   return (
     <ul className="space-y-0.5">
       {conversations.map((conv) => {
         const isActive = conv.id === currentConversationId;
         return (
-          <li key={conv.id}>
+          <li key={conv.id} className="relative group">
             <button
               onClick={() => {
-                setCurrentConversationId(conv.id);
-                // Also trigger fetching old messages here in a real app
+                loadConversation(conv.id);
                 onSelect();
               }}
-              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-sm transition-colors truncate
+              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-sm transition-colors truncate pr-8
                 ${isActive 
-                  ? "bg-black/5 font-medium text-gray-900" 
-                  : "text-gray-600 hover:bg-black/5 hover:text-gray-900"
+                  ? "bg-black/5 dark:bg-white/10 font-medium text-gray-900 dark:text-gray-100" 
+                  : "text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-gray-100"
                 }
               `}
               title={conv.title}
             >
               <span className="opacity-40 mr-1.5 text-xs">○</span>
               {conv.title}
+            </button>
+            <button
+              onClick={(e) => handleDelete(e, conv.id)}
+              className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity rounded-md hover:bg-red-50 dark:hover:bg-red-900/30"
+              title="Delete conversation"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           </li>
         );

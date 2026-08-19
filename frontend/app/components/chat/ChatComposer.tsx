@@ -33,7 +33,7 @@ export default function ChatComposer() {
 
   return (
     <div className="w-full max-w-[800px] mx-auto p-4 pb-6 mt-auto">
-      <div className="relative flex flex-col bg-white border border-[var(--border)] shadow-[var(--shadow)] rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-black/5 focus-within:border-black/20 transition-all">
+      <div className="relative flex flex-col bg-gray-50 dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden focus-within:ring-4 focus-within:ring-gray-100 dark:focus-within:ring-white/5 focus-within:border-gray-300 dark:focus-within:border-white/20 transition-all">
         
         {activeDocument && (
           <div className="px-3 pt-3">
@@ -48,7 +48,7 @@ export default function ChatComposer() {
           ref={textareaRef}
           rows={1}
           placeholder={activeDocument ? `Ask a question about ${activeDocument.filename}...` : "Ask anything..."}
-          className="w-full max-h-[200px] bg-transparent resize-none outline-none py-3 px-4 text-[0.95rem] placeholder:text-gray-400"
+          className="w-full max-h-[200px] bg-transparent resize-none outline-none py-3 px-4 text-[0.95rem] text-gray-900 dark:text-white placeholder:text-gray-400"
           onChange={resizeTextarea}
           onKeyDown={handleKeyDown}
           disabled={isGenerating}
@@ -86,7 +86,7 @@ export default function ChatComposer() {
             />
             <label 
               htmlFor="file-upload"
-              className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-black/5 rounded-md transition-colors cursor-pointer flex items-center justify-center"
+              className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors cursor-pointer flex items-center justify-center"
               title="Attach document"
             >
               <Paperclip className="w-4 h-4" />
@@ -106,7 +106,7 @@ export default function ChatComposer() {
               }
             }}
             disabled={isGenerating}
-            className="p-1.5 bg-black text-white rounded-md hover:bg-gray-800 disabled:opacity-50 disabled:bg-gray-300 transition-colors"
+            className="p-1.5 bg-black dark:bg-white text-white dark:text-black rounded-md hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:bg-gray-300 dark:disabled:bg-gray-700 transition-colors"
           >
             <ArrowUp className="w-4 h-4" />
           </button>

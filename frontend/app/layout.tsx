@@ -4,6 +4,8 @@ import "./globals.css";
 import { NavigationProvider } from "./lib/context/NavigationContext";
 import { ChatProvider } from "./lib/context/ChatContext";
 
+import { ThemeProvider } from "./lib/context/ThemeContext";
+
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
@@ -17,13 +19,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}>
-      <body className="antialiased">
-        <NavigationProvider>
-          <ChatProvider>
-            {children}
-          </ChatProvider>
-        </NavigationProvider>
+    <html lang="en" className={inter.variable} suppressHydrationWarning>
+      <body className="antialiased text-[var(--foreground)] bg-[var(--background)] transition-colors duration-200">
+        <ThemeProvider>
+          <NavigationProvider>
+            <ChatProvider>
+              {children}
+            </ChatProvider>
+          </NavigationProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

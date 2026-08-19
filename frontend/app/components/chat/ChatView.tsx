@@ -19,17 +19,17 @@ export default function ChatView() {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-4 h-full relative">
         <div className="flex flex-col items-center justify-center max-w-lg w-full mt-[-10vh] mb-8 text-center">
-          <h1 className="text-2xl sm:text-3xl font-medium tracking-tight text-gray-900 mb-2">AI Orchestrator</h1>
-          <p className="text-[1.05rem] text-gray-500 mb-6">Your local AI workspace.</p>
-          <div className="text-sm text-gray-400 mb-8 flex flex-col gap-1">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white mb-2">AI Orchestrator</h1>
+          <p className="text-[1.05rem] text-gray-500 dark:text-gray-400 mb-6">Your local AI workspace.</p>
+          <div className="text-sm text-gray-400 dark:text-gray-500 mb-8 flex flex-col gap-1">
             <span>One interface. Four specialized local models. Automatic routing.</span>
             <div className="flex items-center justify-center gap-2 mt-2 font-medium">
               <span>General</span>
-              <span className="w-1 h-1 rounded-full bg-gray-300" />
+              <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
               <span>Coding</span>
-              <span className="w-1 h-1 rounded-full bg-gray-300" />
+              <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
               <span>Study</span>
-              <span className="w-1 h-1 rounded-full bg-gray-300" />
+              <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-600" />
               <span>Reasoning</span>
             </div>
           </div>

@@ -2,7 +2,7 @@ export async function streamChat(
   message: string,
   sessionId: string,
   onChunk: (text: string) => void,
-  onMetadata: (metadata: any) => void
+  onMetadata: (metadata: unknown) => void
 ): Promise<void> {
   try {
     const response = await fetch("http://localhost:8000/chat/stream", {
@@ -55,4 +55,18 @@ export async function streamChat(
     console.error("Stream chat error:", error);
     throw error;
   }
+}
+
+export async function getChatMessages(sessionId: string): Promise<{id: string, role: "user" | "assistant", content: string, timestamp: string}[]> {
+  try {
+    const res = await fetch(`http://localhost:8000/chat/${sessionId}/messages`, {
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (err) {
+    console.error("Failed to load chat history", err);
+  }
+  return [];
 }

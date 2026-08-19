@@ -69,16 +69,18 @@ class ChatPipeline:
 
     async def stream_chat(self, session_id: str, message: str, db) -> AsyncGenerator[str, None]:
         """Run a streaming turn, yielding response tokens as they arrive."""
-
         async for event in self._turn(session_id, message.strip(), db):
             if event["type"] == "clarification":
-                yield json.dumps(
-                    {"type": "clarification", "questions": event["questions"]}
-                )
+                yield f"data: {json.dumps({'type': 'clarification', 'questions': event['questions']})}\n\n"
             elif event["type"] == "tool":
-                yield event["response"]
+                # For compatibility, wrap tool response as tokens if frontend expects tokens
+                yield f"data: {json.dumps({'type': 'token', 'token': event['response']})}\n\n"
             elif event["type"] == "token":
-                yield event["token"]
+                yield f"data: {json.dumps({'type': 'token', 'token': event['token']})}\n\n"
+            elif event["type"] == "done":
+                yield f"data: {json.dumps(event)}\n\n"
+        
+        yield "data: [DONE]\n\n"
 
     # ------------------------------------------------------------------
     # Single source of truth: one pipeline, consumed by both endpoints.
@@ -148,17 +150,15 @@ class ChatPipeline:
         
         # 3. Decide if we should run a vector search
         should_search_rag = False
-        if needs_rag and session_docs:
-            # User explicitly asked to search documents AND they have documents
-            should_search_rag = True
-        elif session_docs and processed.get("intent") in ("study", "reasoning"):
-            # They have documents and the intent suggests they might benefit from context
+        if session_docs:
+            # If the user has uploaded documents to this chat, ALWAYS search them.
+            # This makes it behave seamlessly like Claude, without the user needing to explicitly say "search my document".
             should_search_rag = True
 
         if should_search_rag and session_docs:
             doc_ids = [str(d.id) for d in session_docs]
             rag_results = await rag_service.search(
-                query=processed["optimized_prompt"],
+                query=message,
                 limit=5,
                 score_threshold=0.3,
                 document_ids=doc_ids,
@@ -180,21 +180,29 @@ class ChatPipeline:
 
         # 5. Memory: build the message list sent to the model.
         #    Phase 2: summarization / retrieval land here, once.
-        optimized_message = processed["optimized_prompt"]
+        # We use the raw user message rather than the processor's optimized_prompt 
+        # to prevent the 1.5b classifier from hallucinating meaning.
+        optimized_message = message
         if rag_context:
             optimized_message = (
-                "You have been provided with the following context from the user's documents. "
-                "Please use this context to answer the question. If the answer is not contained "
-                "in the context, say so.\n\n"
-                "--- START OF CONTEXT ---\n"
+                "You have access to the following documents uploaded by the user. "
+                "If the user's question relates to them, use them to provide a highly accurate answer. "
+                "If the question is unrelated to the documents, just answer the question normally without mentioning the documents.\n\n"
+                "--- DOCUMENTS ---\n"
                 f"{rag_context}\n"
-                "--- END OF CONTEXT ---\n\n"
-                f"Question:\n{optimized_message}"
+                "-----------------\n\n"
+                f"{optimized_message}"
             )
             
         await memory_service.maybe_summarize(db, session_id)
         history = await memory_service.get_history(db, session_id)
         messages = history + [{"role": "user", "content": optimized_message}]
+
+        # Inject global system prompt at the very beginning to prevent hallucinations
+        messages.insert(0, {
+            "role": "system",
+            "content": "You are a highly capable AI assistant. Answer directly, clearly, and concisely. Do not hallucinate or invent fictional plots, facts, or characters. If you are unsure, admit it."
+        })
 
         # 6. Generation (streamed internally so /chat and /chat/stream share
         #    one code path; the final chunk carries the Ollama metrics).

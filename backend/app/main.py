@@ -17,11 +17,6 @@ from app.schemas import (
 from fastapi.responses import StreamingResponse
 
 from app.config import APP_NAME
-from app.schemas import (
-    ChatRequest,
-    HealthResponse,
-    ModelsResponse,
-)
 
 from app.services.chat_pipeline import chat_pipeline
 from app.services.rag_service import rag_service
@@ -66,8 +61,11 @@ async def root():
     response_model=HealthResponse
 )
 async def health():
-
-    online = await ollama.health()
+    try:
+        online = await ollama.health()
+    except Exception as e:
+        print(f"Ollama health check failed: {e}")
+        online = False
 
     return HealthResponse(
         status="running",
@@ -121,13 +119,18 @@ async def stream_chat(
     response_model=ModelsResponse
 )
 async def get_models():
-
-    models = await ollama.list_models()
+    try:
+        models = await ollama.list_models()
+    except Exception as e:
+        print(f"Ollama list_models failed: {e}")
+        models = []
 
     return ModelsResponse(
         models=models
     )
 
+
+from sqlalchemy.future import select
 
 @app.post("/conversations")
 async def create_conversation():
@@ -135,6 +138,78 @@ async def create_conversation():
         "conversation_id": str(uuid.uuid4())
     }
 
+@app.get("/conversations")
+async def get_conversations(db: AsyncSession = Depends(get_db)):
+    # Group messages by session_id to get distinct conversations
+    from app.database.models import ConversationMessage
+    from sqlalchemy import func, desc
+    
+    # Get distinct session_ids, their latest message time, and the first user message as title
+    query = select(
+        ConversationMessage.session_id,
+        func.max(ConversationMessage.created_at).label('updated_at')
+    ).group_by(ConversationMessage.session_id).order_by(desc('updated_at'))
+    
+    result = await db.execute(query)
+    sessions = result.all()
+    
+    conversations = []
+    for session_id, updated_at in sessions:
+        # Get first user message for title
+        title_query = select(ConversationMessage.content).where(
+            ConversationMessage.session_id == session_id,
+            ConversationMessage.role == "user"
+        ).order_by(ConversationMessage.created_at).limit(1)
+        
+        title_res = await db.execute(title_query)
+        title = title_res.scalar_one_or_none()
+        
+        # Format title
+        display_title = "New Conversation"
+        if title:
+            display_title = title[:40] + "..." if len(title) > 40 else title
+            
+        conversations.append({
+            "id": session_id,
+            "title": display_title,
+            "updatedAt": updated_at.isoformat(),
+            "createdAt": updated_at.isoformat()
+        })
+        
+    return conversations
+
+@app.delete("/conversations/{session_id}")
+async def delete_conversation(session_id: str, db: AsyncSession = Depends(get_db)):
+    from app.database.models import ConversationMessage, Document
+    from sqlalchemy import delete
+    
+    # First, list all documents for this session and delete them via rag_service 
+    # (this ensures Qdrant is also cleaned up)
+    docs = await rag_service.list_documents(db, session_id)
+    for doc in docs:
+        await rag_service.delete_document(db, str(doc.id))
+
+    # Then delete all messages
+    await db.execute(delete(ConversationMessage).where(ConversationMessage.session_id == session_id))
+    await db.commit()
+    return {"success": True}
+
+@app.get("/chat/{session_id}/messages")
+async def get_chat_messages(session_id: str, db: AsyncSession = Depends(get_db)):
+    from app.database.models import ConversationMessage
+    query = select(ConversationMessage).where(ConversationMessage.session_id == session_id).order_by(ConversationMessage.created_at)
+    result = await db.execute(query)
+    messages = result.scalars().all()
+    
+    return [
+        {
+            "id": str(msg.id),
+            "role": msg.role,
+            "content": msg.content,
+            "timestamp": msg.created_at.isoformat()
+        }
+        for msg in messages
+    ]
 
 # Phase 3: Document Upload & RAG Endpoints
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md"}
