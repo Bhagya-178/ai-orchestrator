@@ -21,6 +21,7 @@ export interface ChatMessage {
   model?: string;
   latencyMs?: number;
   sources?: SourceCitation[];
+  attachedDocument?: UploadedDocument;
 }
 
 export interface Conversation {

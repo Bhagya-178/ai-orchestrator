@@ -401,6 +401,11 @@ class RAGService:
                 chunk_metadata=chunk_data["metadata"],
             ))
 
+        if not points and all_chunks:
+            # If we had chunks but couldn't generate ANY embeddings, fail the upload.
+            logger.error("Failed to generate embeddings for all %d chunks.", len(all_chunks))
+            raise ValueError(f"Failed to generate embeddings for document. Is the embedding model '{EMBEDDING_MODEL}' pulled in Ollama?")
+
         # Batch upsert to Qdrant
         if points:
             try:

@@ -297,3 +297,29 @@ async def delete_document(
     if not success:
         raise HTTPException(status_code=404, detail="Document not found")
     return {"success": True, "message": "Document deleted"}
+
+
+@app.patch("/documents/{document_id}/session")
+async def reassign_document_session(
+    document_id: str,
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reassign a document to a different session.
+
+    This is needed when a document is uploaded before a conversation exists
+    (session_id='default-session') and the real conversation is created on
+    the first message.
+    """
+    from app.database.models import Document
+
+    result = await db.execute(
+        select(Document).where(Document.id == document_id)
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    doc.session_id = session_id
+    await db.commit()
+    return {"success": True, "document_id": str(doc.id), "session_id": session_id}

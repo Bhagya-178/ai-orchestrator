@@ -20,7 +20,7 @@ interface ChatContextType {
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 import { getChatMessages } from "../api/chat";
-import { listDocuments } from "../api/documents";
+import { listDocuments, reassignDocumentSession } from "../api/documents";
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -64,16 +64,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const newConv = await createConversation(content.substring(0, 30));
       sessionId = newConv.id;
       setCurrentConversationId(sessionId);
+
+      // If a document was uploaded before the conversation existed,
+      // reassign it from "default-session" to the real conversation ID
+      if (activeDocument && activeDocument.id !== "uploading") {
+        await reassignDocumentSession(activeDocument.id, sessionId);
+      }
     }
 
     const newUserMsg: ChatMessage = {
       id: Math.random().toString(),
       role: "user",
-      content: content.trim()
+      content: content.trim(),
+      attachedDocument: activeDocument ? activeDocument : undefined
     };
     
     setMessages(prev => [...prev, newUserMsg]);
     setIsGenerating(true);
+    
+    // Clear the active document from the composer input since it's now "sent"
+    if (activeDocument) {
+      setActiveDocument(null);
+    }
 
     const assistantId = Math.random().toString();
     setMessages(prev => [

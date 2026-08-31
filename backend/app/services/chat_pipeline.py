@@ -93,14 +93,22 @@ class ChatPipeline:
     ) -> AsyncGenerator[dict, None]:
         start_total = time.perf_counter()
 
-        # 1. Processor: intent detection + prompt optimization.
-        processed, processor_latency_ms = await self._run_processor(message)
+        # 1. Check if the user has uploaded documents for this session
+        session_docs = await rag_service.list_documents(db, session_id)
+        
+        if session_docs:
+            # Bypass the processor and force general intent + RAG
+            processed = {**FALLBACK_PROCESSED, "optimized_prompt": message, "needs_rag": True}
+            processor_latency_ms = 0.0
+        else:
+            # 1. Processor: intent detection + prompt optimization.
+            processed, processor_latency_ms = await self._run_processor(message)
 
-        # Unload the classifier so the target model doesn't wait on it.
-        try:
-            await ollama.unload_model(PROCESSOR_MODEL)
-        except Exception:
-            pass
+            # Unload the classifier so the target model doesn't wait on it.
+            try:
+                await ollama.unload_model(PROCESSOR_MODEL)
+            except Exception:
+                pass
 
         # 2. Clarification needs no tool / router / generation.
         if processed["needs_clarification"]:
@@ -141,19 +149,9 @@ class ChatPipeline:
         # Phase 3: RAG retrieval (between router and memory)
         rag_context = ""
         
-        # 1. Check if processor detected that user wants to search documents
+        # Decide if we should run a vector search
         needs_rag = processed.get("needs_rag", False)
-        
-        # 2. Get the documents for the current session.
-        # This ensures we only search this user's files and don't leak other users' files.
-        session_docs = await rag_service.list_documents(db, session_id)
-        
-        # 3. Decide if we should run a vector search
-        should_search_rag = False
-        if session_docs:
-            # If the user has uploaded documents to this chat, ALWAYS search them.
-            # This makes it behave seamlessly like Claude, without the user needing to explicitly say "search my document".
-            should_search_rag = True
+        should_search_rag = bool(session_docs)
 
         if should_search_rag and session_docs:
             doc_ids = [str(d.id) for d in session_docs]

@@ -4,7 +4,7 @@ import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus, vs } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { Copy, Check, Bot, User } from "lucide-react";
+import { Copy, Check, Bot, User, FileText } from "lucide-react";
 import { ChatMessage } from "@/app/lib/types";
 
 import { useTheme } from "@/app/lib/context/ThemeContext";
@@ -62,16 +62,30 @@ export default function MessageBubble({ message }: { message: ChatMessage }) {
             }
           `}
         >
+          {message.attachedDocument && (
+            <div className="flex items-center gap-3 p-3 mb-3 bg-white dark:bg-[#27272a] border border-gray-200 dark:border-white/10 rounded-xl max-w-sm">
+              <div className="w-10 h-10 shrink-0 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                  {message.attachedDocument.filename}
+                </p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Document uploaded
+                </p>
+              </div>
+            </div>
+          )}
           {message.content ? (
             <div className={`prose prose-sm md:prose-base max-w-none dark:prose-invert ${isUser ? "" : "prose-slate dark:prose-p:text-gray-300"}`}>
               <ReactMarkdown
                 components={{
-                  // @ts-expect-error Markdown props
-                  code({ node, inline, className, children, ...props }) {
+                  code({ className, children, ...props }) {
                     const match = /language-(\w+)/.exec(className || "");
                     const code = String(children).replace(/\n$/, "");
                     
-                    if (!inline && match) {
+                    if (match) {
                       return (
                         <div className="relative group/code mt-4 mb-4 rounded-md overflow-hidden bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-white/10">
                           <div className="flex items-center justify-between px-4 py-1.5 bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/5">
@@ -85,7 +99,6 @@ export default function MessageBubble({ message }: { message: ChatMessage }) {
                             </button>
                           </div>
                           <SyntaxHighlighter
-                            // @ts-expect-error Style props
                             style={resolvedTheme === "dark" ? vscDarkPlus : vs}
                             language={match[1]}
                             PreTag="div"

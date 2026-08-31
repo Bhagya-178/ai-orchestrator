@@ -17,10 +17,10 @@ export async function uploadDocument(file: File, sessionId: string): Promise<Upl
   const data = await response.json();
   
   return {
-    id: data.id,
+    id: data.document_id || data.id,
     filename: data.filename,
-    fileSize: data.file_size,
-    contentType: data.content_type,
+    fileSize: data.file_size || file.size,
+    contentType: data.content_type || file.type,
     status: "ready", // backend returns after processing is done
   };
 }
@@ -47,5 +47,14 @@ export async function deleteDocument(documentId: string): Promise<void> {
   });
   if (!res.ok) {
     throw new Error("Failed to delete document");
+  }
+}
+
+export async function reassignDocumentSession(documentId: string, sessionId: string): Promise<void> {
+  const res = await fetch(`http://localhost:8000/documents/${documentId}/session?session_id=${sessionId}`, {
+    method: "PATCH",
+  });
+  if (!res.ok) {
+    console.error("Failed to reassign document session");
   }
 }
