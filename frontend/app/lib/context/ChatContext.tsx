@@ -1,7 +1,7 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
-import { ChatMessage, UploadedDocument, Conversation } from "../types";
+import React, { createContext, useContext, useState, ReactNode, useCallback } from "react";
+import { ChatMessage, UploadedDocument } from "../types";
 import { streamChat } from "../api/chat";
 import { createConversation } from "../api/conversations";
 
@@ -15,6 +15,8 @@ interface ChatContextType {
   currentConversationId: string;
   loadConversation: (id: string) => Promise<void>;
   clearChat: () => void;
+  useDocumentContext: boolean;
+  setUseDocumentContext: (val: boolean) => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -27,12 +29,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeDocument, setActiveDocument] = useState<UploadedDocument | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<string>("default-session");
+  const [useDocumentContext, setUseDocumentContext] = useState(true);
 
   const loadConversation = useCallback(async (id: string) => {
     setCurrentConversationId(id);
     if (id === "default-session" || id.length < 10) {
       setMessages([]);
       setActiveDocument(null);
+      setUseDocumentContext(true);
       return;
     }
     
@@ -44,6 +48,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const docs = await listDocuments(id);
     if (docs && docs.length > 0) {
       setActiveDocument(docs[0]);
+      setUseDocumentContext(true);
     } else {
       setActiveDocument(null);
     }
@@ -53,6 +58,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setMessages([]);
     setCurrentConversationId(Math.random().toString(36).substring(7));
     setActiveDocument(null);
+    setUseDocumentContext(true);
+  }, []);
+
+  const handleSetActiveDocument = useCallback((doc: UploadedDocument | null) => {
+    setActiveDocument(doc);
+    // Auto-enable document context when a new document is uploaded
+    if (doc) {
+      setUseDocumentContext(true);
+    }
   }, []);
 
   const sendMessage = async (content: string) => {
@@ -81,11 +95,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     
     setMessages(prev => [...prev, newUserMsg]);
     setIsGenerating(true);
-    
-    // Clear the active document from the composer input since it's now "sent"
-    if (activeDocument) {
-      setActiveDocument(null);
-    }
 
     const assistantId = Math.random().toString();
     setMessages(prev => [
@@ -123,7 +132,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               } : msg
             )
           );
-        }
+        },
+        useDocumentContext
       );
     } catch (error) {
       console.error("Chat failed:", error);
@@ -145,10 +155,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isGenerating,
         sendMessage,
         activeDocument,
-        setActiveDocument,
+        setActiveDocument: handleSetActiveDocument,
         currentConversationId,
         loadConversation,
-        clearChat
+        clearChat,
+        useDocumentContext,
+        setUseDocumentContext,
       }}
     >
       {children}

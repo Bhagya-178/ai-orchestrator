@@ -5,16 +5,17 @@ Kept out of the chat pipeline so the payload shape can grow (Phase 5:
 benchmarking, caching stats, ...) without touching orchestration code.
 """
 
+import asyncio
 import json
 
 import psutil
 
-from app.config import PROCESSOR_MODEL
+from app.config import settings
 
 CONTEXT_WINDOW = 32768
 
 
-def build_request_data(
+async def build_request_data(
     *,
     message: str,
     processed: dict,
@@ -48,18 +49,20 @@ def build_request_data(
         if CONTEXT_WINDOW > 0
         else 0
     )
-    cpu_percent = psutil.cpu_percent(interval=None)
+    
+    # psutil.cpu_percent can be blocking, so we run it in a thread
+    cpu_percent = await asyncio.to_thread(psutil.cpu_percent, interval=None)
 
     return {
         "question": message,
-        "optimized_prompt": processed["optimized_prompt"],
-        "intent": processed["intent"],
+        "optimized_prompt": processed.get("optimized_prompt", ""),
+        "intent": processed.get("intent", ""),
         # Processor metadata, useful for debugging routing decisions
         "task_type": processed.get("task_type"),
         "intent_confidence": processed.get("confidence"),
         "entities": json.dumps(processed.get("entities", [])),
         "processor_reason": processed.get("reason"),
-        "processor_model": PROCESSOR_MODEL,
+        "processor_model": settings.PROCESSOR_MODEL,
         "target_model": model,
         "processor_latency_ms": processor_latency_ms,
         "cpu_percent": cpu_percent,

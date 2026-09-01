@@ -1,9 +1,10 @@
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field
+
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., min_length=1)
     session_id: str | None = None
+    use_rag: bool = True  # frontend can toggle document context on/off
 
 
 class ChatResponse(BaseModel):
@@ -22,3 +23,20 @@ class HealthResponse(BaseModel):
 
 class ModelsResponse(BaseModel):
     models: list[str]
+
+
+class ConversationResponse(BaseModel):
+    id: str
+    title: str
+    updatedAt: str
+    createdAt: str
+
+
+class DocumentResponse(BaseModel):
+    id: str
+    filename: str
+    content_type: str
+    file_size: int
+    session_id: str | None
+    metadata: dict
+    created_at: str

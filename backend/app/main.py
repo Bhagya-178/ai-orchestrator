@@ -1,53 +1,50 @@
-from contextlib import asynccontextmanager
-
-from fastapi import FastAPI, Request, File, UploadFile, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-import traceback
-import shutil
+import logging
 import tempfile
+import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+from sqlalchemy import delete, desc, func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+
+from app.config import settings
 from app.database.init_db import init_db
+from app.database.models import ConversationMessage, Document, SessionSummary
+from app.database.session import get_db
+from app.ollama_client import ollama
 from app.schemas import (
     ChatRequest,
     ChatResponse,
     HealthResponse,
     ModelsResponse,
 )
-from fastapi.responses import StreamingResponse
-
-from app.config import APP_NAME
-
 from app.services.chat_pipeline import chat_pipeline
 from app.services.rag_service import rag_service
-from app.ollama_client import ollama
-from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-from app.database.session import get_db
-from app.database.models import Document
 
-import uuid
-
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create database tables on startup
     await init_db()
+    await ollama.startup()
     yield
+    await ollama.shutdown()
 
-
-app = FastAPI(title=APP_NAME, lifespan=lifespan)
+app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 
 # Configure CORS for frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
 
 @app.get("/")
 async def root():
@@ -55,16 +52,12 @@ async def root():
         "status": "running"
     }
 
-
-@app.get(
-    "/health",
-    response_model=HealthResponse
-)
+@app.get("/health", response_model=HealthResponse)
 async def health():
     try:
         online = await ollama.health()
     except Exception as e:
-        print(f"Ollama health check failed: {e}")
+        logger.error(f"Ollama health check failed: {e}")
         online = False
 
     return HealthResponse(
@@ -77,7 +70,6 @@ async def chat(
     request: ChatRequest,
     db: AsyncSession = Depends(get_db),
 ):
-
     message = request.message.strip()
     session_id = request.session_id or str(uuid.uuid4())
 
@@ -85,15 +77,16 @@ async def chat(
         session_id=session_id,
         message=message,
         db=db,
+        use_rag=request.use_rag,
     )
 
     return ChatResponse(
         success=True,
         session_id=session_id,
-        intent=result["intent"],
-        model=result["model"],
-        latency_ms=result["latency_ms"],
-        response=result["response"],
+        intent=result.get("intent", "general"),
+        model=result.get("model", "unknown"),
+        latency_ms=result.get("latency_ms", 0.0),
+        response=result.get("response", ""),
     )
 
 @app.post("/chat/stream")
@@ -101,7 +94,6 @@ async def stream_chat(
     request: ChatRequest,
     db: AsyncSession = Depends(get_db),
 ):
-
     message = request.message.strip()
     session_id = request.session_id or str(uuid.uuid4())
 
@@ -110,27 +102,22 @@ async def stream_chat(
             session_id=session_id,
             message=message,
             db=db,
+            use_rag=request.use_rag,
         ),
         media_type="text/plain"
     )
 
-@app.get(
-    "/models",
-    response_model=ModelsResponse
-)
+@app.get("/models", response_model=ModelsResponse)
 async def get_models():
     try:
         models = await ollama.list_models()
     except Exception as e:
-        print(f"Ollama list_models failed: {e}")
+        logger.error(f"Ollama list_models failed: {e}")
         models = []
 
     return ModelsResponse(
         models=models
     )
-
-
-from sqlalchemy.future import select
 
 @app.post("/conversations")
 async def create_conversation():
@@ -140,31 +127,41 @@ async def create_conversation():
 
 @app.get("/conversations")
 async def get_conversations(db: AsyncSession = Depends(get_db)):
-    # Group messages by session_id to get distinct conversations
-    from app.database.models import ConversationMessage
-    from sqlalchemy import func, desc
-    
-    # Get distinct session_ids, their latest message time, and the first user message as title
-    query = select(
-        ConversationMessage.session_id,
-        func.max(ConversationMessage.created_at).label('updated_at')
-    ).group_by(ConversationMessage.session_id).order_by(desc('updated_at'))
-    
+    # Fix N+1 query: use a single query with window function or subquery
+    # Subquery to get the first user message content
+    subq = (
+        select(
+            ConversationMessage.session_id,
+            ConversationMessage.content,
+            func.row_number().over(
+                partition_by=ConversationMessage.session_id,
+                order_by=ConversationMessage.created_at
+            ).label("rn")
+        )
+        .where(ConversationMessage.role == "user")
+        .subquery()
+    )
+
+    query = (
+        select(
+            ConversationMessage.session_id,
+            func.max(ConversationMessage.created_at).label('updated_at'),
+            func.max(subq.c.content).label('first_message')
+        )
+        .outerjoin(subq, (ConversationMessage.session_id == subq.c.session_id) & (subq.c.rn == 1))
+        .group_by(ConversationMessage.session_id)
+        .order_by(desc('updated_at'))
+    )
+
     result = await db.execute(query)
     sessions = result.all()
-    
+
     conversations = []
-    for session_id, updated_at in sessions:
-        # Get first user message for title
-        title_query = select(ConversationMessage.content).where(
-            ConversationMessage.session_id == session_id,
-            ConversationMessage.role == "user"
-        ).order_by(ConversationMessage.created_at).limit(1)
-        
-        title_res = await db.execute(title_query)
-        title = title_res.scalar_one_or_none()
-        
-        # Format title
+    for row in sessions:
+        session_id = row.session_id
+        updated_at = row.updated_at
+        title = row.first_message
+
         display_title = "New Conversation"
         if title:
             display_title = title[:40] + "..." if len(title) > 40 else title
@@ -172,31 +169,25 @@ async def get_conversations(db: AsyncSession = Depends(get_db)):
         conversations.append({
             "id": session_id,
             "title": display_title,
-            "updatedAt": updated_at.isoformat(),
-            "createdAt": updated_at.isoformat()
+            "updatedAt": updated_at.isoformat() if updated_at else "",
+            "createdAt": updated_at.isoformat() if updated_at else ""
         })
         
     return conversations
 
 @app.delete("/conversations/{session_id}")
 async def delete_conversation(session_id: str, db: AsyncSession = Depends(get_db)):
-    from app.database.models import ConversationMessage, Document
-    from sqlalchemy import delete
-    
-    # First, list all documents for this session and delete them via rag_service 
-    # (this ensures Qdrant is also cleaned up)
     docs = await rag_service.list_documents(db, session_id)
     for doc in docs:
         await rag_service.delete_document(db, str(doc.id))
 
-    # Then delete all messages
+    await db.execute(delete(SessionSummary).where(SessionSummary.session_id == session_id))
     await db.execute(delete(ConversationMessage).where(ConversationMessage.session_id == session_id))
     await db.commit()
     return {"success": True}
 
 @app.get("/chat/{session_id}/messages")
 async def get_chat_messages(session_id: str, db: AsyncSession = Depends(get_db)):
-    from app.database.models import ConversationMessage
     query = select(ConversationMessage).where(ConversationMessage.session_id == session_id).order_by(ConversationMessage.created_at)
     result = await db.execute(query)
     messages = result.scalars().all()
@@ -206,7 +197,7 @@ async def get_chat_messages(session_id: str, db: AsyncSession = Depends(get_db))
             "id": str(msg.id),
             "role": msg.role,
             "content": msg.content,
-            "timestamp": msg.created_at.isoformat()
+            "timestamp": msg.created_at.isoformat() if msg.created_at else ""
         }
         for msg in messages
     ]
@@ -215,7 +206,6 @@ async def get_chat_messages(session_id: str, db: AsyncSession = Depends(get_db))
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".doc", ".txt", ".md"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
 
-
 @app.post("/documents/upload")
 async def upload_document(
     file: UploadFile = File(...),
@@ -223,8 +213,6 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
 ):
     """Upload and ingest a document for RAG."""
-
-    # Validate file
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
 
@@ -235,34 +223,34 @@ async def upload_document(
             detail=f"Unsupported file type: {ext}. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
         )
 
-    # Save to temp file
+    # Save to temp file and read in chunks to prevent memory DoS
+    bytes_read = 0
     with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
-        content = await file.read()
-        if len(content) > MAX_FILE_SIZE:
-            raise HTTPException(status_code=400, detail="File too large (max 50MB)")
-        tmp.write(content)
+        while chunk := await file.read(1024 * 1024):  # 1MB chunks
+            bytes_read += len(chunk)
+            if bytes_read > MAX_FILE_SIZE:
+                Path(tmp.name).unlink(missing_ok=True)
+                raise HTTPException(status_code=400, detail="File too large (max 50MB)")
+            tmp.write(chunk)
         tmp_path = tmp.name
 
     try:
-        # Ingest document
         doc = await rag_service.ingest_document(
             db=db,
             file_path=tmp_path,
             filename=file.filename,
             content_type=file.content_type or "application/octet-stream",
-            file_size=len(content),
+            file_size=bytes_read,
             session_id=session_id,
         )
         return {
             "success": True,
             "document_id": str(doc.id),
             "filename": doc.filename,
-            "chunks": doc.doc_metadata.get("total_chunks", 0),
+            "chunks": doc.doc_metadata.get("total_chunks", 0) if doc.doc_metadata else 0,
         }
     finally:
-        # Cleanup temp file
         Path(tmp_path).unlink(missing_ok=True)
-
 
 @app.get("/documents")
 async def list_documents(
@@ -280,12 +268,11 @@ async def list_documents(
                 "file_size": d.file_size,
                 "session_id": d.session_id,
                 "metadata": d.doc_metadata,
-                "created_at": d.created_at.isoformat(),
+                "created_at": d.created_at.isoformat() if d.created_at else "",
             }
             for d in docs
         ]
     }
-
 
 @app.delete("/documents/{document_id}")
 async def delete_document(
@@ -298,21 +285,12 @@ async def delete_document(
         raise HTTPException(status_code=404, detail="Document not found")
     return {"success": True, "message": "Document deleted"}
 
-
 @app.patch("/documents/{document_id}/session")
 async def reassign_document_session(
     document_id: str,
     session_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Reassign a document to a different session.
-
-    This is needed when a document is uploaded before a conversation exists
-    (session_id='default-session') and the real conversation is created on
-    the first message.
-    """
-    from app.database.models import Document
-
     result = await db.execute(
         select(Document).where(Document.id == document_id)
     )

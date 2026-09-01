@@ -1,30 +1,37 @@
-from datetime import datetime
+"""
+ORM models for the AI Orchestrator database.
+
+Conventions:
+- All timestamps use database-side UTC via func.now().
+- Foreign keys with ondelete="CASCADE" to prevent orphan rows.
+- ORM relationships defined for convenient access.
+"""
+
 from uuid import uuid4
 
 from sqlalchemy import (
     Column,
     DateTime,
     Float,
+    ForeignKey,
     Integer,
     String,
     Text,
-    ForeignKey,
+    func,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
 
 from app.database.database import Base
 
 
 class RequestLog(Base):
+    """Telemetry log for every chat request processed."""
 
     __tablename__ = "request_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-
-    timestamp = Column(
-        DateTime,
-        default=datetime.utcnow,
-    )
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
 
     # User request
     question = Column(Text)
@@ -34,7 +41,7 @@ class RequestLog(Base):
     intent = Column(String)
     task_type = Column(String)
     intent_confidence = Column(Float)
-    entities = Column(Text)
+    entities = Column(JSONB, default=list)
     processor_reason = Column(Text)
 
     processor_model = Column(String)
@@ -67,48 +74,34 @@ class RequestLog(Base):
 
 
 class ConversationMessage(Base):
+    """A single message in a conversation thread."""
 
     __tablename__ = "conversation_messages"
 
     id = Column(Integer, primary_key=True, index=True)
-
-    # A single session_id holds the whole conversation thread.
-    session_id = Column(String, index=True)
-
-    # "user" | "assistant"
-    role = Column(String)
-    content = Column(Text)
-
-    created_at = Column(
-        DateTime,
-        default=datetime.utcnow,
-    )
+    session_id = Column(String, index=True, nullable=False)
+    role = Column(String, nullable=False)  # "user" | "assistant"
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
 class SessionSummary(Base):
     """Rolling summary for a session (Phase 2).
 
-    Oldest turns are folded into a single summary row once the session
-    grows, so the model context stays bounded instead of replaying the
-    whole history every turn.
+    Oldest turns are folded into a single summary row so the model context
+    stays bounded instead of replaying the whole history every turn.
     """
 
     __tablename__ = "session_summaries"
 
     id = Column(Integer, primary_key=True, index=True)
-
-    # One summary per session.
-    session_id = Column(String, unique=True, index=True)
-
+    session_id = Column(String, unique=True, index=True, nullable=False)
     summary = Column(Text, default="")
-
-    # id of the last raw message folded into the summary.
     last_summarized_message_id = Column(Integer, default=0)
-
     updated_at = Column(
-        DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
     )
 
 
@@ -118,12 +111,20 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    filename = Column(String, index=True)
-    content_type = Column(String)
-    file_size = Column(Integer)
-    session_id = Column(String, index=True)  # optional: associate with chat session
-    doc_metadata = Column(JSONB, default={})  # extra info: pages, author, etc.
-    created_at = Column(DateTime, default=datetime.utcnow)
+    filename = Column(String, index=True, nullable=False)
+    content_type = Column(String, nullable=False)
+    file_size = Column(Integer, nullable=False)
+    session_id = Column(String, index=True)
+    doc_metadata = Column(JSONB, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # ORM relationship — enables doc.chunks access and cascade deletes
+    chunks = relationship(
+        "DocumentChunk",
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class DocumentChunk(Base):
@@ -132,9 +133,17 @@ class DocumentChunk(Base):
     __tablename__ = "document_chunks"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), index=True)
-    chunk_index = Column(Integer)
-    content = Column(Text)
-    qdrant_point_id = Column(String, unique=True, index=True)  # reference to Qdrant
-    chunk_metadata = Column(JSONB, default={})  # page_num, section, etc.
-    created_at = Column(DateTime, default=datetime.utcnow)
+    document_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    chunk_index = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    qdrant_point_id = Column(String, unique=True, index=True)
+    chunk_metadata = Column(JSONB, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # ORM relationship back to parent
+    document = relationship("Document", back_populates="chunks")

@@ -1,23 +1,14 @@
 """
 Single orchestration core shared by /chat and /chat/stream.
-
-Both endpoints consume the SAME _turn() event stream, so every pipeline
-stage — processor, clarification, tool execution, router, memory,
-generation, metrics — is implemented here ONCE and used by both.
-
-Extension points (add each feature in exactly one place):
-  Phase 2 memory summarization/retrieval  -> stage 5 (Memory)
-  Phase 3 RAG / vector retrieval          -> new stage between 3 and 4
-  Phase 4 multi-tool planning             -> stage 3 (Tools)
-  Phase 5 response caching                -> stage 6 (Generation)
 """
 
 import json
+import logging
 import time
-import uuid
-from typing import Any, AsyncGenerator
+from collections.abc import AsyncGenerator
+from typing import Any
 
-from app.config import PROCESSOR_MODEL
+from app.config import settings
 from app.ollama_client import ollama
 from app.processor.processor import processor
 from app.router import router
@@ -28,14 +19,14 @@ from app.services.rag_service import rag_service
 from app.services.tool_service import ToolService
 from app.utils.logger import log_request
 
-# Fallback used when the processor call fails outright, so a single bad
-# request never takes down the whole endpoint.
+logger = logging.getLogger(__name__)
+
 FALLBACK_PROCESSED: dict[str, Any] = {
     "status": "ready",
     "intent": "general",
     "task_type": "unknown",
     "confidence": 0.0,
-    "optimized_prompt": "",  # filled in with the raw message at call time
+    "optimized_prompt": "",
     "needs_clarification": False,
     "clarification_questions": [],
     "entities": [],
@@ -44,14 +35,12 @@ FALLBACK_PROCESSED: dict[str, Any] = {
 
 tool_service = ToolService()
 
-
 class ChatPipeline:
     """Coordinate Processor -> Tool/Router -> Memory -> Generation for chat."""
 
-    async def chat(self, session_id: str, message: str, db) -> dict[str, Any]:
+    async def chat(self, session_id: str, message: str, db: Any, use_rag: bool = True) -> dict[str, Any]:
         """Run a full non-streaming turn and return the result dict."""
-
-        async for event in self._turn(session_id, message.strip(), db):
+        async for event in self._turn(session_id, message.strip(), db, use_rag=use_rag):
             if event["type"] == "clarification":
                 return {"type": "clarification", "questions": event["questions"]}
 
@@ -64,16 +53,14 @@ class ChatPipeline:
                     "response": event["response"],
                 }
 
-        # _turn always ends in a final event, so this is unreachable.
         return {}
 
-    async def stream_chat(self, session_id: str, message: str, db) -> AsyncGenerator[str, None]:
+    async def stream_chat(self, session_id: str, message: str, db: Any, use_rag: bool = True) -> AsyncGenerator[str, None]:
         """Run a streaming turn, yielding response tokens as they arrive."""
-        async for event in self._turn(session_id, message.strip(), db):
+        async for event in self._turn(session_id, message.strip(), db, use_rag=use_rag):
             if event["type"] == "clarification":
                 yield f"data: {json.dumps({'type': 'clarification', 'questions': event['questions']})}\n\n"
             elif event["type"] == "tool":
-                # For compatibility, wrap tool response as tokens if frontend expects tokens
                 yield f"data: {json.dumps({'type': 'token', 'token': event['response']})}\n\n"
             elif event["type"] == "token":
                 yield f"data: {json.dumps({'type': 'token', 'token': event['token']})}\n\n"
@@ -82,35 +69,31 @@ class ChatPipeline:
         
         yield "data: [DONE]\n\n"
 
-    # ------------------------------------------------------------------
-    # Single source of truth: one pipeline, consumed by both endpoints.
-    # ------------------------------------------------------------------
     async def _turn(
         self,
         session_id: str,
         message: str,
-        db,
-    ) -> AsyncGenerator[dict, None]:
+        db: Any,
+        use_rag: bool = True,
+    ) -> AsyncGenerator[dict[str, Any], None]:
         start_total = time.perf_counter()
 
-        # 1. Check if the user has uploaded documents for this session
-        session_docs = await rag_service.list_documents(db, session_id)
+        session_docs = []
+        try:
+            session_docs = await rag_service.list_documents(db, session_id)
+        except Exception as e:
+            logger.error(f"Failed to list documents for RAG: {e}")
         
-        if session_docs:
-            # Bypass the processor and force general intent + RAG
+        if session_docs and use_rag:
             processed = {**FALLBACK_PROCESSED, "optimized_prompt": message, "needs_rag": True}
             processor_latency_ms = 0.0
         else:
-            # 1. Processor: intent detection + prompt optimization.
             processed, processor_latency_ms = await self._run_processor(message)
-
-            # Unload the classifier so the target model doesn't wait on it.
             try:
-                await ollama.unload_model(PROCESSOR_MODEL)
-            except Exception:
-                pass
+                await ollama.unload_model(settings.PROCESSOR_MODEL)
+            except Exception as e:
+                logger.debug(f"Failed to unload processor model: {e}")
 
-        # 2. Clarification needs no tool / router / generation.
         if processed["needs_clarification"]:
             yield {
                 "type": "clarification",
@@ -118,20 +101,17 @@ class ChatPipeline:
             }
             return
 
-        # 3. Tools execute directly and bypass the LLM entirely.
-        # NOTE: Skip tool execution if needs_rag is true, because tools like
-        # "calculator" might be falsely detected; RAG queries should go through
-        # the full pipeline so the LLM can use the retrieved context.
         tool_result = None
         if not processed.get("needs_rag", False):
             tool_result = await self._execute_tool(processed)
 
         if tool_result is not None:
-            # Persist the tool exchange too, so "what did I just ask?" style
-            # follow-ups have full context.
             response = str(tool_result.get("result", tool_result.get("error", "")))
-            await memory_service.add_message(db, session_id, "user", message)
-            await memory_service.add_message(db, session_id, "assistant", response)
+            try:
+                await memory_service.add_message(db, session_id, "user", message)
+                await memory_service.add_message(db, session_id, "assistant", response)
+            except Exception as e:
+                logger.error(f"Failed to add tool messages to memory: {e}")
 
             yield {
                 "type": "tool",
@@ -142,44 +122,42 @@ class ChatPipeline:
             }
             return
 
-        # 4. Router: pick the target model based on processor output.
-        routing, routing_latency_ms = await self._run_router(processed)
-        model = routing["model"]
-
-        # Phase 3: RAG retrieval (between router and memory)
-        rag_context = ""
-        
-        # Decide if we should run a vector search
         needs_rag = processed.get("needs_rag", False)
-        should_search_rag = bool(session_docs)
+        should_search_rag = bool(session_docs) and use_rag
 
+        if should_search_rag:
+            model = settings.RAG_MODEL
+            routing_latency_ms = 0.0
+        else:
+            routing, routing_latency_ms = await self._run_router(processed)
+            model = routing["model"]
+
+        rag_context = ""
         if should_search_rag and session_docs:
             doc_ids = [str(d.id) for d in session_docs]
-            rag_results = await rag_service.search(
-                query=message,
-                limit=5,
-                score_threshold=0.3,
-                document_ids=doc_ids,
-            )
-            
-            # Fallback for queries which don't semantically match document contents
-            if not rag_results:
-                print(f"[RAG DEBUG] No chunks met semantic threshold. Fetching raw chunks directly from Postgres.")
-                rag_results = await rag_service.get_raw_chunks(db, doc_ids, limit=5)
-                
-            print(f"[RAG DEBUG] needs_rag={needs_rag}, query={processed['optimized_prompt']}, results={len(rag_results)}")
-            for r in rag_results:
-                print(f"[RAG DEBUG] hit: doc={r['document_id'][:8]}, chunk={r['chunk_index']}, score={r['score']:.3f}, content={r['content'][:80]}")
-            if rag_results:
-                rag_context = "\n\n".join(
-                    f"[Document {r['document_id'][:8]}, Page {r['page_num']}]\n{r['content']}"
-                    for r in rag_results
+            try:
+                rag_results = await rag_service.search(
+                    query=message,
+                    limit=5,
+                    score_threshold=0.3,
+                    document_ids=doc_ids,
                 )
+                
+                if not rag_results:
+                    logger.debug("No chunks met semantic threshold. Fetching raw chunks directly from Postgres.")
+                    rag_results = await rag_service.get_raw_chunks(db, doc_ids, limit=5)
+                    
+                logger.debug(f"needs_rag={needs_rag}, query={processed['optimized_prompt']}, results={len(rag_results)}")
+                for r in rag_results:
+                    logger.debug(f"hit: doc={r['document_id'][:8]}, chunk={r['chunk_index']}, score={r.get('score', 0):.3f}")
+                if rag_results:
+                    rag_context = "\n\n".join(
+                        f"[Document {r['document_id'][:8]}, Page {r.get('page_num', 'unknown')}]\n{r['content']}"
+                        for r in rag_results
+                    )
+            except Exception as e:
+                logger.error(f"RAG search failed: {e}")
 
-        # 5. Memory: build the message list sent to the model.
-        #    Phase 2: summarization / retrieval land here, once.
-        # We use the raw user message rather than the processor's optimized_prompt 
-        # to prevent the 1.5b classifier from hallucinating meaning.
         optimized_message = message
         if rag_context:
             optimized_message = (
@@ -192,63 +170,73 @@ class ChatPipeline:
                 f"{optimized_message}"
             )
             
-        await memory_service.maybe_summarize(db, session_id)
-        history = await memory_service.get_history(db, session_id)
+        history = []
+        try:
+            await memory_service.maybe_summarize(db, session_id)
+            history = await memory_service.get_history(db, session_id)
+        except Exception as e:
+            logger.error(f"Memory service failed to get history: {e}")
+            
         messages = history + [{"role": "user", "content": optimized_message}]
 
-        # Inject global system prompt at the very beginning to prevent hallucinations
         messages.insert(0, {
             "role": "system",
             "content": "You are a highly capable AI assistant. Answer directly, clearly, and concisely. Do not hallucinate or invent fictional plots, facts, or characters. If you are unsure, admit it."
         })
 
-        # 6. Generation (streamed internally so /chat and /chat/stream share
-        #    one code path; the final chunk carries the Ollama metrics).
         full_response = ""
         done_chunk: dict[str, Any] = {}
         gen_start = time.perf_counter()
 
-        async for chunk in ollama.stream_chat(model=model, messages=messages):
-            data = json.loads(chunk)
+        try:
+            async for chunk in ollama.stream_chat(model=model, messages=messages):
+                data = json.loads(chunk)
 
-            if "message" in data:
-                token = data["message"]["content"]
-                full_response += token
-                yield {"type": "token", "token": token}
+                if "message" in data:
+                    token = data["message"]["content"]
+                    full_response += token
+                    yield {"type": "token", "token": token}
 
-            if data.get("done"):
-                done_chunk = data
-                break
+                if data.get("done"):
+                    done_chunk = data
+                    break
+        except Exception as e:
+            logger.error(f"Ollama streaming chat failed: {e}")
+            full_response += "\n[Error generating response]"
+            yield {"type": "token", "token": "\n[Error generating response]"}
 
         generation_latency_ms = round((time.perf_counter() - gen_start) * 1000, 2)
 
-        # Unload the main model to free VRAM/RAM on RTX 4050
         try:
             await ollama.unload_model(model)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to unload model {model}: {e}")
 
-        # 7. Persist the conversation turn.
-        await memory_service.add_message(db, session_id, "user", message)
-        await memory_service.add_message(db, session_id, "assistant", full_response)
+        try:
+            await memory_service.add_message(db, session_id, "user", message)
+            await memory_service.add_message(db, session_id, "assistant", full_response)
+        except Exception as e:
+            logger.error(f"Memory service failed to add messages: {e}")
 
         total_latency_ms = round((time.perf_counter() - start_total) * 1000, 2)
 
-        # 8. Metrics + logging (non-streaming only; streaming has no DB session).
         if db is not None:
-            request_data = build_request_data(
-                message=message,
-                processed=processed,
-                model=model,
-                processor_latency_ms=processor_latency_ms,
-                routing_latency_ms=routing_latency_ms,
-                generation_latency_ms=generation_latency_ms,
-                total_latency_ms=total_latency_ms,
-                response=full_response,
-                ollama_response=done_chunk,
-            )
-            log_request(request_data)
-            await database_service.save_request_log(db=db, data=request_data)
+            try:
+                request_data = build_request_data(
+                    message=message,
+                    processed=processed,
+                    model=model,
+                    processor_latency_ms=processor_latency_ms,
+                    routing_latency_ms=routing_latency_ms,
+                    generation_latency_ms=generation_latency_ms,
+                    total_latency_ms=total_latency_ms,
+                    response=full_response,
+                    ollama_response=done_chunk,
+                )
+                log_request(request_data)
+                await database_service.save_request_log(db=db, data=request_data)
+            except Exception as e:
+                logger.error(f"Failed to log request: {e}")
 
         yield {
             "type": "done",
@@ -258,43 +246,37 @@ class ChatPipeline:
             "response": full_response,
         }
 
-    # ------------------------------------------------------------------
-    # Private helpers (single-responsibility building blocks)
-    # ------------------------------------------------------------------
     async def _run_processor(self, message: str) -> tuple[dict[str, Any], float]:
-        """Call the Processor and time the call.
-
-        Falls back to a safe default payload if the processor raises, so a
-        malformed response or a transient failure (timeout, bad JSON, etc.)
-        degrades to a plain "general" turn instead of crashing the request.
-        """
-
         start = time.perf_counter()
         try:
             processed = await processor.process(message)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Processor failed: {e}")
             processed = {**FALLBACK_PROCESSED, "optimized_prompt": message}
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
         return processed, latency_ms
 
     async def _run_router(self, processed: dict[str, Any]) -> tuple[dict[str, Any], float]:
-        """Call the Router with the processor's output and time the call."""
-
         start = time.perf_counter()
-        routing = await router.select_model(processed)
+        try:
+            routing = router.select_model(processed)
+        except Exception as e:
+            logger.error(f"Router failed: {e}")
+            routing = {"model": settings.RAG_MODEL, "intent": "general"}
         latency_ms = round((time.perf_counter() - start) * 1000, 2)
         return routing, latency_ms
 
     async def _execute_tool(self, processed: dict[str, Any]) -> dict[str, Any] | None:
-        """Execute a tool if requested by the processor. None when not required."""
-
         if not processed.get("needs_tool"):
             return None
 
-        return await tool_service.execute(
-            processed["tool_name"],
-            **processed.get("tool_args", {})
-        )
-
+        try:
+            return await tool_service.execute(
+                processed["tool_name"],
+                **processed.get("tool_args", {})
+            )
+        except Exception as e:
+            logger.error(f"Tool execution failed: {e}")
+            return {"error": str(e)}
 
 chat_pipeline = ChatPipeline()

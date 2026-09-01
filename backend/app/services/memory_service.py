@@ -12,19 +12,16 @@ Phase 2 (summarization) lives here:
     recent raw messages. Before any summarization happens it returns the
     full history untouched, so no context is ever silently dropped.
 """
+import logging
 
 from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import SUMMARY_MODEL
+from app.config import settings
 from app.database.models import ConversationMessage, SessionSummary
 from app.ollama_client import ollama
 
-# Once a session holds more than this many messages, the oldest turns are
-# folded into a rolling summary instead of being sent raw to the model.
-HISTORY_SUMMARIZE_AFTER = 20
-
-# How many most-recent raw messages stay alongside the summary.
-HISTORY_RECENT_MESSAGES = 8
+logger = logging.getLogger(__name__)
 
 _SUMMARY_SYSTEM_PROMPT = (
     "You maintain a rolling summary of a conversation. The user gives you the "
@@ -37,12 +34,13 @@ _SUMMARY_SYSTEM_PROMPT = (
 
 
 class MemoryService:
+    """Service to handle conversation memory and rolling summarization."""
 
-    async def get_history(self, db, session_id: str) -> list[dict]:
+    async def get_history(self, db: AsyncSession, session_id: str) -> list[dict]:
         """Return this session's messages as [{"role", "content"}, ...].
 
         Once a rolling summary exists, it is prepended as a system message
-        and only the most recent HISTORY_RECENT_MESSAGES raw messages are
+        and only the most recent MAX_RAW_MESSAGES raw messages are
         returned. Before any summarization, the full history is returned.
         """
         if db is None:
@@ -57,8 +55,8 @@ class MemoryService:
         )
         rows = result.scalars().all()
 
-        if summary and len(rows) > HISTORY_RECENT_MESSAGES:
-            rows = rows[-HISTORY_RECENT_MESSAGES:]
+        if summary and len(rows) > settings.MAX_RAW_MESSAGES:
+            rows = rows[-settings.MAX_RAW_MESSAGES:]
 
         messages = [
             {"role": row.role, "content": row.content}
@@ -76,7 +74,7 @@ class MemoryService:
 
         return messages
 
-    async def add_message(self, db, session_id: str, role: str, content: str) -> None:
+    async def add_message(self, db: AsyncSession, session_id: str, role: str, content: str) -> None:
         """Persist one message for a session."""
         if db is None:
             return
@@ -84,7 +82,7 @@ class MemoryService:
         db.add(ConversationMessage(session_id=session_id, role=role, content=content))
         await db.commit()
 
-    async def clear_history(self, db, session_id: str) -> None:
+    async def clear_history(self, db: AsyncSession, session_id: str) -> None:
         """Delete all messages and the rolling summary for a session."""
         if db is None:
             return
@@ -105,7 +103,7 @@ class MemoryService:
     # Phase 2: rolling summarization
     # ------------------------------------------------------------------
 
-    async def get_summary(self, db, session_id: str) -> str | None:
+    async def get_summary(self, db: AsyncSession, session_id: str) -> str | None:
         """Return the rolling summary for a session, or None."""
         if db is None:
             return None
@@ -118,7 +116,7 @@ class MemoryService:
 
     async def save_summary(
         self,
-        db,
+        db: AsyncSession,
         session_id: str,
         summary: str,
         last_summarized_message_id: int,
@@ -146,10 +144,10 @@ class MemoryService:
 
         await db.commit()
 
-    async def maybe_summarize(self, db, session_id: str) -> None:
+    async def maybe_summarize(self, db: AsyncSession, session_id: str) -> None:
         """Fold the oldest turns into a rolling summary once the session grows.
 
-        No-op below HISTORY_SUMMARIZE_AFTER messages, and a no-op if the
+        No-op below SUMMARIZE_THRESHOLD messages, and a no-op if the
         summarizer model call fails — the session keeps its raw history and
         nothing is pruned. Never raises into the pipeline.
         """
@@ -161,65 +159,72 @@ class MemoryService:
             .where(ConversationMessage.session_id == session_id)
             .order_by(ConversationMessage.id)
         )
-        rows = result.scalars().all()
+        rows = list(result.scalars().all())
 
-        if len(rows) <= HISTORY_SUMMARIZE_AFTER:
+        if len(rows) <= settings.SUMMARIZE_THRESHOLD:
             return
 
         # Keep the most recent raw messages; fold everything older.
-        to_summarize = rows[:-HISTORY_RECENT_MESSAGES]
+        to_summarize = rows[:-settings.MAX_RAW_MESSAGES]
         if not to_summarize:
             return
 
         last_summarized_id = to_summarize[-1].id
 
-        transcript = "\n".join(
+        transcript = "\\n".join(
             f"{row.role.capitalize()}: {row.content}"
             for row in to_summarize
         )
         previous = await self.get_summary(db, session_id) or "(none)"
 
+        await self._do_summarize(db, session_id, previous, transcript, to_summarize, last_summarized_id)
+
+    async def _do_summarize(self, db: AsyncSession, session_id: str, previous: str, transcript: str, to_summarize: list, last_summarized_id: int) -> None:
+        """Performs the actual summarization and database update."""
         try:
             response = await ollama.chat(
-                model=SUMMARY_MODEL,
+                model=settings.SUMMARY_MODEL,
                 messages=[
                     {"role": "system", "content": _SUMMARY_SYSTEM_PROMPT},
                     {
                         "role": "user",
                         "content": (
-                            f"PREVIOUS SUMMARY:\n{previous}\n\n"
-                            f"NEW MESSAGES:\n{transcript}\n\n"
+                            f"PREVIOUS SUMMARY:\\n{previous}\\n\\n"
+                            f"NEW MESSAGES:\\n{transcript}\\n\\n"
                             f"UPDATED SUMMARY:"
                         ),
                     },
                 ],
             )
-        except Exception:
-            # Summarizer unavailable? Keep the raw history; never fail the turn.
+        except Exception as e:
+            # Summarizer unavailable or failed? Keep the raw history; never fail the turn.
+            logger.exception("Failed to summarize conversation history. Error: %s", e)
             return
         finally:
             # Unload summary model to free VRAM/RAM on RTX 4050
             try:
-                await ollama.unload_model(SUMMARY_MODEL)
-            except Exception:
-                pass
+                await ollama.unload_model(settings.SUMMARY_MODEL)
+            except Exception as unload_e:
+                logger.warning("Failed to unload summary model: %s", unload_e)
 
         summary = response.get("message", {}).get("content", "").strip()
         if not summary:
             return
 
-        await self.save_summary(db, session_id, summary, last_summarized_id)
+        try:
+            await self.save_summary(db, session_id, summary, last_summarized_id)
 
-        # Prune the folded rows so the table stays bounded.
-        await db.execute(
-            delete(ConversationMessage).where(
-                ConversationMessage.session_id == session_id,
-                ConversationMessage.id.in_(
-                    [row.id for row in to_summarize]
-                ),
+            # Prune the folded rows so the table stays bounded.
+            await db.execute(
+                delete(ConversationMessage).where(
+                    ConversationMessage.session_id == session_id,
+                    ConversationMessage.id.in_(
+                        [row.id for row in to_summarize]
+                    ),
+                )
             )
-        )
-        await db.commit()
-
+            await db.commit()
+        except Exception as db_e:
+            logger.exception("Database error while saving summary: %s", db_e)
 
 memory_service = MemoryService()

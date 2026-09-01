@@ -1,10 +1,18 @@
+"""
+Create database tables only when they are missing.
+
+This uses SQLAlchemy's create_all — it creates missing tables but does NOT
+handle column-level migrations. For schema changes on existing tables,
+use Alembic.
+"""
+
 import asyncio
 import logging
 
 from sqlalchemy import inspect as sa_inspect
 
-from app.database.database import engine, Base
 from app.database import models  # noqa: F401 — registers models with Base
+from app.database.database import Base, get_engine
 
 logger = logging.getLogger(__name__)
 
@@ -12,8 +20,9 @@ logger = logging.getLogger(__name__)
 _REQUIRED_TABLES = frozenset(Base.metadata.tables.keys())
 
 
-async def init_db():
+async def init_db() -> None:
     """Create database tables only when they are missing."""
+    engine = get_engine()
 
     async with engine.connect() as conn:
         existing = await conn.run_sync(

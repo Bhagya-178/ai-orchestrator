@@ -1,15 +1,47 @@
+"""
+Logging utilities for the application.
+
+Configures a rotating file handler to keep log file sizes in check,
+and provides helper functions for structured request logging.
+"""
 import json
+import logging
+import os
 from datetime import datetime
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-LOG_FILE = PROJECT_ROOT / "logs" / "requests.log"
+LOG_DIR = PROJECT_ROOT / "logs"
 
-LOG_FILE.parent.mkdir(exist_ok=True)
+# Ensure logs/ directory is created safely
+os.makedirs(LOG_DIR, exist_ok=True)
+
+LOG_FILE = LOG_DIR / "requests.log"
+APP_LOG_FILE = LOG_DIR / "app.log"
+
+# Setup basic app logging with rotation
+app_logger = logging.getLogger("app")
+app_logger.setLevel(logging.INFO)
+
+if not app_logger.handlers:
+    # 5 MB max size, keeping 3 backups
+    handler = RotatingFileHandler(APP_LOG_FILE, maxBytes=5*1024*1024, backupCount=3, encoding="utf-8")
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+    handler.setFormatter(formatter)
+    app_logger.addHandler(handler)
+    
+    # Allow other loggers to use this format
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        root_logger.addHandler(handler)
+        root_logger.setLevel(logging.INFO)
 
 
-def log_request(data: dict):
-
+def log_request(data: dict) -> None:
+    """Log structured request metrics to the dedicated requests.log file."""
     metadata = {
         "timestamp": datetime.now().isoformat(),
 
@@ -56,6 +88,10 @@ def log_request(data: dict):
         "response_length": data.get("response_length"),
     }
 
-    with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(json.dumps(metadata) + "\n")
-        f.flush()
+    # Write directly to the structured log file
+    try:
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(metadata) + "\\n")
+            f.flush()
+    except Exception as e:
+        app_logger.error("Failed to write to requests log: %s", e)

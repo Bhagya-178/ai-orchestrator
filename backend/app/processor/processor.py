@@ -1,13 +1,15 @@
 import json
+import logging
+from typing import Any
 
+from app.config import settings
 from app.ollama_client import ollama
 from app.processor.system_prompt import PROCESSOR_SYSTEM_PROMPT
 from app.processor.tool_detector import tool_detector
 
+logger = logging.getLogger(__name__)
 
 class RequestProcessor:
-
-    MODEL = "qwen2.5:1.5b"
 
     # Allowed values, used to coerce whatever the classifier returns
     # into a known shape.
@@ -20,7 +22,7 @@ class RequestProcessor:
         "general": {"conversation", "creative", "writing"},
     }
 
-    async def process(self, message: str) -> dict:
+    async def process(self, message: str) -> dict[str, Any]:
         message = message.strip()
 
         # Deterministic detection first: clear calculator / datetime
@@ -51,15 +53,18 @@ class RequestProcessor:
         needs_rag = tool_detector.detect_rag(message)
 
         # Otherwise let the classifier LLM decide.
-        response = await ollama.chat(
-            model=self.MODEL,
-            messages=[
-                {"role": "system", "content": PROCESSOR_SYSTEM_PROMPT},
-                {"role": "user", "content": message},
-            ],
-        )
-
-        content = response.get("message", {}).get("content", "").strip()
+        try:
+            response = await ollama.chat(
+                model=settings.PROCESSOR_MODEL,
+                messages=[
+                    {"role": "system", "content": PROCESSOR_SYSTEM_PROMPT},
+                    {"role": "user", "content": message},
+                ],
+            )
+            content = response.get("message", {}).get("content", "").strip()
+        except Exception as e:
+            logger.error(f"Ollama chat failed during processing: {e}")
+            content = ""
 
         # Extract JSON if the model wrapped it in markdown.
         if "```" in content:
@@ -77,7 +82,8 @@ class RequestProcessor:
             if start != -1 and end != -1:
                 content = content[start : end + 1]
             result = json.loads(content)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to parse JSON from processor output: {e}, content: {content}")
             return {
                 "status": "ready",
                 "intent": "general",
@@ -145,8 +151,8 @@ class RequestProcessor:
         if not result["optimized_prompt"]:
             result["optimized_prompt"] = message
 
-        if result["task_type"] not in self.VALID_TASK_TYPES[result["intent"]]:
-            result["task_type"] = next(iter(self.VALID_TASK_TYPES[result["intent"]]))
+        if result["task_type"] not in self.VALID_TASK_TYPES.get(result["intent"], {}):
+            result["task_type"] = next(iter(self.VALID_TASK_TYPES.get(result["intent"], {"conversation"})))
 
         # -------- Safety net -------- #
         # The classifier is a small model (qwen2.5:1.5b) that sometimes

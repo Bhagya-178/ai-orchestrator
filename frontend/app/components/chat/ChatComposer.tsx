@@ -1,13 +1,21 @@
 "use client";
 
-import { useRef, useEffect } from "react";
-import { Paperclip, ArrowUp, X } from "lucide-react";
+import { useRef } from "react";
+import { Paperclip, ArrowUp, FileText, X, Sparkles } from "lucide-react";
 import { useChat } from "@/app/lib/context/ChatContext";
 import { uploadDocument } from "@/app/lib/api/documents";
 import DocumentAttachment from "../documents/DocumentAttachment";
 
 export default function ChatComposer() {
-  const { sendMessage, isGenerating, activeDocument, setActiveDocument, currentConversationId } = useChat();
+  const { 
+    sendMessage, 
+    isGenerating, 
+    activeDocument, 
+    setActiveDocument, 
+    currentConversationId,
+    useDocumentContext,
+    setUseDocumentContext,
+  } = useChat();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const resizeTextarea = () => {
@@ -31,11 +39,16 @@ export default function ChatComposer() {
     }
   };
 
+  // Show context pill when: document is uploaded in this session (even if already "sent")
+  // The pill persists as long as the conversation has a document
+  const showContextPill = !!activeDocument;
+
   return (
     <div className="w-full max-w-[800px] mx-auto p-4 pb-6 mt-auto">
       <div className="relative flex flex-col bg-gray-50 dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden focus-within:ring-4 focus-within:ring-gray-100 dark:focus-within:ring-white/5 focus-within:border-gray-300 dark:focus-within:border-white/20 transition-all">
         
-        {activeDocument && (
+        {/* Document upload preview (only during initial upload) */}
+        {activeDocument && activeDocument.status === "uploading" && (
           <div className="px-3 pt-3">
             <DocumentAttachment 
               document={activeDocument} 
@@ -47,7 +60,11 @@ export default function ChatComposer() {
         <textarea
           ref={textareaRef}
           rows={1}
-          placeholder={activeDocument ? `Ask a question about ${activeDocument.filename}...` : "Ask anything..."}
+          placeholder={
+            activeDocument && useDocumentContext 
+              ? `Ask about ${activeDocument.filename}...` 
+              : "Ask anything..."
+          }
           className="w-full max-h-[200px] bg-transparent resize-none outline-none py-3 px-4 text-[0.95rem] text-gray-900 dark:text-white placeholder:text-gray-400"
           onChange={resizeTextarea}
           onKeyDown={handleKeyDown}
@@ -55,42 +72,66 @@ export default function ChatComposer() {
         />
         
         <div className="flex items-center justify-between px-3 pb-3">
-          <div className="relative">
-            <input 
-              type="file" 
-              className="hidden" 
-              id="file-upload" 
-              accept=".pdf,.doc,.docx,.txt,.md"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  try {
-                    // Set optimistic uploading state
-                    setActiveDocument({
-                      id: "uploading",
-                      filename: file.name,
-                      fileSize: file.size,
-                      contentType: file.type,
-                      status: "uploading"
-                    });
-                    
-                    const uploaded = await uploadDocument(file, currentConversationId);
-                    setActiveDocument(uploaded);
-                  } catch (error) {
-                    console.error("Upload failed", error);
-                    setActiveDocument(null);
-                    alert("Failed to upload document");
+          <div className="flex items-center gap-2">
+            {/* File upload button */}
+            <div className="relative">
+              <input 
+                type="file" 
+                className="hidden" 
+                id="file-upload" 
+                accept=".pdf,.doc,.docx,.txt,.md"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    try {
+                      setActiveDocument({
+                        id: "uploading",
+                        filename: file.name,
+                        fileSize: file.size,
+                        contentType: file.type,
+                        status: "uploading"
+                      });
+                      
+                      const uploaded = await uploadDocument(file, currentConversationId);
+                      setActiveDocument(uploaded);
+                    } catch (error) {
+                      console.error("Upload failed", error);
+                      setActiveDocument(null);
+                      alert("Failed to upload document");
+                    }
                   }
-                }
-              }}
-            />
-            <label 
-              htmlFor="file-upload"
-              className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors cursor-pointer flex items-center justify-center"
-              title="Attach document"
-            >
-              <Paperclip className="w-4 h-4" />
-            </label>
+                }}
+              />
+              <label 
+                htmlFor="file-upload"
+                className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors cursor-pointer flex items-center justify-center"
+                title="Attach document"
+              >
+                <Paperclip className="w-4 h-4" />
+              </label>
+            </div>
+
+            {/* Document Context Pill — unique toggle control */}
+            {showContextPill && activeDocument.status !== "uploading" && (
+              <button
+                onClick={() => setUseDocumentContext(!useDocumentContext)}
+                className={`
+                  group/pill flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-full text-xs font-medium
+                  transition-all duration-200 border
+                  ${useDocumentContext 
+                    ? "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-300" 
+                    : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-400 dark:text-gray-500 line-through"
+                  }
+                `}
+                title={useDocumentContext ? "Click to disable document context" : "Click to enable document context"}
+              >
+                <FileText className={`w-3 h-3 ${useDocumentContext ? "text-blue-500 dark:text-blue-400" : "text-gray-400"}`} />
+                <span className="max-w-[120px] truncate">{activeDocument.filename}</span>
+                {useDocumentContext && (
+                  <Sparkles className="w-3 h-3 text-blue-400 dark:text-blue-300" />
+                )}
+              </button>
+            )}
           </div>
           
           <button

@@ -20,4 +20,3 @@ class BaseTool(ABC):
         Returns:
             Any: Tool result
         """
-        pass

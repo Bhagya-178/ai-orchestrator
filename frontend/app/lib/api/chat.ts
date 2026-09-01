@@ -2,13 +2,14 @@ export async function streamChat(
   message: string,
   sessionId: string,
   onChunk: (text: string) => void,
-  onMetadata: (metadata: unknown) => void
+  onMetadata: (metadata: unknown) => void,
+  useRag: boolean = true
 ): Promise<void> {
   try {
     const response = await fetch("http://localhost:8000/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, session_id: sessionId }),
+      body: JSON.stringify({ message, session_id: sessionId, use_rag: useRag }),
     });
 
     if (!response.ok) {
