@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef } from "react";
-import { Paperclip, ArrowUp, FileText, X, Sparkles } from "lucide-react";
+import { useRef, useState } from "react";
+import { Paperclip, ArrowUp, FileText, X, Sparkles, AlertCircle } from "lucide-react";
 import { useChat } from "@/app/lib/context/ChatContext";
 import { uploadDocument } from "@/app/lib/api/documents";
 import DocumentAttachment from "../documents/DocumentAttachment";
@@ -17,6 +17,9 @@ export default function ChatComposer() {
     setUseDocumentContext,
   } = useChat();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [message, setMessage] = useState("");
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const resizeTextarea = () => {
     if (textareaRef.current) {
@@ -25,15 +28,50 @@ export default function ChatComposer() {
     }
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setMessage(e.target.value);
+    resizeTextarea();
+  };
+
+  const handleSend = () => {
+    if (message.trim()) {
+      sendMessage(message);
+      setMessage("");
+      if (textareaRef.current) {
+        textareaRef.current.style.height = "auto";
+      }
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      const val = textareaRef.current?.value || "";
-      if (val.trim()) {
-        sendMessage(val);
-        if (textareaRef.current) {
-          textareaRef.current.value = "";
-          resizeTextarea();
+      handleSend();
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setUploadError(null);
+    const file = e.target.files?.[0];
+    if (file) {
+      try {
+        setActiveDocument({
+          id: "uploading",
+          filename: file.name,
+          fileSize: file.size,
+          contentType: file.type,
+          status: "uploading"
+        });
+        
+        const uploaded = await uploadDocument(file, currentConversationId);
+        setActiveDocument(uploaded);
+      } catch (error) {
+        console.error("Upload failed", error);
+        setActiveDocument(null);
+        setUploadError("Failed to upload document. Please try again.");
+      } finally {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
         }
       }
     }
@@ -45,6 +83,18 @@ export default function ChatComposer() {
 
   return (
     <div className="w-full max-w-[800px] mx-auto p-4 pb-6 mt-auto">
+      {uploadError && (
+        <div className="mb-3 p-3 flex items-center justify-between text-sm text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-900/30">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4" />
+            <span>{uploadError}</span>
+          </div>
+          <button onClick={() => setUploadError(null)} className="p-1 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-md transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      
       <div className="relative flex flex-col bg-gray-50 dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden focus-within:ring-4 focus-within:ring-gray-100 dark:focus-within:ring-white/5 focus-within:border-gray-300 dark:focus-within:border-white/20 transition-all">
         
         {/* Document upload preview (only during initial upload) */}
@@ -60,14 +110,15 @@ export default function ChatComposer() {
         <textarea
           ref={textareaRef}
           rows={1}
+          value={message}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
           placeholder={
             activeDocument && useDocumentContext 
               ? `Ask about ${activeDocument.filename}...` 
               : "Ask anything..."
           }
           className="w-full max-h-[200px] bg-transparent resize-none outline-none py-3 px-4 text-[0.95rem] text-gray-900 dark:text-white placeholder:text-gray-400"
-          onChange={resizeTextarea}
-          onKeyDown={handleKeyDown}
           disabled={isGenerating}
         />
         
@@ -76,31 +127,12 @@ export default function ChatComposer() {
             {/* File upload button */}
             <div className="relative">
               <input 
+                ref={fileInputRef}
                 type="file" 
                 className="hidden" 
                 id="file-upload" 
                 accept=".pdf,.doc,.docx,.txt,.md"
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    try {
-                      setActiveDocument({
-                        id: "uploading",
-                        filename: file.name,
-                        fileSize: file.size,
-                        contentType: file.type,
-                        status: "uploading"
-                      });
-                      
-                      const uploaded = await uploadDocument(file, currentConversationId);
-                      setActiveDocument(uploaded);
-                    } catch (error) {
-                      console.error("Upload failed", error);
-                      setActiveDocument(null);
-                      alert("Failed to upload document");
-                    }
-                  }
-                }}
+                onChange={handleFileUpload}
               />
               <label 
                 htmlFor="file-upload"
@@ -136,17 +168,8 @@ export default function ChatComposer() {
           
           <button
             type="button"
-            onClick={() => {
-              const val = textareaRef.current?.value || "";
-              if (val.trim()) {
-                sendMessage(val);
-                if (textareaRef.current) {
-                  textareaRef.current.value = "";
-                  resizeTextarea();
-                }
-              }
-            }}
-            disabled={isGenerating}
+            onClick={handleSend}
+            disabled={isGenerating || !message.trim()}
             className="p-1.5 bg-black dark:bg-white text-white dark:text-black rounded-md hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:bg-gray-300 dark:disabled:bg-gray-700 transition-colors"
           >
             <ArrowUp className="w-4 h-4" />

@@ -13,9 +13,9 @@
 
 ## ⚡ The Problem
 
-**A single general-purpose LLM is not necessarily the best model for every task.** 
+**Every local LLM has its own unique specialty.** 
 
-Different models perform better on different workloads (e.g., DeepSeek for reasoning, Qwen Coder for programming). However, asking users to manually select a model for every single prompt creates unnecessary friction and complexity. Furthermore, using massive heavyweight models for simple arithmetic or basic queries wastes immense inference time and computational resources.
+Different models are explicitly engineered for different workloads—DeepSeek excels at deep reasoning, Qwen Coder dominates programming, and Gemma is optimized for general study. However, expecting users to manually select the correct model for every single prompt creates unnecessary friction. Furthermore, using these massive, heavyweight models to calculate simple arithmetic or answer basic queries wastes immense inference time and computational resources.
 
 ## 🎯 The Solution
 
@@ -59,35 +59,44 @@ When documents (PDF, DOCX, TXT) are uploaded to a chat, they are automatically e
 ## 🏗️ System Architecture
 
 ```text
-                         Chat Request
-                              │
-                              ▼
-                       Chat Pipeline
-                              │
-                              ▼
-                         Processor
-                       (qwen2.5:1.5b)
-                              │
-                 ┌────────────┴────────────┐
-                 ▼                         ▼
-               Tool?                    LLM Task
-                 │                         │
-                 ▼                         ▼
-            Python Tool               Model Router
-                 │                         │
-                 │            ┌────────────┼────────────┐
-                 │            ▼            ▼            ▼
-                 │           RAG         Memory    Target Model
-                 │            │            │            │
-                 │            └────────────┼────────────┘
-                 │                         │
-                 │                         ▼
-                 │                       Ollama
-                 │                         │
-                 └────────────┬────────────┘
-                              │
-                              ▼
-                           Response
+                           Chat Request (with optional File)
+                                          │
+                                          ▼
+                         ┌─────────────────────────────────┐
+                         │          Chat Pipeline          │
+                         └────────────────┬────────────────┘
+                                          │
+                                          ▼
+                                    Memory Service 
+                                 (Fetch Chat History)
+                                          │
+             ┌────────────────────────────┴────────────────────────────┐
+             ▼                                                         ▼
+     Has Document? (YES)                                       Has Document? (NO)
+             │                                                         │
+             ▼                                                         ▼
+        RAG Service                                                Processor
+  (Qdrant Vector Search)                                        (qwen2.5:1.5b)
+             │                                                         │
+             │                                        ┌────────────────┴────────────────┐
+             │                                        ▼                                 ▼
+             │                                  Tool Detected                       LLM Task
+             │                                        │                                 │
+             │                                        ▼                                 ▼
+             │                                  Tool Service                      Model Router
+             │                                (Math, Datetime)             (deepseek, gemma, coder)
+             │                                        │                                 │
+             │                                  Return Tool Result                      │
+             │                                 (Bypasses Inference)                     │
+             │                                                                          │
+             └────────────────────────────────────┐                                     │
+                                                  ▼                                     ▼
+                                             qwen3 (RAG)                           Target Model
+                                                  │                                     │
+                                                  └──────────────────┬──────────────────┘
+                                                                     ▼
+                                                                Ollama Client
+                                                            (Streaming Inference)
 ```
 
 ### Request Lifecycle
@@ -224,21 +233,84 @@ Visit [http://localhost:3000](http://localhost:3000) in your browser. The fronte
 
 ```text
 ai-orchestrator/
-│
 ├── backend/                  # FastAPI Python Server
 │   ├── app/
-│   │   ├── database/         # PostgreSQL DB (SQLAlchemy/Alembic)
+│   │   ├── database/         # PostgreSQL DB (SQLAlchemy)
+│   │   │   ├── database.py   
+│   │   │   ├── init_db.py    
+│   │   │   ├── models.py     
+│   │   │   └── session.py    
 │   │   ├── processor/        # Intent detection & system prompts
-│   │   ├── services/         # RAG, Chat Pipeline, Memory, Metrics
-│   │   └── tools/            # Deterministic tools (Calculator, Datetime)
-│   └── README.md             
+│   │   │   ├── processor.py  
+│   │   │   ├── system_prompt.py
+│   │   │   └── tool_detector.py
+│   │   ├── services/         # Core business logic
+│   │   │   ├── chat_pipeline.py
+│   │   │   ├── database_service.py
+│   │   │   ├── document_parser.py
+│   │   │   ├── memory_service.py
+│   │   │   ├── metrics.py    
+│   │   │   ├── rag_service.py
+│   │   │   └── tool_service.py
+│   │   ├── tools/            # Deterministic tools
+│   │   │   ├── base_tool.py  
+│   │   │   ├── calculator.py 
+│   │   │   ├── datetime_tool.py
+│   │   │   └── registry.py   
+│   │   ├── utils/            
+│   │   │   └── logger.py     
+│   │   ├── config.py         # Centralized configuration
+│   │   ├── main.py           # FastAPI entrypoint
+│   │   ├── ollama_client.py  
+│   │   ├── registry.py       # Model routing registry
+│   │   ├── router.py         
+│   │   └── schemas.py        # Pydantic schemas
+│   ├── Dockerfile            
+│   ├── README.md             
+│   └── requirements.txt      
 │
 ├── frontend/                 # Next.js React Application
 │   ├── app/
-│   │   ├── components/       # UI Components (Chat, Documents, Sidebar)
-│   │   └── lib/              # API abstractions & React Contexts
-│   └── README.md             
+│   │   ├── components/       # UI Components
+│   │   │   ├── chat/         
+│   │   │   │   ├── ChatComposer.tsx
+│   │   │   │   ├── ChatView.tsx
+│   │   │   │   └── MessageBubble.tsx
+│   │   │   ├── conversations/
+│   │   │   │   └── ConversationList.tsx
+│   │   │   ├── documents/    
+│   │   │   │   └── DocumentAttachment.tsx
+│   │   │   ├── layout/       
+│   │   │   │   ├── AppShell.tsx
+│   │   │   │   ├── ConversationOverlay.tsx
+│   │   │   │   └── TopBar.tsx
+│   │   │   └── system/       
+│   │   │       ├── BackendStatus.tsx
+│   │   │       └── SettingsModal.tsx
+│   │   ├── lib/              # API and React Contexts
+│   │   │   ├── api/          
+│   │   │   │   ├── chat.ts   
+│   │   │   │   ├── client.ts 
+│   │   │   │   ├── conversations.ts
+│   │   │   │   ├── documents.ts
+│   │   │   │   └── health.ts 
+│   │   │   ├── context/      
+│   │   │   │   ├── ChatContext.tsx
+│   │   │   │   ├── NavigationContext.tsx
+│   │   │   │   └── ThemeContext.tsx
+│   │   │   └── types.ts      
+│   │   ├── globals.css       
+│   │   ├── layout.tsx        
+│   │   └── page.tsx          
+│   ├── public/               
+│   ├── .env.local            
+│   ├── Dockerfile            
+│   ├── README.md             
+│   ├── next.config.ts        
+│   └── package.json          
 │
+├── docker-compose.yml        # Production Docker configuration
+├── docker-compose.dev.yml    # Hot-reload Docker configuration
 └── README.md                 # Project Overview
 ```
 

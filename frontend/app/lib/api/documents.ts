@@ -1,18 +1,14 @@
 import { UploadedDocument } from "../types";
+import { fetchApi } from "./client";
 
 export async function uploadDocument(file: File, sessionId: string): Promise<UploadedDocument> {
   const formData = new FormData();
   formData.append("file", file);
   
-  const response = await fetch(`http://localhost:8000/documents/upload?session_id=${sessionId}`, {
+  const response = await fetchApi(`documents/upload?session_id=${sessionId}`, {
     method: "POST",
     body: formData,
   });
-
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || "Failed to upload document");
-  }
 
   const data = await response.json();
   
@@ -26,10 +22,7 @@ export async function uploadDocument(file: File, sessionId: string): Promise<Upl
 }
 
 export async function listDocuments(sessionId: string): Promise<UploadedDocument[]> {
-  const res = await fetch(`http://localhost:8000/documents?session_id=${sessionId}`, {
-    cache: 'no-store'
-  });
-  if (!res.ok) return [];
+  const res = await fetchApi(`documents?session_id=${sessionId}`);
   const data = await res.json();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data.documents || []).map((doc: any) => ({
@@ -42,19 +35,13 @@ export async function listDocuments(sessionId: string): Promise<UploadedDocument
 }
 
 export async function deleteDocument(documentId: string): Promise<void> {
-  const res = await fetch(`http://localhost:8000/documents/${documentId}`, {
+  await fetchApi(`documents/${documentId}`, {
     method: "DELETE",
   });
-  if (!res.ok) {
-    throw new Error("Failed to delete document");
-  }
 }
 
 export async function reassignDocumentSession(documentId: string, sessionId: string): Promise<void> {
-  const res = await fetch(`http://localhost:8000/documents/${documentId}/session?session_id=${sessionId}`, {
+  await fetchApi(`documents/${documentId}/session?session_id=${sessionId}`, {
     method: "PATCH",
   });
-  if (!res.ok) {
-    console.error("Failed to reassign document session");
-  }
 }

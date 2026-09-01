@@ -1,35 +1,22 @@
 import { Conversation } from "../types";
-
-const API_BASE_URL = "http://127.0.0.1:8000";
+import { fetchApi } from "./client";
 
 export async function getConversations(): Promise<Conversation[]> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/conversations`, {
-      cache: 'no-store'
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    console.error("Failed to load conversations", err);
-  }
-  return [];
+  const res = await fetchApi("conversations");
+  return res.json();
 }
 
 export async function createConversation(title: string = "New Conversation"): Promise<Conversation> {
-  const res = await fetch(`${API_BASE_URL}/conversations`, { method: "POST" });
-  if (res.ok) {
-    const data = await res.json();
-    return {
-      id: data.conversation_id,
-      title,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
-  }
-  throw new Error("Failed to create conversation");
+  const res = await fetchApi("conversations", { method: "POST" });
+  const data = await res.json();
+  return {
+    id: data.conversation_id,
+    title,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
 }
 
 export async function deleteConversation(id: string): Promise<void> {
-  await fetch(`${API_BASE_URL}/conversations/${id}`, { method: "DELETE" });
+  await fetchApi(`conversations/${id}`, { method: "DELETE" });
 }

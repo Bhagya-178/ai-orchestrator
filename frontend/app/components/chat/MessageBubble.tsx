@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus, vs } from "react-syntax-highlighter/dist/esm/styles/prism";
@@ -9,23 +9,35 @@ import { ChatMessage } from "@/app/lib/types";
 
 import { useTheme } from "@/app/lib/context/ThemeContext";
 
-export default function MessageBubble({ message }: { message: ChatMessage }) {
+const MessageBubble = React.memo(function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [copiedMessage, setCopiedMessage] = useState(false);
   const { resolvedTheme } = useTheme();
+  
+  const codeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const messageTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const handleCopyCode = (code: string) => {
+  useEffect(() => {
+    return () => {
+      if (codeTimeoutRef.current) clearTimeout(codeTimeoutRef.current);
+      if (messageTimeoutRef.current) clearTimeout(messageTimeoutRef.current);
+    };
+  }, []);
+
+  const handleCopyCode = useCallback((code: string) => {
+    if (codeTimeoutRef.current) clearTimeout(codeTimeoutRef.current);
     navigator.clipboard.writeText(code);
     setCopiedCode(code);
-    setTimeout(() => setCopiedCode(null), 2000);
-  };
+    codeTimeoutRef.current = setTimeout(() => setCopiedCode(null), 2000);
+  }, []);
 
-  const handleCopyMessage = async () => {
+  const handleCopyMessage = useCallback(async () => {
+    if (messageTimeoutRef.current) clearTimeout(messageTimeoutRef.current);
     try {
       await navigator.clipboard.writeText(message.content || "");
       setCopiedMessage(true);
-      setTimeout(() => setCopiedMessage(false), 2000);
+      messageTimeoutRef.current = setTimeout(() => setCopiedMessage(false), 2000);
     } catch (err) {
       console.error("Clipboard API failed:", err);
       // Fallback
@@ -36,13 +48,56 @@ export default function MessageBubble({ message }: { message: ChatMessage }) {
       try {
         document.execCommand('copy');
         setCopiedMessage(true);
-        setTimeout(() => setCopiedMessage(false), 2000);
+        messageTimeoutRef.current = setTimeout(() => setCopiedMessage(false), 2000);
       } catch (e) {
         console.error("Fallback copy failed:", e);
       }
       document.body.removeChild(textArea);
     }
-  };
+  }, [message.content]);
+
+  const components = useMemo(() => ({
+    code({ className, children, ...props }: any) {
+      const match = /language-(\w+)/.exec(className || "");
+      const code = String(children).replace(/\n$/, "");
+      
+      if (match) {
+        return (
+          <div className="relative group/code mt-4 mb-4 rounded-md overflow-hidden bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-white/10">
+            <div className="flex items-center justify-between px-4 py-1.5 bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/5">
+              <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{match[1]}</span>
+              <button
+                onClick={() => handleCopyCode(code)}
+                className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                title="Copy code"
+              >
+                {copiedCode === code ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+            <SyntaxHighlighter
+              style={resolvedTheme === "dark" ? vscDarkPlus : vs}
+              language={match[1]}
+              PreTag="div"
+              customStyle={{
+                margin: 0,
+                background: "transparent",
+                padding: "1rem",
+                fontSize: "0.875rem",
+              }}
+              {...props}
+            >
+              {code}
+            </SyntaxHighlighter>
+          </div>
+        );
+      }
+      return (
+        <code className="bg-black/5 dark:bg-white/10 rounded-md px-1.5 py-0.5 font-mono text-[0.85em]" {...props}>
+          {children}
+        </code>
+      );
+    }
+  }), [resolvedTheme, copiedCode, handleCopyCode]);
 
   return (
     <div className={`flex gap-4 ${isUser ? "justify-end" : "justify-start"} w-full group`}>
@@ -79,50 +134,7 @@ export default function MessageBubble({ message }: { message: ChatMessage }) {
           )}
           {message.content ? (
             <div className={`prose prose-sm md:prose-base max-w-none dark:prose-invert ${isUser ? "" : "prose-slate dark:prose-p:text-gray-300"}`}>
-              <ReactMarkdown
-                components={{
-                  code({ className, children, ...props }) {
-                    const match = /language-(\w+)/.exec(className || "");
-                    const code = String(children).replace(/\n$/, "");
-                    
-                    if (match) {
-                      return (
-                        <div className="relative group/code mt-4 mb-4 rounded-md overflow-hidden bg-white dark:bg-[#1e1e1e] border border-gray-200 dark:border-white/10">
-                          <div className="flex items-center justify-between px-4 py-1.5 bg-gray-50 dark:bg-white/5 border-b border-gray-200 dark:border-white/5">
-                            <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{match[1]}</span>
-                            <button
-                              onClick={() => handleCopyCode(code)}
-                              className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
-                              title="Copy code"
-                            >
-                              {copiedCode === code ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                          <SyntaxHighlighter
-                            style={resolvedTheme === "dark" ? vscDarkPlus : vs}
-                            language={match[1]}
-                            PreTag="div"
-                            customStyle={{
-                              margin: 0,
-                              background: "transparent",
-                              padding: "1rem",
-                              fontSize: "0.875rem",
-                            }}
-                            {...props}
-                          >
-                            {code}
-                          </SyntaxHighlighter>
-                        </div>
-                      );
-                    }
-                    return (
-                      <code className="bg-black/5 dark:bg-white/10 rounded-md px-1.5 py-0.5 font-mono text-[0.85em]" {...props}>
-                        {children}
-                      </code>
-                    );
-                  }
-                }}
-              >
+              <ReactMarkdown components={components}>
                 {message.content}
               </ReactMarkdown>
             </div>
@@ -181,4 +193,6 @@ export default function MessageBubble({ message }: { message: ChatMessage }) {
       </div>
     </div>
   );
-}
+});
+
+export default MessageBubble;

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useCallback } from "react";
+import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from "react";
 import { ChatMessage, UploadedDocument } from "../types";
 import { streamChat } from "../api/chat";
 import { createConversation } from "../api/conversations";
@@ -17,6 +17,7 @@ interface ChatContextType {
   clearChat: () => void;
   useDocumentContext: boolean;
   setUseDocumentContext: (val: boolean) => void;
+  stopGeneration: () => void;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -30,6 +31,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeDocument, setActiveDocument] = useState<UploadedDocument | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<string>("default-session");
   const [useDocumentContext, setUseDocumentContext] = useState(true);
+  
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const loadConversation = useCallback(async (id: string) => {
     setCurrentConversationId(id);
@@ -56,7 +59,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const clearChat = useCallback(() => {
     setMessages([]);
-    setCurrentConversationId(Math.random().toString(36).substring(7));
+    setCurrentConversationId(crypto.randomUUID());
     setActiveDocument(null);
     setUseDocumentContext(true);
   }, []);
@@ -69,8 +72,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const stopGeneration = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsGenerating(false);
+  }, []);
+
   const sendMessage = async (content: string) => {
-    if (!content.trim() || isGenerating) return;
+    // Prevent sending message if generating or document is still uploading
+    if (!content.trim() || isGenerating || (activeDocument && activeDocument.status === 'uploading')) return;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
 
     let sessionId = currentConversationId;
     if (messages.length === 0) {
@@ -81,13 +100,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       // If a document was uploaded before the conversation existed,
       // reassign it from "default-session" to the real conversation ID
-      if (activeDocument && activeDocument.id !== "uploading") {
+      if (activeDocument && activeDocument.status !== "uploading") {
         await reassignDocumentSession(activeDocument.id, sessionId);
       }
     }
 
     const newUserMsg: ChatMessage = {
-      id: Math.random().toString(),
+      id: crypto.randomUUID(),
       role: "user",
       content: content.trim(),
       attachedDocument: activeDocument ? activeDocument : undefined
@@ -96,7 +115,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setMessages(prev => [...prev, newUserMsg]);
     setIsGenerating(true);
 
-    const assistantId = Math.random().toString();
+    const assistantId = crypto.randomUUID();
     setMessages(prev => [
       ...prev,
       {
@@ -114,36 +133,55 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         sessionId,
         (token) => {
           fullResponse += token;
-          setMessages(prev => 
-            prev.map(msg => 
-              msg.id === assistantId ? { ...msg, content: fullResponse } : msg
-            )
-          );
+          setMessages(prev => {
+            // Optimization: avoid mapping over all messages
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg.id === assistantId) {
+              const newPrev = [...prev];
+              newPrev[newPrev.length - 1] = { ...lastMsg, content: fullResponse };
+              return newPrev;
+            }
+            return prev.map(msg => msg.id === assistantId ? { ...msg, content: fullResponse } : msg);
+          });
         },
         (metadata) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const md = metadata as any;
-          setMessages(prev => 
-            prev.map(msg => 
+          setMessages(prev => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg.id === assistantId) {
+              const newPrev = [...prev];
+              newPrev[newPrev.length - 1] = { ...lastMsg, model: md.model, latencyMs: md.latency_ms };
+              return newPrev;
+            }
+            return prev.map(msg => 
               msg.id === assistantId ? { 
                 ...msg, 
                 model: md.model,
                 latencyMs: md.latency_ms
               } : msg
-            )
-          );
+            );
+          });
         },
-        useDocumentContext
+        useDocumentContext,
+        abortController.signal
       );
-    } catch (error) {
-      console.error("Chat failed:", error);
-      setMessages(prev => 
-        prev.map(msg => 
-          msg.id === assistantId ? { ...msg, content: fullResponse + "\n\n*(Error: Connection to backend failed)*" } : msg
-        )
-      );
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log("Generation aborted");
+      } else {
+        console.error("Chat failed:", error);
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === assistantId ? { ...msg, content: fullResponse + "\n\n*(Error: Connection to backend failed)*" } : msg
+          )
+        );
+      }
     } finally {
-      setIsGenerating(false);
+      if (abortControllerRef.current === abortController) {
+        setIsGenerating(false);
+        abortControllerRef.current = null;
+      }
     }
   };
 
@@ -161,6 +199,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         clearChat,
         useDocumentContext,
         setUseDocumentContext,
+        stopGeneration
       }}
     >
       {children}
