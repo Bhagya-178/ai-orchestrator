@@ -189,40 +189,41 @@ Returns a new `conversation_id` for session tracking.
 ## Project Structure
 
 ```text
-backend/
+backend/                  # FastAPI Python Server
 ├── app/
-│   ├── config.py
-│   ├── main.py
-│   ├── ollama_client.py
-│   ├── registry.py
-│   ├── router.py
-│   ├── schemas.py
-│   ├── processor/
-│   │   ├── processor.py
+│   ├── database/         # PostgreSQL DB (SQLAlchemy)
+│   │   ├── database.py   
+│   │   ├── init_db.py    
+│   │   ├── models.py     
+│   │   └── session.py    
+│   ├── processor/        # Intent detection & system prompts
+│   │   ├── processor.py  
 │   │   ├── system_prompt.py
 │   │   └── tool_detector.py
-│   ├── database/
-│   │   ├── database.py
-│   │   ├── init_db.py
-│   │   ├── models.py
-│   │   └── session.py
-│   ├── services/
+│   ├── services/         # Core business logic
 │   │   ├── chat_pipeline.py
 │   │   ├── database_service.py
+│   │   ├── document_parser.py
 │   │   ├── memory_service.py
-│   │   ├── metrics.py
+│   │   ├── metrics.py    
 │   │   ├── rag_service.py
 │   │   └── tool_service.py
-│   ├── tools/
-│   │   ├── base_tool.py
-│   │   ├── calculator.py
+│   ├── tools/            # Deterministic tools
+│   │   ├── base_tool.py  
+│   │   ├── calculator.py 
 │   │   ├── datetime_tool.py
-│   │   └── registry.py
-│   └── utils/
-│       └── logger.py
-├── logs/
-├── requirements.txt
-└── README.md
+│   │   └── registry.py   
+│   ├── utils/            
+│   │   └── logger.py     
+│   ├── config.py         # Centralized configuration
+│   ├── main.py           # FastAPI entrypoint
+│   ├── ollama_client.py  
+│   ├── registry.py       # Model routing registry
+│   ├── router.py         
+│   └── schemas.py        # Pydantic schemas
+├── Dockerfile            
+├── README.md             
+└── requirements.txt      
 ```
 
 ## Tool Support
@@ -271,6 +272,7 @@ Tool requests and document searches are detected deterministically (so the small
 - ✅ **Phase 3 RAG with token-based chunking** — deterministic document search detection, semantic retrieval, and prompt injection
 - ✅ **Document upload endpoints** (`/documents/upload`, `/documents`, `/documents/{document_id}`)
 - ✅ Request logging & metrics to PostgreSQL (latency, tokens/sec, context usage, CPU)
+- ✅ Docker support and production deployment (`Dockerfile` and `docker-compose.yml`)
 
 **In progress / next up:**
 
@@ -283,7 +285,6 @@ Tool requests and document searches are detected deterministically (so the small
 - Phase 4 — multi-tool planning (stage 3)
 - Phase 5 — response caching (stage 7)
 - Additional tool integrations (web search, API calls)
-- Docker support and production deployment
 - Authentication, monitoring, and rate limiting
 - Hybrid search (semantic + keyword BM25)
 

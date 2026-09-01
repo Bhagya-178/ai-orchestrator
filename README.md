@@ -200,8 +200,19 @@ ollama pull qwen2.5:1.5b
 ollama pull bge-m3
 ```
 
-### 1. Start the Backend (FastAPI)
+### 1. Run with Docker Compose (Recommended)
 
+The easiest way to spin up the entire application (Frontend, Backend, Postgres, and Qdrant) is via Docker Compose:
+
+```bash
+docker-compose up -d --build
+```
+
+The frontend will be available at [http://localhost:3000](http://localhost:3000) and the backend API at `http://localhost:8000`.
+
+### 2. Start the Backend Manually (FastAPI)
+
+If you prefer to run the backend natively:
 ```bash
 cd backend
 python -m venv .venv
@@ -217,7 +228,7 @@ Create a `.env` file in the `backend/` directory with your database connection s
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### 2. Start the Frontend (Next.js 15)
+### 3. Start the Frontend Manually (Next.js 15)
 
 ```bash
 cd frontend

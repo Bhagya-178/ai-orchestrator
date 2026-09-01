@@ -32,9 +32,22 @@ Instead of a monolithic design, the application is broken down into structured c
 
 ## Getting Started
 
-First, ensure the Python backend is running on `http://127.0.0.1:8000`.
+First, ensure the Python backend is running. By default, the frontend expects the backend at `http://localhost:8000`. You can override this by creating an `.env.local` file:
 
-Then, install dependencies and run the development server:
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+### Running with Docker (Recommended)
+
+You can run the entire stack (Frontend, Backend, Postgres, Qdrant) using Docker Compose from the root directory:
+```bash
+docker-compose up -d
+```
+
+### Running Manually
+
+Install dependencies and run the development server:
 
 ```bash
 npm install
@@ -42,3 +55,47 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+    
+## Project Structure
+
+```text
+frontend/                 # Next.js React Application
+├── app/
+│   ├── components/       # UI Components
+│   │   ├── chat/         
+│   │   │   ├── ChatComposer.tsx
+│   │   │   ├── ChatView.tsx
+│   │   │   └── MessageBubble.tsx
+│   │   ├── conversations/
+│   │   │   └── ConversationList.tsx
+│   │   ├── documents/    
+│   │   │   └── DocumentAttachment.tsx
+│   │   ├── layout/       
+│   │   │   ├── AppShell.tsx
+│   │   │   ├── ConversationOverlay.tsx
+│   │   │   └── TopBar.tsx
+│   │   └── system/       
+│   │       ├── BackendStatus.tsx
+│   │       └── SettingsModal.tsx
+│   ├── lib/              # API and React Contexts
+│   │   ├── api/          
+│   │   │   ├── chat.ts   
+│   │   │   ├── client.ts 
+│   │   │   ├── conversations.ts
+│   │   │   ├── documents.ts
+│   │   │   └── health.ts 
+│   │   ├── context/      
+│   │   │   ├── ChatContext.tsx
+│   │   │   ├── NavigationContext.tsx
+│   │   │   └── ThemeContext.tsx
+│   │   └── types.ts      
+│   ├── globals.css       
+│   ├── layout.tsx        
+│   └── page.tsx          
+├── public/               
+├── .env.local            
+├── Dockerfile            
+├── README.md             
+├── next.config.ts        
+└── package.json          
+```
