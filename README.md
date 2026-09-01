@@ -53,7 +53,7 @@ When documents (PDF, DOCX, TXT) are uploaded to a chat, they are automatically e
                                                                 ▼
                                                         Relevant Chunks
                                                                 │
- User Query ────────────────────────────────────────────────────┼──► Target LLM
+ User Query ────────────────────────────────────────────────────┼──► LLM
 ```
 
 ## 🏗️ System Architecture
