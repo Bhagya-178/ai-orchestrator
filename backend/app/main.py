@@ -21,6 +21,8 @@ from app.schemas import (
     ChatResponse,
     HealthResponse,
     ModelsResponse,
+    MetricsResponse,
+    ChatMetrics
 )
 from app.services.chat_pipeline import chat_pipeline
 from app.services.rag_service import rag_service
@@ -40,7 +42,8 @@ app = FastAPI(title=settings.APP_NAME, lifespan=lifespan)
 # Configure CORS for frontend communication
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=list(settings.CORS_ORIGINS),
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -78,6 +81,8 @@ async def chat(
         message=message,
         db=db,
         use_rag=request.use_rag,
+        intent_override=request.intent_override,
+        effort_level=request.effort_level,
     )
 
     return ChatResponse(
@@ -103,6 +108,8 @@ async def stream_chat(
             message=message,
             db=db,
             use_rag=request.use_rag,
+            intent_override=request.intent_override,
+            effort_level=request.effort_level,
         ),
         media_type="text/plain"
     )
@@ -185,6 +192,43 @@ async def delete_conversation(session_id: str, db: AsyncSession = Depends(get_db
     await db.execute(delete(ConversationMessage).where(ConversationMessage.session_id == session_id))
     await db.commit()
     return {"success": True}
+
+@app.get("/conversations/{session_id}/metrics", response_model=MetricsResponse)
+async def get_conversation_metrics(session_id: str, db: AsyncSession = Depends(get_db)):
+    from app.database.models import RequestLog
+    query = select(
+        func.count(RequestLog.id).label("total_requests"),
+        func.avg(RequestLog.total_latency_ms).label("avg_latency"),
+        func.sum(RequestLog.prompt_tokens).label("total_prompt_tokens"),
+        func.sum(RequestLog.completion_tokens).label("total_completion_tokens"),
+        func.avg(RequestLog.tokens_per_second).label("avg_tps")
+    ).where(RequestLog.session_id == session_id)
+    
+    result = await db.execute(query)
+    row = result.fetchone()
+    
+    if not row or row.total_requests == 0:
+        return MetricsResponse(
+            session_id=session_id,
+            metrics=ChatMetrics(
+                total_requests=0,
+                average_latency_ms=0.0,
+                total_prompt_tokens=0,
+                total_completion_tokens=0,
+                average_tokens_per_second=0.0
+            )
+        )
+        
+    return MetricsResponse(
+        session_id=session_id,
+        metrics=ChatMetrics(
+            total_requests=row.total_requests or 0,
+            average_latency_ms=float(row.avg_latency or 0.0),
+            total_prompt_tokens=int(row.total_prompt_tokens or 0),
+            total_completion_tokens=int(row.total_completion_tokens or 0),
+            average_tokens_per_second=float(row.avg_tps or 0.0)
+        )
+    )
 
 @app.get("/chat/{session_id}/messages")
 async def get_chat_messages(session_id: str, db: AsyncSession = Depends(get_db)):

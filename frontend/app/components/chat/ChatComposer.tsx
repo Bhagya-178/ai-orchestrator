@@ -15,6 +15,10 @@ export default function ChatComposer() {
     currentConversationId,
     useDocumentContext,
     setUseDocumentContext,
+    intentOverride,
+    setIntentOverride,
+    effortLevel,
+    setEffortLevel
   } = useChat();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,6 +84,7 @@ export default function ChatComposer() {
   // Show context pill when: document is uploaded in this session (even if already "sent")
   // The pill persists as long as the conversation has a document
   const showContextPill = !!activeDocument;
+  const isRagActive = Boolean(activeDocument && useDocumentContext);
 
   return (
     <div className="w-full max-w-[800px] mx-auto p-4 pb-6 mt-auto">
@@ -122,10 +127,10 @@ export default function ChatComposer() {
           disabled={isGenerating}
         />
         
-        <div className="flex items-center justify-between px-3 pb-3">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between px-3 pb-3 gap-2">
+          <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
             {/* File upload button */}
-            <div className="relative">
+            <div className="relative shrink-0">
               <input 
                 ref={fileInputRef}
                 type="file" 
@@ -149,7 +154,7 @@ export default function ChatComposer() {
                 onClick={() => setUseDocumentContext(!useDocumentContext)}
                 className={`
                   group/pill flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-full text-xs font-medium
-                  transition-all duration-200 border
+                  transition-all duration-200 border shrink-0
                   ${useDocumentContext 
                     ? "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-300" 
                     : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-400 dark:text-gray-500 line-through"
@@ -164,13 +169,46 @@ export default function ChatComposer() {
                 )}
               </button>
             )}
+
+            {/* If a document is attached and context is enabled, show simple indicator and HIDE dropdowns */}
+            {isRagActive ? (
+              <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/25 px-2 py-0.5 rounded-md shrink-0">
+                {activeDocument?.status === "uploading" ? "Uploading..." : "RAG active"}
+              </span>
+            ) : (
+              /* Manual Controls — only visible when no document is active */
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <select
+                  value={intentOverride}
+                  onChange={(e) => setIntentOverride(e.target.value)}
+                  className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-[11px] font-medium text-gray-600 dark:text-gray-300 outline-none cursor-pointer py-1 px-2 rounded-lg transition-all"
+                  title="Model / Intent Override"
+                >
+                  <option value="auto" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Auto Model</option>
+                  <option value="general" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">General</option>
+                  <option value="coding" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Coding</option>
+                  <option value="reasoning" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Reasoning</option>
+                  <option value="study" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Study</option>
+                </select>
+                <select
+                  value={effortLevel}
+                  onChange={(e) => setEffortLevel(e.target.value)}
+                  className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-[11px] font-medium text-gray-600 dark:text-gray-300 outline-none cursor-pointer py-1 px-2 rounded-lg transition-all"
+                  title="Effort Level"
+                >
+                  <option value="low" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Low Effort</option>
+                  <option value="medium" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Medium Effort</option>
+                  <option value="high" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">High Effort</option>
+                </select>
+              </div>
+            )}
           </div>
           
           <button
             type="button"
             onClick={handleSend}
             disabled={isGenerating || !message.trim()}
-            className="p-1.5 bg-black dark:bg-white text-white dark:text-black rounded-md hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:bg-gray-300 dark:disabled:bg-gray-700 transition-colors"
+            className="p-1.5 shrink-0 bg-black dark:bg-white text-white dark:text-black rounded-md hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:bg-gray-300 dark:disabled:bg-gray-700 transition-colors"
           >
             <ArrowUp className="w-4 h-4" />
           </button>

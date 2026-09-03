@@ -161,8 +161,6 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
           
           {!isUser && message.model && (
             <div className="text-[11px] text-gray-400 font-medium flex items-center gap-1.5">
-              <span>Automatically routed</span>
-              <span>·</span>
               <span>{message.model}</span>
               {message.latencyMs && (
                 <>

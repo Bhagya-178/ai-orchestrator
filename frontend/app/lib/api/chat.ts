@@ -6,12 +6,20 @@ export async function streamChat(
   onChunk: (text: string) => void,
   onMetadata: (metadata: unknown) => void,
   useRag: boolean = true,
+  intentOverride: string = "auto",
+  effortLevel: string = "medium",
   signal?: AbortSignal
 ): Promise<void> {
   const response = await fetchApi("chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, session_id: sessionId, use_rag: useRag }),
+    body: JSON.stringify({ 
+      message, 
+      session_id: sessionId, 
+      use_rag: useRag,
+      intent_override: intentOverride === "auto" ? null : intentOverride,
+      effort_level: effortLevel
+    }),
     signal,
   });
 

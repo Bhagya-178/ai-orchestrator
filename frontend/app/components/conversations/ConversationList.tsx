@@ -1,20 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { getConversations, deleteConversation } from "@/app/lib/api/conversations";
 import { Conversation } from "@/app/lib/types";
 import { useChat } from "@/app/lib/context/ChatContext";
+import { useNavigation } from "@/app/lib/context/NavigationContext";
 import { Trash2 } from "lucide-react";
 
 export default function ConversationList({ onSelect }: { onSelect: () => void }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const { currentConversationId, loadConversation, clearChat } = useChat();
+  const { currentConversationId, loadConversation, clearChat, isGenerating } = useChat();
+  const { isSidebarOpen } = useNavigation();
 
-  const loadConversations = () => getConversations().then(setConversations);
+  const loadConversations = useCallback(() => {
+    getConversations().then(setConversations);
+  }, []);
 
+  // Auto-refresh when sidebar opens, conversation ID changes, or message generation completes
   useEffect(() => {
     loadConversations();
-  }, []);
+  }, [loadConversations, isSidebarOpen, currentConversationId, isGenerating]);
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();

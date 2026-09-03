@@ -17,6 +17,10 @@ interface ChatContextType {
   clearChat: () => void;
   useDocumentContext: boolean;
   setUseDocumentContext: (val: boolean) => void;
+  intentOverride: string;
+  setIntentOverride: (val: string) => void;
+  effortLevel: string;
+  setEffortLevel: (val: string) => void;
   stopGeneration: () => void;
 }
 
@@ -31,6 +35,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeDocument, setActiveDocument] = useState<UploadedDocument | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<string>("default-session");
   const [useDocumentContext, setUseDocumentContext] = useState(true);
+  const [intentOverride, setIntentOverride] = useState<string>("auto");
+  const [effortLevel, setEffortLevel] = useState<string>("medium");
   
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -164,6 +170,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           });
         },
         useDocumentContext,
+        activeDocument && useDocumentContext ? "auto" : intentOverride,
+        activeDocument && useDocumentContext ? "high" : effortLevel,
         abortController.signal
       );
     } catch (error: any) {
@@ -199,6 +207,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         clearChat,
         useDocumentContext,
         setUseDocumentContext,
+        intentOverride,
+        setIntentOverride,
+        effortLevel,
+        setEffortLevel,
         stopGeneration
       }}
     >

@@ -31,14 +31,24 @@ async def init_db() -> None:
 
     missing = _REQUIRED_TABLES - existing
 
-    if not missing:
+    if missing:
+        logger.info("Missing tables %s — running create_all …", missing)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables created successfully.")
+    else:
         logger.info("All database tables already exist — skipping creation.")
-        return
 
-    logger.info("Missing tables %s — running create_all …", missing)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database tables created successfully.")
+    # Column-level auto migrations for backward compatibility
+    try:
+        from sqlalchemy import text
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("ALTER TABLE request_logs ADD COLUMN IF NOT EXISTS session_id VARCHAR;")
+            )
+        logger.info("Checked column migrations successfully.")
+    except Exception as e:
+        logger.warning("Auto-migration check skipped or failed: %s", e)
 
 
 if __name__ == "__main__":

@@ -30,3 +30,16 @@ export interface Conversation {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface ChatMetrics {
+  total_requests: number;
+  average_latency_ms: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  average_tokens_per_second: number;
+}
+
+export interface MetricsResponse {
+  session_id: string;
+  metrics: ChatMetrics;
+}

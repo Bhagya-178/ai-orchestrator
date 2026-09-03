@@ -7,6 +7,7 @@ benchmarking, caching stats, ...) without touching orchestration code.
 
 import asyncio
 import json
+from typing import Any
 
 import psutil
 
@@ -16,22 +17,21 @@ CONTEXT_WINDOW = 32768
 
 
 async def build_request_data(
-    *,
     message: str,
-    processed: dict,
+    processed: dict[str, Any],
     model: str,
     processor_latency_ms: float,
     routing_latency_ms: float,
     generation_latency_ms: float,
     total_latency_ms: float,
     response: str,
-    ollama_response: dict,
-) -> dict:
-    """Assemble the full metrics payload for logging and DB persistence.
-
-    Uses .get() with defaults throughout so a missing/renamed field in
-    Ollama's response never turns into an unhandled KeyError.
-    """
+    ollama_response: dict[str, Any],
+    session_id: str | None = None
+) -> dict[str, Any]:
+    """Compile metric points from a completed chat turn."""
+    prompt_tokens = ollama_response.get("prompt_eval_count", 0)
+    completion_tokens = ollama_response.get("eval_count", 0)
+    total_tokens = prompt_tokens + completion_tokens
 
     eval_count = ollama_response.get("eval_count", 0)
     eval_duration_ns = ollama_response.get("eval_duration", 0)
@@ -54,6 +54,7 @@ async def build_request_data(
     cpu_percent = await asyncio.to_thread(psutil.cpu_percent, interval=None)
 
     return {
+        "session_id": session_id,
         "question": message,
         "optimized_prompt": processed.get("optimized_prompt", ""),
         "intent": processed.get("intent", ""),

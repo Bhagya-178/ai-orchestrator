@@ -272,14 +272,25 @@ class RAGService:
             )
 
         try:
-            results = await self.client.search(
-                collection_name=self.collection_name,
-                query_vector=query_embedding,
-                limit=limit,
-                score_threshold=score_threshold,
-                query_filter=query_filter,
-                with_payload=True,
-            )
+            if hasattr(self.client, "query_points"):
+                response = await self.client.query_points(
+                    collection_name=self.collection_name,
+                    query=query_embedding,
+                    limit=limit,
+                    score_threshold=score_threshold,
+                    query_filter=query_filter,
+                    with_payload=True,
+                )
+                results = response.points
+            else:
+                results = await self.client.search(
+                    collection_name=self.collection_name,
+                    query_vector=query_embedding,
+                    limit=limit,
+                    score_threshold=score_threshold,
+                    query_filter=query_filter,
+                    with_payload=True,
+                )
         except Exception:
             logger.exception("Qdrant search failed")
             return []
@@ -301,9 +312,11 @@ class RAGService:
         if not document_ids:
             return []
         
+        import uuid
+        uuid_ids = [uuid.UUID(str(d)) for d in document_ids]
         query = (
             select(DocumentChunk)
-            .where(DocumentChunk.document_id.in_(document_ids))
+            .where(DocumentChunk.document_id.in_(uuid_ids))
             .order_by(DocumentChunk.document_id, DocumentChunk.chunk_index)
             .limit(limit)
         )

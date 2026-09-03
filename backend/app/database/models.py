@@ -32,6 +32,7 @@ class RequestLog(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
+    session_id = Column(String, index=True, nullable=True)
 
     # User request
     question = Column(Text)

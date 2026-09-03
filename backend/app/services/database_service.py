@@ -22,6 +22,7 @@ class DatabaseService:
         """Save a new request log entry to the database."""
         try:
             log = RequestLog(
+                session_id=data.get("session_id"),
                 question=data.get("question", ""),
                 optimized_prompt=data.get("optimized_prompt", ""),
                 intent=data.get("intent", ""),

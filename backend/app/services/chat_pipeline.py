@@ -38,9 +38,11 @@ tool_service = ToolService()
 class ChatPipeline:
     """Coordinate Processor -> Tool/Router -> Memory -> Generation for chat."""
 
-    async def chat(self, session_id: str, message: str, db: Any, use_rag: bool = True) -> dict[str, Any]:
+    async def chat(
+        self, session_id: str, message: str, db: Any, use_rag: bool = True, intent_override: str | None = None, effort_level: str | None = "medium"
+    ) -> dict[str, Any]:
         """Run a full non-streaming turn and return the result dict."""
-        async for event in self._turn(session_id, message.strip(), db, use_rag=use_rag):
+        async for event in self._turn(session_id, message.strip(), db, use_rag, intent_override, effort_level):
             if event["type"] == "clarification":
                 return {"type": "clarification", "questions": event["questions"]}
 
@@ -55,9 +57,11 @@ class ChatPipeline:
 
         return {}
 
-    async def stream_chat(self, session_id: str, message: str, db: Any, use_rag: bool = True) -> AsyncGenerator[str, None]:
+    async def stream_chat(
+        self, session_id: str, message: str, db: Any, use_rag: bool = True, intent_override: str | None = None, effort_level: str | None = "medium"
+    ) -> AsyncGenerator[str, None]:
         """Run a streaming turn, yielding response tokens as they arrive."""
-        async for event in self._turn(session_id, message.strip(), db, use_rag=use_rag):
+        async for event in self._turn(session_id, message.strip(), db, use_rag, intent_override, effort_level):
             if event["type"] == "clarification":
                 yield f"data: {json.dumps({'type': 'clarification', 'questions': event['questions']})}\n\n"
             elif event["type"] == "tool":
@@ -75,6 +79,8 @@ class ChatPipeline:
         message: str,
         db: Any,
         use_rag: bool = True,
+        intent_override: str | None = None,
+        effort_level: str | None = "medium"
     ) -> AsyncGenerator[dict[str, Any], None]:
         start_total = time.perf_counter()
 
@@ -84,8 +90,38 @@ class ChatPipeline:
         except Exception as e:
             logger.error(f"Failed to list documents for RAG: {e}")
         
-        if session_docs and use_rag:
-            processed = {**FALLBACK_PROCESSED, "optimized_prompt": message, "needs_rag": True}
+        has_manual_intent = bool(intent_override and intent_override.lower() != "auto")
+
+        from app.processor.tool_detector import tool_detector
+        detected = tool_detector.detect(message)
+        needs_rag_det = tool_detector.detect_rag(message)
+
+        if detected:
+            processed = {
+                **FALLBACK_PROCESSED,
+                "optimized_prompt": message,
+                "intent": detected["intent"],
+                "needs_tool": True,
+                "tool_name": detected["tool_name"],
+                "tool_args": detected["tool_args"],
+            }
+            processor_latency_ms = 0.0
+        elif session_docs and use_rag:
+            intent = intent_override.lower() if has_manual_intent else "general"
+            processed = {
+                **FALLBACK_PROCESSED,
+                "optimized_prompt": message,
+                "intent": intent,
+                "needs_rag": True,
+            }
+            processor_latency_ms = 0.0
+        elif has_manual_intent:
+            processed = {
+                **FALLBACK_PROCESSED,
+                "optimized_prompt": message,
+                "intent": intent_override.lower(),
+                "needs_rag": needs_rag_det,
+            }
             processor_latency_ms = 0.0
         else:
             processed, processor_latency_ms = await self._run_processor(message)
@@ -125,7 +161,10 @@ class ChatPipeline:
         needs_rag = processed.get("needs_rag", False)
         should_search_rag = bool(session_docs) and use_rag
 
-        if should_search_rag:
+        if has_manual_intent:
+            routing, routing_latency_ms = await self._run_router(processed)
+            model = routing["model"]
+        elif should_search_rag:
             model = settings.RAG_MODEL
             routing_latency_ms = 0.0
         else:
@@ -179,9 +218,26 @@ class ChatPipeline:
             
         messages = history + [{"role": "user", "content": optimized_message}]
 
+        system_content = "You are a highly capable AI assistant. Answer directly, clearly, and concisely. Do not hallucinate or invent fictional plots, facts, or characters. If you are unsure, admit it."
+        generation_options: dict[str, Any] = {}
+
+        if should_search_rag:
+            # Document RAG queries require full explanations without artificial truncation
+            system_content += " Answer thoroughly, accurately, and completely based on the provided document context."
+            generation_options["num_predict"] = 2048
+        elif effort_level == "low":
+            system_content += " KEEP YOUR RESPONSE EXTREMELY CONCISE AND BRIEF. ONE OR TWO SENTENCES MAXIMUM. DO NOT ELABORATE."
+            generation_options["num_predict"] = 250
+        elif effort_level == "high":
+            system_content += " PROVIDE A VERY DETAILED, STEP-BY-STEP, COMPREHENSIVE ANSWER. SHOW ALL YOUR REASONING AND EXPLAIN THOROUGHLY."
+            generation_options["num_predict"] = 2048
+        else:  # medium or default
+            system_content += " PROVIDE A BALANCED, MODERATE-LENGTH ANSWER. EXPLAIN THE KEY POINTS CLEARLY AND SUCCINCTLY WITHOUT BEING OVERLY BRIEF OR UNNECESSARILY VERBOSE."
+            generation_options["num_predict"] = 1024
+
         messages.insert(0, {
             "role": "system",
-            "content": "You are a highly capable AI assistant. Answer directly, clearly, and concisely. Do not hallucinate or invent fictional plots, facts, or characters. If you are unsure, admit it."
+            "content": system_content
         })
 
         full_response = ""
@@ -189,7 +245,7 @@ class ChatPipeline:
         gen_start = time.perf_counter()
 
         try:
-            async for chunk in ollama.stream_chat(model=model, messages=messages):
+            async for chunk in ollama.stream_chat(model=model, messages=messages, options=generation_options):
                 data = json.loads(chunk)
 
                 if "message" in data:
@@ -222,7 +278,7 @@ class ChatPipeline:
 
         if db is not None:
             try:
-                request_data = build_request_data(
+                request_data = await build_request_data(
                     message=message,
                     processed=processed,
                     model=model,
@@ -232,6 +288,7 @@ class ChatPipeline:
                     total_latency_ms=total_latency_ms,
                     response=full_response,
                     ollama_response=done_chunk,
+                    session_id=session_id
                 )
                 log_request(request_data)
                 await database_service.save_request_log(db=db, data=request_data)
