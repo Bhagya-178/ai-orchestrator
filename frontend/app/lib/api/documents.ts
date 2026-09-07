@@ -21,8 +21,9 @@ export async function uploadDocument(file: File, sessionId: string): Promise<Upl
   };
 }
 
-export async function listDocuments(sessionId: string): Promise<UploadedDocument[]> {
-  const res = await fetchApi(`documents?session_id=${sessionId}`);
+export async function listDocuments(sessionId?: string): Promise<UploadedDocument[]> {
+  const qs = sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : "";
+  const res = await fetchApi(`documents${qs}`);
   const data = await res.json();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data.documents || []).map((doc: any) => ({

@@ -6,7 +6,7 @@ import ConversationOverlay from "./ConversationOverlay";
 
 export default function AppShell({ children }: { children: ReactNode }) {
   return (
-    <div className="flex flex-col min-h-[100dvh] w-full bg-[var(--background)] relative text-[var(--foreground)] font-sans antialiased">
+    <div className="flex flex-col h-[100dvh] max-h-[100dvh] w-full bg-[var(--background)] relative text-[var(--foreground)] font-sans antialiased overflow-hidden">
       <TopBar />
       <ConversationOverlay />
       

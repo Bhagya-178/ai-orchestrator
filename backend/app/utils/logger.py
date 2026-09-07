@@ -15,7 +15,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOG_DIR = PROJECT_ROOT / "logs"
 
 # Ensure logs/ directory is created safely
-os.makedirs(LOG_DIR, exist_ok=True)
+try:
+    os.makedirs(LOG_DIR, exist_ok=True)
+except Exception:
+    pass
 
 LOG_FILE = LOG_DIR / "requests.log"
 APP_LOG_FILE = LOG_DIR / "app.log"
@@ -25,11 +28,14 @@ app_logger = logging.getLogger("app")
 app_logger.setLevel(logging.INFO)
 
 if not app_logger.handlers:
-    # 5 MB max size, keeping 3 backups
-    handler = RotatingFileHandler(APP_LOG_FILE, maxBytes=5*1024*1024, backupCount=3, encoding="utf-8")
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
+    try:
+        # 5 MB max size, keeping 3 backups
+        handler: logging.Handler = RotatingFileHandler(APP_LOG_FILE, maxBytes=5*1024*1024, backupCount=3, encoding="utf-8")
+    except Exception:
+        handler = logging.StreamHandler()
     handler.setFormatter(formatter)
     app_logger.addHandler(handler)
     
@@ -91,7 +97,7 @@ def log_request(data: dict) -> None:
     # Write directly to the structured log file
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(metadata) + "\\n")
+            f.write(json.dumps(metadata) + "\n")
             f.flush()
     except Exception as e:
         app_logger.error("Failed to write to requests log: %s", e)

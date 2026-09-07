@@ -1,15 +1,21 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Paperclip, ArrowUp, FileText, X, Sparkles, AlertCircle } from "lucide-react";
+import { useRef, useState, useEffect } from "react";
+import { Paperclip, ArrowUp, FileText, X, Sparkles, AlertCircle, Square } from "lucide-react";
 import { useChat } from "@/app/lib/context/ChatContext";
+import { useAuth } from "@/app/lib/context/AuthContext";
 import { uploadDocument } from "@/app/lib/api/documents";
+import { getRecentPrompts } from "@/app/lib/api/chat";
 import DocumentAttachment from "../documents/DocumentAttachment";
+import VoiceInputButton from "../voice/VoiceInputButton";
+import GuestLimitModal from "../auth/GuestLimitModal";
 
 export default function ChatComposer() {
   const { 
+    messages,
     sendMessage, 
     isGenerating, 
+    stopGeneration,
     activeDocument, 
     setActiveDocument, 
     currentConversationId,
@@ -18,12 +24,46 @@ export default function ChatComposer() {
     intentOverride,
     setIntentOverride,
     effortLevel,
-    setEffortLevel
+    setEffortLevel,
+    updateSettings,
   } = useChat();
+
+  const {
+    isAuthenticated,
+    isGuestLimitReached,
+    guestMessageCount,
+    guestMessageLimit,
+    incrementGuestMessageCount,
+    setShowAuthModal,
+    setAuthModalMode,
+  } = useAuth();
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState("");
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isGuestLimitModalOpen, setIsGuestLimitModalOpen] = useState(false);
+
+  // Message history navigation (like ChatGPT / Claude / Shell)
+  const historyIndexRef = useRef<number>(-1);
+  const draftRef = useRef<string>("");
+
+  // Pre-seed prompt history from database on load so ArrowUp works immediately
+  useEffect(() => {
+    getRecentPrompts().then((dbPrompts) => {
+      if (dbPrompts && dbPrompts.length > 0) {
+        try {
+          const raw = localStorage.getItem("ai_orchestrator_prompt_history");
+          const existing: string[] = raw ? JSON.parse(raw) : [];
+          const merged = Array.from(new Set([...dbPrompts, ...existing]));
+          if (merged.length > 50) merged.splice(0, merged.length - 50);
+          localStorage.setItem("ai_orchestrator_prompt_history", JSON.stringify(merged));
+        } catch {
+          // ignore storage errors
+        }
+      }
+    });
+  }, []);
 
   const resizeTextarea = () => {
     if (textareaRef.current) {
@@ -34,16 +74,61 @@ export default function ChatComposer() {
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMessage(e.target.value);
+    historyIndexRef.current = -1;
     resizeTextarea();
   };
 
+  // Persistent prompt history helpers (like ChatGPT / Claude / Shell)
+  const getCombinedPromptHistory = () => {
+    let saved: string[] = [];
+    try {
+      const raw = localStorage.getItem("ai_orchestrator_prompt_history");
+      if (raw) saved = JSON.parse(raw);
+    } catch {
+      saved = [];
+    }
+
+    const sessionPrompts = messages
+      .filter((m) => m.role === "user" && m.content.trim())
+      .map((m) => m.content.trim());
+
+    // Merge: older saved prompts first, followed by session prompts, no adjacent duplicates
+    const combined = Array.from(new Set([...saved, ...sessionPrompts]));
+    return combined;
+  };
+
+  const persistPrompt = (promptText: string) => {
+    try {
+      let saved: string[] = [];
+      const raw = localStorage.getItem("ai_orchestrator_prompt_history");
+      if (raw) saved = JSON.parse(raw);
+      const filtered = saved.filter((p) => p !== promptText);
+      filtered.push(promptText);
+      if (filtered.length > 50) filtered.shift();
+      localStorage.setItem("ai_orchestrator_prompt_history", JSON.stringify(filtered));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
   const handleSend = () => {
-    if (message.trim()) {
-      sendMessage(message);
-      setMessage("");
-      if (textareaRef.current) {
-        textareaRef.current.style.height = "auto";
-      }
+    if (!message.trim()) return;
+
+    if (!isAuthenticated && isGuestLimitReached) {
+      setIsGuestLimitModalOpen(true);
+      return;
+    }
+
+    persistPrompt(message.trim());
+    sendMessage(message);
+    if (!isAuthenticated) {
+      incrementGuestMessageCount();
+    }
+    setMessage("");
+    historyIndexRef.current = -1;
+    draftRef.current = "";
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
     }
   };
 
@@ -51,6 +136,68 @@ export default function ChatComposer() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+      return;
+    }
+
+    // Up Arrow: retrieve previous user prompt
+    if (e.key === "ArrowUp" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      const textarea = textareaRef.current;
+      const isEmpty = !message.trim();
+      const isAtStart = textarea ? textarea.selectionStart === 0 && !message.slice(0, textarea.selectionStart).includes("\n") : true;
+
+      if (isEmpty || isAtStart) {
+        const userPrompts = getCombinedPromptHistory();
+
+        if (userPrompts.length > 0) {
+          e.preventDefault();
+          if (historyIndexRef.current === -1) {
+            draftRef.current = message;
+            historyIndexRef.current = userPrompts.length - 1;
+          } else if (historyIndexRef.current > 0) {
+            historyIndexRef.current -= 1;
+          }
+
+          const targetPrompt = userPrompts[historyIndexRef.current];
+          setMessage(targetPrompt);
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.selectionStart = textareaRef.current.selectionEnd = targetPrompt.length;
+              resizeTextarea();
+            }
+          });
+        }
+      }
+      return;
+    }
+
+    // Down Arrow: navigate forward in history or restore unsubmitted draft
+    if (e.key === "ArrowDown" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      if (historyIndexRef.current !== -1) {
+        const userPrompts = getCombinedPromptHistory();
+
+        e.preventDefault();
+        if (historyIndexRef.current < userPrompts.length - 1) {
+          historyIndexRef.current += 1;
+          const targetPrompt = userPrompts[historyIndexRef.current];
+          setMessage(targetPrompt);
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.selectionStart = textareaRef.current.selectionEnd = targetPrompt.length;
+              resizeTextarea();
+            }
+          });
+        } else {
+          // Reached the end: restore saved draft
+          historyIndexRef.current = -1;
+          setMessage(draftRef.current);
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.selectionStart = textareaRef.current.selectionEnd = draftRef.current.length;
+              resizeTextarea();
+            }
+          });
+        }
+      }
     }
   };
 
@@ -100,7 +247,7 @@ export default function ChatComposer() {
         </div>
       )}
       
-      <div className="relative flex flex-col bg-gray-50 dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden focus-within:ring-4 focus-within:ring-gray-100 dark:focus-within:ring-white/5 focus-within:border-gray-300 dark:focus-within:border-white/20 transition-all">
+      <div className="relative flex flex-col bg-[#f7f7f5] dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-zinc-200 dark:focus-within:ring-white/10 focus-within:border-gray-300 dark:focus-within:border-white/20 transition-all shadow-sm">
         
         {/* Document upload preview (only during initial upload) */}
         {activeDocument && activeDocument.status === "uploading" && (
@@ -148,6 +295,11 @@ export default function ChatComposer() {
               </label>
             </div>
 
+            <VoiceInputButton 
+              onTranscribed={(spokenText) => setMessage((prev) => prev ? `${prev} ${spokenText}` : spokenText)}
+              disabled={isGenerating}
+            />
+
             {/* Document Context Pill — unique toggle control */}
             {showContextPill && activeDocument.status !== "uploading" && (
               <button
@@ -180,7 +332,11 @@ export default function ChatComposer() {
               <div className="flex items-center gap-1.5 flex-wrap">
                 <select
                   value={intentOverride}
-                  onChange={(e) => setIntentOverride(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setIntentOverride(val);
+                    updateSettings(val, undefined);
+                  }}
                   className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-[11px] font-medium text-gray-600 dark:text-gray-300 outline-none cursor-pointer py-1 px-2 rounded-lg transition-all"
                   title="Model / Intent Override"
                 >
@@ -192,33 +348,92 @@ export default function ChatComposer() {
                 </select>
                 <select
                   value={effortLevel}
-                  onChange={(e) => setEffortLevel(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!isAuthenticated && val === "high") {
+                      setAuthModalMode("login");
+                      setShowAuthModal(true);
+                      return;
+                    }
+                    setEffortLevel(val);
+                    updateSettings(undefined, val);
+                  }}
                   className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-[11px] font-medium text-gray-600 dark:text-gray-300 outline-none cursor-pointer py-1 px-2 rounded-lg transition-all"
                   title="Effort Level"
                 >
                   <option value="low" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Low Effort</option>
                   <option value="medium" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Medium Effort</option>
-                  <option value="high" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">High Effort</option>
+                  <option value="high" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
+                    High Effort {!isAuthenticated ? "(Sign In)" : ""}
+                  </option>
                 </select>
               </div>
             )}
           </div>
           
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={isGenerating || !message.trim()}
-            className="p-1.5 shrink-0 bg-black dark:bg-white text-white dark:text-black rounded-md hover:bg-gray-800 dark:hover:bg-gray-200 disabled:opacity-50 disabled:bg-gray-300 dark:disabled:bg-gray-700 transition-colors"
-          >
-            <ArrowUp className="w-4 h-4" />
-          </button>
+          {isGenerating ? (
+            <button
+              type="button"
+              onClick={stopGeneration}
+              className="p-1.5 shrink-0 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 hover:opacity-90 active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+              title="Stop generating"
+            >
+              <Square className="w-4 h-4 fill-current" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={!message.trim()}
+              className="send-btn p-1.5 shrink-0 rounded-lg transition-colors cursor-pointer"
+              title="Send message"
+            >
+              <ArrowUp className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Guest Preview Quota Indicator */}
+      {!isAuthenticated && (
+        <div className="flex items-center justify-between text-[11px] px-2 mt-2 text-gray-500 dark:text-gray-400">
+          <div className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full ${isGuestLimitReached ? "bg-red-500" : "bg-amber-500"}`} />
+            <span>
+              {isGuestLimitReached ? (
+                <span className="text-red-600 dark:text-red-400 font-medium">
+                  Free guest limit reached (5/5)
+                </span>
+              ) : (
+                <span>
+                  Guest Tier: <strong>{Math.max(0, guestMessageLimit - guestMessageCount)} of {guestMessageLimit}</strong> free messages left
+                </span>
+              )}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setAuthModalMode("login");
+              setShowAuthModal(true);
+            }}
+            className="text-blue-600 dark:text-blue-400 hover:underline font-semibold cursor-pointer"
+          >
+            Sign in for unlimited &rarr;
+          </button>
+        </div>
+      )}
+
       <div className="text-center mt-2">
         <span className="text-[10px] text-gray-400 font-medium">
           Responses are generated locally and may contain mistakes. Verify important information.
         </span>
       </div>
+
+      <GuestLimitModal
+        isOpen={isGuestLimitModalOpen}
+        onClose={() => setIsGuestLimitModalOpen(false)}
+      />
     </div>
   );
 }

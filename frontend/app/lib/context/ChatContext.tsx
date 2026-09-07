@@ -2,8 +2,9 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from "react";
 import { ChatMessage, UploadedDocument } from "../types";
-import { streamChat } from "../api/chat";
-import { createConversation } from "../api/conversations";
+import { streamChat, getChatMessages } from "../api/chat";
+import { createConversation, getConversation, updateConversationSettings } from "../api/conversations";
+import { listDocuments, reassignDocumentSession } from "../api/documents";
 
 interface ChatContextType {
   messages: ChatMessage[];
@@ -13,6 +14,7 @@ interface ChatContextType {
   activeDocument: UploadedDocument | null;
   setActiveDocument: (doc: UploadedDocument | null) => void;
   currentConversationId: string;
+  currentTitle: string;
   loadConversation: (id: string) => Promise<void>;
   clearChat: () => void;
   useDocumentContext: boolean;
@@ -21,22 +23,26 @@ interface ChatContextType {
   setIntentOverride: (val: string) => void;
   effortLevel: string;
   setEffortLevel: (val: string) => void;
+  updateSettings: (newIntent?: string, newEffort?: string) => Promise<void>;
   stopGeneration: () => void;
+  editMessage: (messageId: string, newContent: string) => Promise<void>;
+  regenerateLastResponse: () => Promise<void>;
+  /** Increments whenever a new conversation is first committed to the backend */
+  conversationVersion: number;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
-
-import { getChatMessages } from "../api/chat";
-import { listDocuments, reassignDocumentSession } from "../api/documents";
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [activeDocument, setActiveDocument] = useState<UploadedDocument | null>(null);
   const [currentConversationId, setCurrentConversationId] = useState<string>("default-session");
+  const [currentTitle, setCurrentTitle] = useState<string>("New Chat");
   const [useDocumentContext, setUseDocumentContext] = useState(true);
   const [intentOverride, setIntentOverride] = useState<string>("auto");
   const [effortLevel, setEffortLevel] = useState<string>("medium");
+  const [conversationVersion, setConversationVersion] = useState(0);
   
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -44,31 +50,95 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCurrentConversationId(id);
     if (id === "default-session" || id.length < 10) {
       setMessages([]);
+      setCurrentTitle("New Chat");
       setActiveDocument(null);
       setUseDocumentContext(true);
+      setIntentOverride("auto");
+      setEffortLevel("medium");
       return;
     }
     
     // Load past messages
-    const history = await getChatMessages(id);
-    setMessages(history);
+    let history: ChatMessage[] = [];
+    try {
+      history = await getChatMessages(id);
+    } catch (err) {
+      console.warn("Failed to load conversation history:", err);
+    }
+
+    // Load past conversation settings (intent, effort level, and title)
+    try {
+      const conv = await getConversation(id);
+      if (conv && conv.title && conv.title !== "New Conversation" && conv.title !== "New Chat") {
+        setCurrentTitle(conv.title);
+      } else if (history.length > 0) {
+        const firstUser = history.find(m => m.role === "user" && m.content.trim());
+        setCurrentTitle(firstUser?.content.slice(0, 45) || "New Chat");
+      } else {
+        setCurrentTitle("New Chat");
+      }
+
+      if (conv) {
+        if (conv.intent_override) setIntentOverride(conv.intent_override);
+        if (conv.effort_level) setEffortLevel(conv.effort_level);
+      }
+    } catch (err) {
+      console.warn("Failed to load conversation settings:", err);
+      if (history.length > 0) {
+        const firstUser = history.find(m => m.role === "user" && m.content.trim());
+        setCurrentTitle(firstUser?.content.slice(0, 45) || "New Chat");
+      }
+    }
 
     // Load past documents
-    const docs = await listDocuments(id);
+    let docs: UploadedDocument[] = [];
+    try {
+      docs = await listDocuments(id);
+    } catch (err) {
+      console.warn("Failed to load documents for session:", err);
+    }
+
     if (docs && docs.length > 0) {
       setActiveDocument(docs[0]);
       setUseDocumentContext(true);
+
+      // Ensure the first user message displays the attached document badge
+      let attached = false;
+      const historyWithDocs = history.map((msg) => {
+        if (!attached && msg.role === "user") {
+          attached = true;
+          return msg.attachedDocument ? msg : { ...msg, attachedDocument: docs[0] };
+        }
+        return msg;
+      });
+      setMessages(historyWithDocs);
     } else {
       setActiveDocument(null);
+      setMessages(history);
     }
   }, []);
 
   const clearChat = useCallback(() => {
     setMessages([]);
     setCurrentConversationId(crypto.randomUUID());
+    setCurrentTitle("New Chat");
     setActiveDocument(null);
     setUseDocumentContext(true);
+    setIntentOverride("auto");
+    setEffortLevel("medium");
   }, []);
+
+  const updateSettings = useCallback(async (newIntent?: string, newEffort?: string) => {
+    if (newIntent) setIntentOverride(newIntent);
+    if (newEffort) setEffortLevel(newEffort);
+
+    if (currentConversationId && currentConversationId !== "default-session" && currentConversationId.length >= 10) {
+      await updateConversationSettings(currentConversationId, {
+        intent_override: newIntent,
+        effort_level: newEffort,
+      });
+    }
+  }, [currentConversationId]);
 
   const handleSetActiveDocument = useCallback((doc: UploadedDocument | null) => {
     setActiveDocument(doc);
@@ -99,15 +169,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     let sessionId = currentConversationId;
     if (messages.length === 0) {
-      // Create new conversation on first message
-      const newConv = await createConversation(content.substring(0, 30));
-      sessionId = newConv.id;
-      setCurrentConversationId(sessionId);
+      const derivedTitle = content.trim().length > 40 ? content.trim().substring(0, 40) + "..." : content.trim();
+      setCurrentTitle(derivedTitle);
 
-      // If a document was uploaded before the conversation existed,
-      // reassign it from "default-session" to the real conversation ID
+      // If currentConversationId is the placeholder "default-session", create a real conversation
+      if (sessionId === "default-session" || sessionId.length < 10) {
+        const newConv = await createConversation(derivedTitle);
+        sessionId = newConv.id;
+        setCurrentConversationId(sessionId);
+      }
+      // Signal ConversationList to refresh after this new session is committed
+      setConversationVersion(v => v + 1);
+
+      // Ensure uploaded document is associated with this conversation's sessionId
       if (activeDocument && activeDocument.status !== "uploading") {
-        await reassignDocumentSession(activeDocument.id, sessionId);
+        try {
+          await reassignDocumentSession(activeDocument.id, sessionId);
+        } catch (err) {
+          console.warn("Document session reassignment error:", err);
+        }
       }
     }
 
@@ -172,7 +252,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         useDocumentContext,
         activeDocument && useDocumentContext ? "auto" : intentOverride,
         activeDocument && useDocumentContext ? "high" : effortLevel,
-        abortController.signal
+        abortController.signal,
+        (toolStep) => {
+          setMessages(prev => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg && lastMsg.id === assistantId) {
+              const currentSteps = lastMsg.toolSteps || [];
+              const newPrev = [...prev];
+              newPrev[newPrev.length - 1] = {
+                ...lastMsg,
+                toolSteps: [...currentSteps, toolStep],
+              };
+              return newPrev;
+            }
+            return prev.map(msg =>
+              msg.id === assistantId
+                ? { ...msg, toolSteps: [...(msg.toolSteps || []), toolStep] }
+                : msg
+            );
+          });
+        }
       );
     } catch (error: any) {
       if (error.name === 'AbortError') {
@@ -189,9 +288,47 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (abortControllerRef.current === abortController) {
         setIsGenerating(false);
         abortControllerRef.current = null;
+        // Increment version so ConversationList refreshes after messages are saved to DB
+        setConversationVersion(v => v + 1);
       }
     }
   };
+
+  const editMessage = useCallback(async (messageId: string, newContent: string) => {
+    if (isGenerating || !newContent.trim()) return;
+    const msgIndex = messages.findIndex(m => m.id === messageId);
+    if (msgIndex === -1) return;
+
+    // Prune subsequent messages to branch cleanly
+    setMessages(prev => prev.slice(0, msgIndex));
+    // Send updated prompt
+    await sendMessage(newContent);
+  }, [isGenerating, messages, sendMessage]);
+
+  const regenerateLastResponse = useCallback(async () => {
+    if (isGenerating || messages.length < 2) return;
+    // Find last user message
+    let lastUserPrompt = "";
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === "user") {
+        lastUserPrompt = messages[i].content;
+        break;
+      }
+    }
+    if (!lastUserPrompt) return;
+
+    // Remove trailing assistant message
+    setMessages(prev => {
+      for (let i = prev.length - 1; i >= 0; i--) {
+        if (prev[i].role === "assistant") {
+          return prev.slice(0, i);
+        }
+      }
+      return prev;
+    });
+
+    await sendMessage(lastUserPrompt);
+  }, [isGenerating, messages, sendMessage]);
 
   return (
     <ChatContext.Provider
@@ -200,9 +337,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setMessages,
         isGenerating,
         sendMessage,
+        editMessage,
+        regenerateLastResponse,
         activeDocument,
         setActiveDocument: handleSetActiveDocument,
         currentConversationId,
+        currentTitle,
         loadConversation,
         clearChat,
         useDocumentContext,
@@ -211,7 +351,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setIntentOverride,
         effortLevel,
         setEffortLevel,
-        stopGeneration
+        updateSettings,
+        stopGeneration,
+        conversationVersion,
       }}
     >
       {children}

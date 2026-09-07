@@ -1,4 +1,5 @@
 import { fetchApi } from "./client";
+import { ChatMessage, ToolStepEvent } from "../types";
 
 export async function streamChat(
   message: string,
@@ -8,7 +9,8 @@ export async function streamChat(
   useRag: boolean = true,
   intentOverride: string = "auto",
   effortLevel: string = "medium",
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onToolStep?: (step: ToolStepEvent) => void
 ): Promise<void> {
   const response = await fetchApi("chat/stream", {
     method: "POST",
@@ -53,6 +55,8 @@ export async function streamChat(
             const parsed = JSON.parse(dataStr);
             if (parsed.type === "token") {
               onChunk(parsed.token);
+            } else if (parsed.type === "tool_result" || parsed.type === "tool_start" || parsed.type === "thought") {
+              onToolStep?.(parsed as ToolStepEvent);
             } else if (parsed.type === "done") {
               onMetadata(parsed);
             }
@@ -65,7 +69,23 @@ export async function streamChat(
   }
 }
 
-export async function getChatMessages(sessionId: string): Promise<{id: string, role: "user" | "assistant", content: string, timestamp: string}[]> {
-  const res = await fetchApi(`chat/${sessionId}/messages`);
-  return res.json();
+export async function getChatMessages(sessionId: string): Promise<ChatMessage[]> {
+  try {
+    const res = await fetchApi(`chat/${sessionId}/messages`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (err) {
+    console.warn("Could not load chat messages (backend starting up or unreachable):", err);
+    return [];
+  }
+}
+
+export async function getRecentPrompts(): Promise<string[]> {
+  try {
+    const res = await fetchApi("chat/recent-prompts");
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
 }

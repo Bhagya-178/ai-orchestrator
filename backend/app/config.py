@@ -58,6 +58,12 @@ class Settings:
     MAX_RAW_MESSAGES: int = 20
     SUMMARIZE_THRESHOLD: int = 15
 
+    # --- Authentication ---
+    JWT_SECRET: str = "orchestrator-super-secret-key-change-in-prod-2026"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+
 
 def _load_settings() -> Settings:
     """Build a Settings instance from the environment."""
@@ -81,6 +87,10 @@ def _load_settings() -> Settings:
         CORS_ORIGINS=tuple(_parse_cors_origins(cors_raw)),
         MAX_RAW_MESSAGES=int(os.getenv("MAX_RAW_MESSAGES", "20")),
         SUMMARIZE_THRESHOLD=int(os.getenv("SUMMARIZE_THRESHOLD", "15")),
+        JWT_SECRET=os.getenv("JWT_SECRET", "orchestrator-super-secret-key-change-in-prod-2026"),
+        JWT_ALGORITHM=os.getenv("JWT_ALGORITHM", "HS256"),
+        ACCESS_TOKEN_EXPIRE_MINUTES=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")),
+        REFRESH_TOKEN_EXPIRE_DAYS=int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30")),
     )
 
 

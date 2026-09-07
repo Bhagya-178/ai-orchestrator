@@ -6,6 +6,9 @@ services:
     ports:
       - "3000:3000"
     environment:
+      - HOSTNAME=0.0.0.0
+      - PORT=3000
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
       - NEXT_PUBLIC_API_URL=http://localhost:8000
     depends_on:
       - backend
@@ -14,6 +17,7 @@ services:
       - /app/node_modules
       - /app/.next
     command: npm run dev
+    restart: unless-stopped
 
   backend:
     build: 
@@ -30,13 +34,17 @@ services:
       - SUMMARY_MODEL=qwen2.5:1.5b
       - RAG_MODEL=qwen3:8b
     depends_on:
-      - db
-      - qdrant
+      db:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./backend:/app
+    user: "0:0"
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
 
   db:
     image: postgres:15-alpine
@@ -45,9 +53,15 @@ services:
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=ai_orchestrator
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_orchestrator"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -55,6 +69,7 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_data:/qdrant/storage
+    restart: unless-stopped
 
 volumes:
   postgres_data:

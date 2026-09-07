@@ -1,14 +1,23 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Sparkles, ShieldCheck } from "lucide-react";
 import { useNavigation } from "@/app/lib/context/NavigationContext";
 import { useChat } from "@/app/lib/context/ChatContext";
+import { useAuth } from "@/app/lib/context/AuthContext";
 import ConversationList from "../conversations/ConversationList";
 
 export default function ConversationOverlay() {
   const { isSidebarOpen, closeSidebar } = useNavigation();
   const { clearChat } = useChat();
+  const { 
+    user, 
+    isAuthenticated, 
+    guestMessageCount, 
+    guestMessageLimit, 
+    setShowAuthModal, 
+    setAuthModalMode 
+  } = useAuth();
   const overlayRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click
@@ -79,6 +88,49 @@ export default function ConversationOverlay() {
           </div>
           <ConversationList onSelect={closeSidebar} />
         </div>
+
+        {/* Sidebar Footer: Tier Status */}
+        {!isAuthenticated ? (
+          <div className="p-3 border-t border-[var(--border)]/70 bg-black/[0.02] dark:bg-white/[0.02]">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-semibold text-gray-900 dark:text-white">Guest Tier</span>
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                Free Preview
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 dark:bg-zinc-800 rounded-full h-1.5 overflow-hidden mb-2">
+              <div 
+                className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                style={{ width: `${Math.min(100, (guestMessageCount / guestMessageLimit) * 100)}%` }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+              <span>{guestMessageCount} / {guestMessageLimit} messages used</span>
+              <button
+                onClick={() => {
+                  setAuthModalMode("login");
+                  setShowAuthModal(true);
+                  closeSidebar();
+                }}
+                className="font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                Sign In &rarr;
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="p-3 border-t border-[var(--border)]/70 flex items-center justify-between text-xs bg-black/[0.01] dark:bg-white/[0.01]">
+            <div className="flex items-center gap-2 truncate">
+              <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 text-white font-semibold flex items-center justify-center text-[10px] shrink-0">
+                {user?.full_name ? user.full_name[0].toUpperCase() : user?.email[0].toUpperCase()}
+              </div>
+              <span className="truncate font-medium text-gray-800 dark:text-gray-200">{user?.email}</span>
+            </div>
+            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shrink-0">
+              {user?.role === "admin" ? "Admin" : "Member"}
+            </span>
+          </div>
+        )}
       </div>
     </>
   );

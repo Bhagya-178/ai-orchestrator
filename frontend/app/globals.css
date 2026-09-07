@@ -8,7 +8,12 @@
   --muted: #71717a;
   --card: #ffffff;
   --border: #e4e4e7;
-  --shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  --send-btn: #18181b;
+  --send-btn-hover: #09090b;
+  --send-btn-fg: #ffffff;
+  --send-btn-disabled: #d4d4d8;
+  --send-btn-disabled-fg: #a1a1aa;
 }
 
 .dark {
@@ -17,7 +22,12 @@
   --muted: #a1a1aa;
   --card: #18181b;
   --border: #27272a;
-  --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  --shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+  --send-btn: #fafafa;
+  --send-btn-hover: #e4e4e7;
+  --send-btn-fg: #09090b;
+  --send-btn-disabled: #27272a;
+  --send-btn-disabled-fg: #52525b;
 }
 
 html {
@@ -45,17 +55,22 @@ textarea {
 }
 
 ::selection {
-  background: rgba(24, 24, 27, 0.2);
+  background: rgba(24, 24, 27, 0.15);
 }
 
 .dark ::selection {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.18);
 }
 
+/* ── Prose (markdown) ── */
 .prose a {
-  color: #0f172a;
+  color: #3b82f6;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.dark .prose a {
+  color: #60a5fa;
 }
 
 .prose p,
@@ -66,18 +81,31 @@ textarea {
 }
 
 .prose code {
-  background: rgba(24, 24, 27, 0.05);
+  background: rgba(24, 24, 27, 0.06);
+  border: 1px solid rgba(24, 24, 27, 0.08);
   border-radius: 0.35rem;
   padding: 0.12rem 0.35rem;
+  font-size: 0.875em;
 }
 
+.dark .prose code {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* ── Code block wrapper ── */
 .code-block {
   position: relative;
   margin-top: 0.75rem;
   overflow: hidden;
-  border: 1px solid rgba(24, 24, 27, 0.12);
+  border: 1px solid rgba(24, 24, 27, 0.1);
   border-radius: 0.85rem;
-  background: #f7f7f5;
+  background: #f9f9f8;
+}
+
+.dark .code-block {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: #141414;
 }
 
 .code-block pre {
@@ -99,4 +127,45 @@ textarea {
   padding: 0.32rem 0.55rem;
   font-size: 0.68rem;
   cursor: pointer;
+}
+
+.dark .copy-button {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(30, 30, 30, 0.9);
+  color: #d4d4d8;
+}
+
+/* ── Send button ── */
+.send-btn {
+  background: var(--send-btn);
+  color: var(--send-btn-fg);
+}
+
+.send-btn:hover:not(:disabled) {
+  background: var(--send-btn-hover);
+}
+
+.send-btn:disabled {
+  background: var(--send-btn-disabled);
+  color: var(--send-btn-disabled-fg);
+  cursor: not-allowed;
+}
+
+/* ── Scrollbar polish ── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(24, 24, 27, 0.15);
+  border-radius: 99px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
 }

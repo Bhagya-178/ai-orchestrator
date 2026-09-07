@@ -12,10 +12,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Create non-root user
-RUN addgroup --system appuser && adduser --system --ingroup appuser appuser
+RUN addgroup --system appuser && adduser --system --ingroup appuser appuser \
+    && mkdir -p /app/logs && chown -R appuser:appuser /app
 
 # Copy application code
-COPY . .
+COPY --chown=appuser:appuser . .
 
 # Switch to non-root user
 USER appuser
@@ -24,7 +25,7 @@ USER appuser
 EXPOSE 8000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD python -c "import httpx; print(httpx.get('http://localhost:8000/health').status_code)" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD python -c "import httpx, sys; sys.exit(0 if httpx.get('http://localhost:8000/health').status_code == 200 else 1)" || exit 1
 
 # Start the application
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -39,10 +39,25 @@ class ChatPipeline:
     """Coordinate Processor -> Tool/Router -> Memory -> Generation for chat."""
 
     async def chat(
-        self, session_id: str, message: str, db: Any, use_rag: bool = True, intent_override: str | None = None, effort_level: str | None = "medium"
+        self,
+        session_id: str,
+        message: str,
+        db: Any,
+        use_rag: bool = True,
+        intent_override: str | None = None,
+        effort_level: str | None = "medium",
+        custom_system_prompt: str | None = None,
     ) -> dict[str, Any]:
         """Run a full non-streaming turn and return the result dict."""
-        async for event in self._turn(session_id, message.strip(), db, use_rag, intent_override, effort_level):
+        async for event in self._turn(
+            session_id,
+            message.strip(),
+            db,
+            use_rag,
+            intent_override,
+            effort_level,
+            custom_system_prompt,
+        ):
             if event["type"] == "clarification":
                 return {"type": "clarification", "questions": event["questions"]}
 
@@ -58,13 +73,30 @@ class ChatPipeline:
         return {}
 
     async def stream_chat(
-        self, session_id: str, message: str, db: Any, use_rag: bool = True, intent_override: str | None = None, effort_level: str | None = "medium"
+        self,
+        session_id: str,
+        message: str,
+        db: Any,
+        use_rag: bool = True,
+        intent_override: str | None = None,
+        effort_level: str | None = "medium",
+        custom_system_prompt: str | None = None,
     ) -> AsyncGenerator[str, None]:
         """Run a streaming turn, yielding response tokens as they arrive."""
-        async for event in self._turn(session_id, message.strip(), db, use_rag, intent_override, effort_level):
+        async for event in self._turn(
+            session_id,
+            message.strip(),
+            db,
+            use_rag,
+            intent_override,
+            effort_level,
+            custom_system_prompt,
+        ):
             if event["type"] == "clarification":
                 yield f"data: {json.dumps({'type': 'clarification', 'questions': event['questions']})}\n\n"
             elif event["type"] == "tool":
+                tool_name = event.get("model", "tool")
+                yield f"data: {json.dumps({'type': 'tool_result', 'tool': tool_name, 'result': event['response'], 'elapsed_ms': event.get('latency_ms')})}\n\n"
                 yield f"data: {json.dumps({'type': 'token', 'token': event['response']})}\n\n"
             elif event["type"] == "token":
                 yield f"data: {json.dumps({'type': 'token', 'token': event['token']})}\n\n"
@@ -80,7 +112,8 @@ class ChatPipeline:
         db: Any,
         use_rag: bool = True,
         intent_override: str | None = None,
-        effort_level: str | None = "medium"
+        effort_level: str | None = "medium",
+        custom_system_prompt: str | None = None,
     ) -> AsyncGenerator[dict[str, Any], None]:
         start_total = time.perf_counter()
 
@@ -219,6 +252,8 @@ class ChatPipeline:
         messages = history + [{"role": "user", "content": optimized_message}]
 
         system_content = "You are a highly capable AI assistant. Answer directly, clearly, and concisely. Do not hallucinate or invent fictional plots, facts, or characters. If you are unsure, admit it."
+        if custom_system_prompt and custom_system_prompt.strip():
+            system_content = f"{custom_system_prompt.strip()}\n\n{system_content}"
         generation_options: dict[str, Any] = {}
 
         if should_search_rag:

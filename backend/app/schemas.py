@@ -44,6 +44,32 @@ class ConversationResponse(BaseModel):
     title: str
     updatedAt: str
     createdAt: str
+    intent_override: str = "auto"
+    effort_level: str = "medium"
+    is_pinned: bool = False
+    system_prompt: str = ""
+
+
+class ConversationUpdateRequest(BaseModel):
+    intent_override: str | None = None
+    effort_level: str | None = None
+    title: str | None = None
+    is_pinned: bool | None = None
+    system_prompt: str | None = None
+
+
+class ConversationExportResponse(BaseModel):
+    id: str
+    title: str
+    markdown: str
+    json_data: dict
+
+
+class RegenerateRequest(BaseModel):
+    session_id: str
+    intent_override: str | None = None
+    effort_level: str | None = "medium"
+    use_rag: bool = True
 
 
 class DocumentResponse(BaseModel):
@@ -54,3 +80,43 @@ class DocumentResponse(BaseModel):
     session_id: str | None
     metadata: dict
     created_at: str
+
+
+# --- Authentication & User Management Schemas ---
+
+class UserRegisterRequest(BaseModel):
+    email: str = Field(..., min_length=3)
+    password: str = Field(..., min_length=6)
+    full_name: str | None = ""
+
+
+class UserLoginRequest(BaseModel):
+    email: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1)
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    role: str
+    is_active: bool
+    custom_instructions: str = ""
+    created_at: str
+
+
+class UserUpdateRequest(BaseModel):
+    full_name: str | None = None
+    custom_instructions: str | None = None
+    password: str | None = None
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str

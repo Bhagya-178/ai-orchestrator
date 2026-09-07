@@ -17,7 +17,7 @@ export default function BackendStatus() {
   }, []);
 
   return (
-    <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 bg-black/5 px-2 py-1 rounded-full border border-black/5">
+    <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 bg-black/5 dark:bg-white/5 px-2 py-1 rounded-full border border-black/5 dark:border-white/10">
       <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-green-500' : 'bg-red-500'}`} />
       <span>{isOnline ? 'Local backend connected' : 'Backend offline'}</span>
     </div>
