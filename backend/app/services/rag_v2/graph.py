@@ -93,6 +93,46 @@ class KnowledgeGraph:
         self.adj[edge.source][edge.target] = edge
         self.rev_adj[edge.target][edge.source] = edge
 
+    @property
+    def edges(self) -> list[RelationshipEdge]:
+        """Return all edges in the knowledge graph."""
+        return [edge for targets in self.adj.values() for edge in targets.values()]
+
+    def get_neighbors(self, node_id: str) -> list[str]:
+        """Return immediate neighbor IDs."""
+        return list(self.adj.get(node_id, {}).keys())
+
+    def get_outgoing_edges(self, node_id: str) -> list[RelationshipEdge]:
+        """Return outgoing edges from node_id."""
+        return list(self.adj.get(node_id, {}).values())
+
+    def get_incoming_edges(self, node_id: str) -> list[RelationshipEdge]:
+        """Return incoming edges to node_id."""
+        return list(self.rev_adj.get(node_id, {}).values())
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize knowledge graph to dictionary representation."""
+        return {
+            "nodes": [n.model_dump() for n in self.nodes.values()],
+            "edges": [e.model_dump() for e in self.edges],
+        }
+
+    def clear(self) -> None:
+        """Clear all nodes and edges from the graph."""
+        self.nodes.clear()
+        self.adj.clear()
+        self.rev_adj.clear()
+
+    def compute_degree_centrality(self) -> dict[str, float]:
+        """Compute degree centrality normalized by maximum possible connections."""
+        total = len(self.nodes) - 1
+        if total <= 0:
+            return {nid: 0.0 for nid in self.nodes}
+        return {
+            nid: round((len(self.adj.get(nid, {})) + len(self.rev_adj.get(nid, {}))) / total, 4)
+            for nid in self.nodes
+        }
+
     def extract_from_python_code(self, code: str, filename: str = "") -> int:
         """
         Parse Python source code using the AST module to extract:
@@ -230,6 +270,7 @@ class KnowledgeGraph:
         for nid, rank in scores.items():
             if nid in self.nodes:
                 self.nodes[nid].centrality = round(rank / max_score if max_score > 0 else rank, 4)
+        return scores
 
     def find_shortest_path(self, source_id: str, target_id: str) -> list[str]:
         """Breadth-First Search to find shortest relationship path between two entities."""

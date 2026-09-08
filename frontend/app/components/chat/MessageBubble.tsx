@@ -265,12 +265,11 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
             
             {!isUser && message.model && (
               <div className="text-[11px] text-gray-400 font-medium flex items-center gap-1.5">
-                <span>{message.model}</span>
+                <span className="font-mono bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-[10px] text-gray-600 dark:text-gray-300 border border-[var(--border)]/50">
+                  {message.model}
+                </span>
                 {message.latencyMs && (
-                  <>
-                    <span>·</span>
-                    <span>{(message.latencyMs / 1000).toFixed(1)}s</span>
-                  </>
+                  <span>· {(message.latencyMs / 1000).toFixed(1)}s</span>
                 )}
               </div>
             )}

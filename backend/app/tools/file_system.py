@@ -50,7 +50,9 @@ class FileSystemTool(BaseTool):
         """Resolve path and verify it remains strictly within workspace root."""
         if user_path and ("\x00" in user_path or "%00" in user_path):
             raise ValueError("Null byte injection detected in path.")
-        clean_path = (user_path or ".").strip().lstrip("/\\")
+        clean_path = (user_path or ".").strip()
+        if clean_path.startswith(("\\\\", "//")):
+            raise PermissionError(f"Access denied: UNC path '{user_path}' escapes the workspace boundary.")
         target = (self.workspace_root / clean_path).resolve()
         if not str(target).startswith(str(self.workspace_root)):
             raise PermissionError(f"Access denied: path '{user_path}' escapes the workspace boundary.")

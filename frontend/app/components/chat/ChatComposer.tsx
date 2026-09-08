@@ -6,6 +6,7 @@ import { useChat } from "@/app/lib/context/ChatContext";
 import { useAuth } from "@/app/lib/context/AuthContext";
 import { uploadDocument } from "@/app/lib/api/documents";
 import { getRecentPrompts } from "@/app/lib/api/chat";
+import { getAvailableModels } from "@/app/lib/api/health";
 import DocumentAttachment from "../documents/DocumentAttachment";
 import VoiceInputButton from "../voice/VoiceInputButton";
 import GuestLimitModal from "../auth/GuestLimitModal";
@@ -47,6 +48,18 @@ export default function ChatComposer() {
   // Message history navigation (like ChatGPT / Claude / Shell)
   const historyIndexRef = useRef<number>(-1);
   const draftRef = useRef<string>("");
+
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+
+  // Fetch available models from backend
+  useEffect(() => {
+    getAvailableModels()
+      .then((models) => {
+        const chatModels = models.filter((m) => !m.includes("embed") && !m.includes("bge-m3"));
+        setAvailableModels(chatModels);
+      })
+      .catch(console.error);
+  }, []);
 
   // Pre-seed prompt history from database on load so ArrowUp works immediately
   useEffect(() => {
@@ -337,14 +350,27 @@ export default function ChatComposer() {
                     setIntentOverride(val);
                     updateSettings(val, undefined);
                   }}
-                  className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-[11px] font-medium text-gray-600 dark:text-gray-300 outline-none cursor-pointer py-1 px-2 rounded-lg transition-all"
-                  title="Model / Intent Override"
+                  className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-[11px] font-medium text-gray-600 dark:text-gray-300 outline-none cursor-pointer py-1 px-2 rounded-lg transition-all max-w-[150px] truncate"
+                  title="Select AI Model or Mode"
                 >
-                  <option value="auto" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Auto Model</option>
-                  <option value="general" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">General</option>
-                  <option value="coding" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Coding</option>
-                  <option value="reasoning" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Reasoning</option>
-                  <option value="study" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Study</option>
+                  <option value="auto" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100 font-semibold">
+                    ✨ Auto Model (Smart)
+                  </option>
+                  <optgroup label="Intent Routing" className="bg-white dark:bg-[#18181b] text-gray-500 font-medium">
+                    <option value="general" className="text-gray-900 dark:text-gray-100">General Chat</option>
+                    <option value="coding" className="text-gray-900 dark:text-gray-100">Coding Specialist</option>
+                    <option value="reasoning" className="text-gray-900 dark:text-gray-100">Deep Reasoning</option>
+                    <option value="study" className="text-gray-900 dark:text-gray-100">Study / Research</option>
+                  </optgroup>
+                  {availableModels.length > 0 && (
+                    <optgroup label="Installed Local Models" className="bg-white dark:bg-[#18181b] text-gray-500 font-medium">
+                      {availableModels.map((m) => (
+                        <option key={m} value={m} className="text-gray-900 dark:text-gray-100">
+                          {m}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
                 <select
                   value={effortLevel}

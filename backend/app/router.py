@@ -16,6 +16,13 @@ class ModelRouter:
         """
         intent = processed.get("intent", "general")
 
+        # If direct model name is selected (e.g. 'deepseek-r1:8b', 'qwen2.5-coder:7b', or contains ':')
+        if ":" in intent or intent in ("qwen3:8b", "deepseek-r1:8b", "qwen2.5-coder:7b", "gemma4:e4b", "qwen2.5:1.5b"):
+            return {
+                "intent": "direct_model",
+                "model": intent
+            }
+
         if intent not in MODEL_REGISTRY:
             intent = "general"
 

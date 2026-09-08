@@ -20,6 +20,7 @@ class DualStreamRequest(BaseModel):
     model_b: str = Field(...)
     system_prompt: str | None = None
     blind: bool = False
+    sequential: bool = True
 
 
 class VoteRequest(BaseModel):
@@ -35,7 +36,8 @@ async def stream_arena_battle(
     current_user: User | None = Depends(get_optional_user),
 ):
     """
-    Stream concurrent responses from Model A and Model B in an interleaved SSE stream.
+    Stream concurrent or sequential responses from Model A and Model B.
+    By default sequential=True unloads Model A before loading Model B to protect local GPU VRAM.
     """
     return StreamingResponse(
         arena_service.stream_dual_battle(
@@ -44,6 +46,7 @@ async def stream_arena_battle(
             model_b=body.model_b,
             system_prompt=body.system_prompt,
             blind=body.blind,
+            sequential=body.sequential,
         ),
         media_type="text/event-stream",
         headers={

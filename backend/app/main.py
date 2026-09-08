@@ -273,9 +273,37 @@ async def get_models():
         logger.error(f"Ollama list_models failed: {e}")
         models = []
 
+    if not models:
+        from app.registry import MODEL_REGISTRY
+        models = list(dict.fromkeys([v for v in MODEL_REGISTRY.values()] + [settings.RAG_MODEL, settings.PROCESSOR_MODEL]))
+
     return ModelsResponse(
         models=models
     )
+
+@app.get("/models/details")
+async def get_models_detailed():
+    """Return detailed metadata (size, parameter_size, capabilities) for installed models."""
+    try:
+        models_data = await ollama.list_models_detailed()
+    except Exception as e:
+        logger.error(f"Ollama list_models_detailed failed: {e}")
+        models_data = []
+
+    results = []
+    for item in models_data:
+        details = item.get("details", {})
+        results.append({
+            "name": item.get("name", "unknown"),
+            "size": item.get("size", 0),
+            "family": details.get("family", ""),
+            "parameter_size": details.get("parameter_size", ""),
+            "quantization_level": details.get("quantization_level", ""),
+            "capabilities": item.get("capabilities", ["completion"]),
+            "modified_at": item.get("modified_at", ""),
+        })
+
+    return {"models": results}
 
 @app.post("/conversations")
 async def create_conversation(

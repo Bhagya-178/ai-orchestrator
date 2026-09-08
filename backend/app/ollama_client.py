@@ -6,6 +6,7 @@ The client must be started/stopped via startup() and shutdown() which
 are called from the FastAPI lifespan handler.
 """
 
+import json
 import logging
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -90,6 +91,36 @@ class OllamaClient:
         response.raise_for_status()
         return response.json()
 
+    async def generate_stream(
+        self,
+        model: str,
+        prompt: str,
+        options: dict[str, Any] | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Streaming text generation — yields parsed dict chunks."""
+        payload: dict[str, Any] = {
+            "model": model,
+            "prompt": prompt.strip(),
+            "stream": True,
+            "keep_alive": settings.OLLAMA_KEEP_ALIVE,
+        }
+        if options:
+            payload["options"] = options
+
+        async with httpx.AsyncClient(
+            base_url=settings.OLLAMA_URL,
+            timeout=self._stream_timeout,
+        ) as stream_client, stream_client.stream(
+            "POST", "/api/generate", json=payload
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if line:
+                    try:
+                        yield json.loads(line)
+                    except Exception:
+                        continue
+
     async def chat(
         self,
         model: str,
@@ -153,6 +184,13 @@ class OllamaClient:
         response.raise_for_status()
         data = response.json()
         return [model["name"] for model in data.get("models", [])]
+
+    async def list_models_detailed(self) -> list[dict[str, Any]]:
+        """List available models with full metadata (size, parameter size, capabilities)."""
+        response = await self.client.get("/api/tags")
+        response.raise_for_status()
+        data = response.json()
+        return data.get("models", [])
 
     async def unload_model(self, model: str) -> None:
         """Unload a model from memory by sending a zero keep_alive request."""

@@ -25,6 +25,7 @@ export async function streamArenaBattle(
     model_b: string;
     system_prompt?: string;
     blind?: boolean;
+    sequential?: boolean;
   },
   onEvent: (event: ArenaBattleEvent) => void,
   signal?: AbortSignal

@@ -18,6 +18,7 @@ import {
   LayoutGrid,
   Plus,
   Lock,
+  Check,
 } from "lucide-react";
 import { useAuth } from "@/app/lib/context/AuthContext";
 import { useNavigation } from "@/app/lib/context/NavigationContext";
@@ -39,11 +40,13 @@ import { getAvailableModels } from "@/app/lib/api/health";
 
 export default function TopBar() {
   const { openSidebar } = useNavigation();
-  const { sendMessage, currentTitle, clearChat } = useChat();
+  const { sendMessage, currentTitle, clearChat, intentOverride, setIntentOverride, updateSettings } = useChat();
   const { isAuthenticated } = useAuth();
 
   const [isStudioMenuOpen, setIsStudioMenuOpen] = useState(false);
+  const [isModelPickerOpen, setIsModelPickerOpen] = useState(false);
   const studioMenuRef = useRef<HTMLDivElement>(null);
+  const modelPickerRef = useRef<HTMLDivElement>(null);
 
   // Modals state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -70,12 +73,15 @@ export default function TopBar() {
       if (studioMenuRef.current && !studioMenuRef.current.contains(e.target as Node)) {
         setIsStudioMenuOpen(false);
       }
+      if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) {
+        setIsModelPickerOpen(false);
+      }
     };
-    if (isStudioMenuOpen) {
+    if (isStudioMenuOpen || isModelPickerOpen) {
       document.addEventListener("mousedown", handleOutsideClick);
     }
     return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, [isStudioMenuOpen]);
+  }, [isStudioMenuOpen, isModelPickerOpen]);
 
   return (
     <>
@@ -108,11 +114,78 @@ export default function TopBar() {
           </button>
         </div>
 
-        {/* Center: Current Chat Title */}
-        <div className="flex-1 max-w-sm lg:max-w-md mx-2 text-center truncate hidden md:block">
-          <span className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate block px-3 py-1 bg-black/5 dark:bg-white/5 rounded-lg border border-[var(--border)]/60">
+        {/* Center: Current Chat Title & Model Picker */}
+        <div className="flex-1 max-w-sm lg:max-w-md mx-2 flex items-center justify-center gap-2 truncate">
+          <span className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate hidden md:block px-3 py-1 bg-black/5 dark:bg-white/5 rounded-lg border border-[var(--border)]/60">
             {currentTitle || "New Chat"}
           </span>
+
+          {/* Model Selector Dropdown */}
+          <div className="relative" ref={modelPickerRef}>
+            <button
+              onClick={() => setIsModelPickerOpen(!isModelPickerOpen)}
+              className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg border border-[var(--border)] transition-colors cursor-pointer"
+              title="Active Model (Click to switch)"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+              <span className="max-w-[120px] truncate font-mono text-[11px]">
+                {intentOverride === "auto" ? "Auto Model" : intentOverride}
+              </span>
+              <ChevronDown className={`w-3 h-3 text-gray-400 transition-transform ${isModelPickerOpen ? "rotate-180" : ""}`} />
+            </button>
+
+            {isModelPickerOpen && (
+              <div className="absolute left-1/2 -translate-x-1/2 mt-2 w-64 bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-2.5 py-1.5 border-b border-[var(--border)] mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block">
+                    Available Models ({models.length})
+                  </span>
+                </div>
+
+                <div className="space-y-0.5 max-h-60 overflow-y-auto">
+                  <button
+                    onClick={() => {
+                      setIntentOverride("auto");
+                      updateSettings("auto", undefined);
+                      setIsModelPickerOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-left transition-colors cursor-pointer ${
+                      intentOverride === "auto"
+                        ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-semibold"
+                        : "hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Auto Model (Smart Router)</span>
+                    </div>
+                    {intentOverride === "auto" && <Check className="w-3.5 h-3.5 text-blue-600" />}
+                  </button>
+
+                  {models
+                    .filter((m) => !m.includes("embed") && !m.includes("bge-m3"))
+                    .map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => {
+                          setIntentOverride(m);
+                          updateSettings(m, undefined);
+                          setIsModelPickerOpen(false);
+                        }}
+                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono text-left transition-colors cursor-pointer ${
+                          intentOverride === m
+                            ? "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-semibold"
+                            : "hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300"
+                        }`}
+                      >
+                        <span className="truncate">{m}</span>
+                        {intentOverride === m && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0 ml-1" />}
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right: Clean Action Center */}

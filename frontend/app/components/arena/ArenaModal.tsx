@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { X, Swords, Zap, Award, ThumbsUp, RotateCcw, Eye, EyeOff } from "lucide-react";
+import { X, Swords, Zap, Award, RotateCcw, Eye, EyeOff, Square, AlertCircle, CheckCircle2 } from "lucide-react";
 import { streamArenaBattle, recordArenaVote, getArenaLeaderboard } from "@/app/lib/api/arena";
 import { ArenaMetrics, LeaderboardEntry } from "@/app/lib/types";
 
@@ -13,13 +13,20 @@ interface ArenaModalProps {
 
 export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaModalProps) {
   const [activeTab, setActiveTab] = useState<"battle" | "leaderboard">("battle");
-  const [modelA, setModelA] = useState(availableModels[0] || "qwen2.5:1.5b");
-  const [modelB, setModelB] = useState(availableModels[1] || availableModels[0] || "qwen3:8b");
+  const playableModels = (availableModels || []).filter(
+    (m) => !m.includes("embed") && !m.includes("bge-m3")
+  );
+
+  const [modelA, setModelA] = useState(playableModels[0] || "qwen3:8b");
+  const [modelB, setModelB] = useState(playableModels[1] || playableModels[0] || "deepseek-r1:8b");
   const [prompt, setPrompt] = useState("Write a quick explanation of how quantum computing differs from classical computing, then provide an analogy.");
   const [blind, setBlind] = useState(true);
 
   const [streamA, setStreamA] = useState("");
   const [streamB, setStreamB] = useState("");
+  const [errorA, setErrorA] = useState<string | null>(null);
+  const [errorB, setErrorB] = useState<string | null>(null);
+  const [generalError, setGeneralError] = useState<string | null>(null);
   const [metricsA, setMetricsA] = useState<ArenaMetrics | null>(null);
   const [metricsB, setMetricsB] = useState<ArenaMetrics | null>(null);
   const [isBattling, setIsBattling] = useState(false);
@@ -30,9 +37,9 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (availableModels.length > 0) {
-      if (!availableModels.includes(modelA)) setModelA(availableModels[0]);
-      if (availableModels.length > 1 && !availableModels.includes(modelB)) setModelB(availableModels[1]);
+    if (playableModels.length > 0) {
+      if (!playableModels.includes(modelA)) setModelA(playableModels[0]);
+      if (!playableModels.includes(modelB)) setModelB(playableModels[1] || playableModels[0]);
     }
   }, [availableModels]);
 
@@ -44,11 +51,40 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
 
   if (!isOpen) return null;
 
+  const handleStopBattle = () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setIsBattling(false);
+  };
+
+  const handleReset = () => {
+    handleStopBattle();
+    setStreamA("");
+    setStreamB("");
+    setErrorA(null);
+    setErrorB(null);
+    setGeneralError(null);
+    setMetricsA(null);
+    setMetricsB(null);
+    setRevealed(false);
+    setVotedWinner(null);
+  };
+
   const handleStartBattle = async () => {
     if (!prompt.trim() || isBattling) return;
 
+    if (!modelA || !modelB) {
+      setGeneralError("Please select both Model A and Model B before starting the battle.");
+      return;
+    }
+
     setStreamA("");
     setStreamB("");
+    setErrorA(null);
+    setErrorB(null);
+    setGeneralError(null);
     setMetricsA(null);
     setMetricsB(null);
     setRevealed(false);
@@ -59,9 +95,17 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
 
     try {
       await streamArenaBattle(
-        { prompt, model_a: modelA, model_b: modelB, blind },
+        { prompt, model_a: modelA, model_b: modelB, blind, sequential: true },
         (event) => {
-          if (event.side === "A") {
+          if (event.type === "error") {
+            if (event.side === "A") {
+              setErrorA(event.error || "Model A encountered an error during generation.");
+            } else if (event.side === "B") {
+              setErrorB(event.error || "Model B encountered an error during generation.");
+            } else {
+              setGeneralError(event.error || "Arena battle encountered an error.");
+            }
+          } else if (event.side === "A") {
             if (event.type === "token" && event.token) {
               setStreamA((prev) => prev + event.token);
             } else if (event.type === "metrics" && event.metrics) {
@@ -80,6 +124,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
     } catch (err: any) {
       if (err.name !== "AbortError") {
         console.error("Battle stream error:", err);
+        setGeneralError(err.message || "Failed to stream battle. Check if Ollama and backend are running.");
       }
     } finally {
       setIsBattling(false);
@@ -89,12 +134,18 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
   const handleVote = async (winner: "A" | "B" | "tie" | "both_bad") => {
     setVotedWinner(winner);
     setRevealed(true);
-    await recordArenaVote({
-      prompt,
-      model_a: modelA,
-      model_b: modelB,
-      winner,
-    });
+    try {
+      await recordArenaVote({
+        prompt,
+        model_a: modelA,
+        model_b: modelB,
+        winner,
+      });
+      // Refresh leaderboard in background
+      getArenaLeaderboard().then(setLeaderboard).catch(console.error);
+    } catch (err: any) {
+      console.error("Failed to record vote:", err);
+    }
   };
 
   return (
@@ -154,7 +205,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                   onChange={(e) => setModelA(e.target.value)}
                   className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"
                 >
-                  {availableModels.map((m) => (
+                  {playableModels.map((m) => (
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
@@ -167,7 +218,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                   onChange={(e) => setModelB(e.target.value)}
                   className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"
                 >
-                  {availableModels.map((m) => (
+                  {playableModels.map((m) => (
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
@@ -180,19 +231,59 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-black/5 text-xs font-medium"
                 >
                   {blind ? <EyeOff className="w-3.5 h-3.5 text-orange-500" /> : <Eye className="w-3.5 h-3.5 text-blue-500" />}
-                  <span>{blind ? "Blind Mode: ON" : "Blind Mode: OFF"}</span>
+                  <span>{blind ? "Blind: ON" : "Blind: OFF"}</span>
                 </button>
 
+                <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[11px] font-medium border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>VRAM Safe</span>
+                </div>
+
                 <button
-                  onClick={handleStartBattle}
-                  disabled={isBattling}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium shadow transition-all disabled:opacity-50"
+                  type="button"
+                  onClick={handleReset}
+                  title="Reset battle"
+                  className="p-1.5 rounded-lg border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/5 text-gray-500 transition-colors"
                 >
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>{isBattling ? "Streaming..." : "Start Battle"}</span>
+                  <RotateCcw className="w-3.5 h-3.5" />
                 </button>
+
+                {isBattling ? (
+                  <button
+                    onClick={handleStopBattle}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium shadow transition-all"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                    <span>Stop</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleStartBattle}
+                    disabled={!prompt.trim() || playableModels.length === 0}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium shadow transition-all disabled:opacity-50"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Start Battle</span>
+                  </button>
+                )}
               </div>
             </div>
+
+            {/* Error Banner */}
+            {generalError && (
+              <div className="flex items-center justify-between p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs animate-in fade-in duration-150">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{generalError}</span>
+                </div>
+                <button
+                  onClick={() => setGeneralError(null)}
+                  className="p-1 hover:bg-red-500/20 rounded-md transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
 
             {/* Prompt input */}
             <div className="relative">
@@ -210,9 +301,16 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
               {/* Column Model A */}
               <div className="flex flex-col border border-[var(--border)] rounded-xl bg-[var(--background)] overflow-hidden">
                 <div className="flex items-center justify-between px-3.5 py-2 border-b border-[var(--border)] bg-black/[0.02] dark:bg-white/[0.02]">
-                  <span className="font-semibold text-xs text-gray-900 dark:text-white">
-                    {blind && !revealed ? "Model A (Hidden)" : modelA}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-xs text-gray-900 dark:text-white">
+                      {blind && !revealed ? "Model A (Hidden)" : modelA}
+                    </span>
+                    {isBattling && !metricsA && !errorA && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] bg-blue-500/10 text-blue-600 animate-pulse font-medium">
+                        Generating...
+                      </span>
+                    )}
+                  </div>
                   {metricsA && (
                     <div className="flex items-center gap-2 text-[10px] text-gray-500">
                       <span className="font-mono bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded">
@@ -223,16 +321,37 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                   )}
                 </div>
                 <div className="flex-1 p-3.5 text-xs text-gray-800 dark:text-gray-200 overflow-y-auto whitespace-pre-wrap font-sans">
-                  {streamA || <span className="text-gray-400 italic">Response A will stream here...</span>}
+                  {errorA ? (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold mb-0.5">Model A Error</div>
+                        <div>{errorA}</div>
+                      </div>
+                    </div>
+                  ) : streamA ? (
+                    <span>{streamA}</span>
+                  ) : (
+                    <span className="text-gray-400 italic">
+                      {isBattling ? "⚡ Model A streaming in GPU..." : "Response A will stream here..."}
+                    </span>
+                  )}
                 </div>
               </div>
 
               {/* Column Model B */}
               <div className="flex flex-col border border-[var(--border)] rounded-xl bg-[var(--background)] overflow-hidden">
                 <div className="flex items-center justify-between px-3.5 py-2 border-b border-[var(--border)] bg-black/[0.02] dark:bg-white/[0.02]">
-                  <span className="font-semibold text-xs text-gray-900 dark:text-white">
-                    {blind && !revealed ? "Model B (Hidden)" : modelB}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-xs text-gray-900 dark:text-white">
+                      {blind && !revealed ? "Model B (Hidden)" : modelB}
+                    </span>
+                    {isBattling && (metricsA || errorA) && !metricsB && !errorB && (
+                      <span className="px-1.5 py-0.2 rounded text-[9px] bg-purple-500/10 text-purple-600 animate-pulse font-medium">
+                        Generating...
+                      </span>
+                    )}
+                  </div>
                   {metricsB && (
                     <div className="flex items-center gap-2 text-[10px] text-gray-500">
                       <span className="font-mono bg-purple-500/10 text-purple-600 px-1.5 py-0.5 rounded">
@@ -243,20 +362,46 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                   )}
                 </div>
                 <div className="flex-1 p-3.5 text-xs text-gray-800 dark:text-gray-200 overflow-y-auto whitespace-pre-wrap font-sans">
-                  {streamB || <span className="text-gray-400 italic">Response B will stream here...</span>}
+                  {errorB ? (
+                    <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold mb-0.5">Model B Error</div>
+                        <div>{errorB}</div>
+                      </div>
+                    </div>
+                  ) : streamB ? (
+                    <span>{streamB}</span>
+                  ) : (
+                    <span className="text-gray-400 italic">
+                      {isBattling && !metricsA && !errorA
+                        ? "⏳ Waiting for Model A to finish & unload from GPU..."
+                        : isBattling
+                        ? "⚡ Model A unloaded. Model B streaming in GPU..."
+                        : "Response B will stream here..."}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* Voting Bar */}
-            {(streamA || streamB) && (
-              <div className="pt-2 border-t border-[var(--border)] flex items-center justify-between">
-                <span className="text-xs text-gray-500">Which response is better?</span>
+            {(streamA || streamB || errorA || errorB) && (
+              <div className="pt-2 border-t border-[var(--border)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">Which response is better?</span>
+                  {votedWinner && (
+                    <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 animate-in fade-in">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Vote recorded: {votedWinner.toUpperCase()} (models revealed!)
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => handleVote("A")}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                      votedWinner === "A" ? "bg-orange-600 text-white border-orange-600" : "hover:bg-black/5 border-[var(--border)]"
+                      votedWinner === "A" ? "bg-orange-600 text-white border-orange-600 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border)]"
                     }`}
                   >
                     👈 Model A
@@ -264,7 +409,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                   <button
                     onClick={() => handleVote("B")}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                      votedWinner === "B" ? "bg-orange-600 text-white border-orange-600" : "hover:bg-black/5 border-[var(--border)]"
+                      votedWinner === "B" ? "bg-orange-600 text-white border-orange-600 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border)]"
                     }`}
                   >
                     Model B 👉
@@ -272,7 +417,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                   <button
                     onClick={() => handleVote("tie")}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                      votedWinner === "tie" ? "bg-orange-600 text-white border-orange-600" : "hover:bg-black/5 border-[var(--border)]"
+                      votedWinner === "tie" ? "bg-orange-600 text-white border-orange-600 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border)]"
                     }`}
                   >
                     🤝 Tie
@@ -280,7 +425,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                   <button
                     onClick={() => handleVote("both_bad")}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                      votedWinner === "both_bad" ? "bg-orange-600 text-white border-orange-600" : "hover:bg-black/5 border-[var(--border)]"
+                      votedWinner === "both_bad" ? "bg-orange-600 text-white border-orange-600 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border)]"
                     }`}
                   >
                     👎 Both Bad
