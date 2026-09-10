@@ -38,6 +38,19 @@ Question: {question}
 """
 
 
+EFFORT_ITERATIONS = {
+    "low": 2,
+    "medium": 5,
+    "high": 10,
+}
+
+EFFORT_TEMPERATURE = {
+    "low": 0.1,
+    "medium": 0.2,
+    "high": 0.3,
+}
+
+
 class ReActAgent:
     """Production-grade ReAct agent planner and execution supervisor."""
 
@@ -68,6 +81,7 @@ class ReActAgent:
         question: str,
         model: str,
         active_tools: list[str] | None = None,
+        effort_level: str = "medium",
     ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Execute the multi-step ReAct agent loop, yielding real-time execution steps.
@@ -84,13 +98,22 @@ class ReActAgent:
         tools_used = []
         iteration = 0
 
-        logger.info(f"Starting ReAct loop for model '{model}' with tools [{tool_names}]")
+        clean_effort = effort_level.lower() if effort_level else "medium"
+        max_iters = EFFORT_ITERATIONS.get(clean_effort, self.max_iterations)
+        temperature = EFFORT_TEMPERATURE.get(clean_effort, 0.2)
 
-        while iteration < self.max_iterations:
+        logger.info(f"Starting ReAct loop ({clean_effort} effort, {max_iters} iters) for model '{model}' with tools [{tool_names}]")
+
+        yield {
+            "type": "thought",
+            "content": f"ReAct agent initialized ({clean_effort.capitalize()} Effort: {max_iters} max tool iterations).",
+        }
+
+        while iteration < max_iters:
             iteration += 1
 
             prompt = (
-                f"{REACT_PROMPT_TEMPLATE.format(tool_descriptions=tool_descriptions, tool_names=tool_names, max_iterations=self.max_iterations, question=question)}"
+                f"{REACT_PROMPT_TEMPLATE.format(tool_descriptions=tool_descriptions, tool_names=tool_names, max_iterations=max_iters, question=question)}"
                 f"{scratchpad}\nThought:"
             )
 
@@ -98,7 +121,7 @@ class ReActAgent:
             async for chunk in ollama.generate_stream(
                 model=model,
                 prompt=prompt,
-                options={"temperature": 0.2, "stop": ["\nObservation:"]},
+                options={"temperature": temperature, "stop": ["\nObservation:"]},
             ):
                 token = chunk.get("response", "")
                 response_text += token
@@ -130,14 +153,30 @@ class ReActAgent:
             raw_input = action_input_match.group(1).strip() if action_input_match else "{}"
 
             # Parse input kwargs
+            clean_input = re.sub(r"^```(?:json)?|```$", "", raw_input.strip(), flags=re.MULTILINE).strip()
+            input_kwargs = {}
             try:
-                # Try JSON parse first
-                input_kwargs = json.loads(raw_input)
-                if not isinstance(input_kwargs, dict):
-                    input_kwargs = {"query": str(input_kwargs)}
+                parsed = json.loads(clean_input)
+                if isinstance(parsed, dict):
+                    input_kwargs = parsed
+                else:
+                    input_kwargs = {"query": str(parsed), "expression": str(parsed)}
             except Exception:
-                # Fallback: single string argument
-                input_kwargs = {"query": raw_input.strip("\"'")}
+                json_match = re.search(r"(\{.*\})", clean_input, re.DOTALL)
+                if json_match:
+                    try:
+                        input_kwargs = json.loads(json_match.group(1))
+                    except Exception:
+                        pass
+                if not input_kwargs:
+                    val = clean_input.strip("\"' \n")
+                    input_kwargs = {"query": val, "expression": val}
+
+            # Bridge expression and query parameters if missing
+            if "query" in input_kwargs and "expression" not in input_kwargs:
+                input_kwargs["expression"] = input_kwargs["query"]
+            elif "expression" in input_kwargs and "query" not in input_kwargs:
+                input_kwargs["query"] = input_kwargs["expression"]
 
             # Extract preceding thought
             thought_text = ""

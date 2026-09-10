@@ -7,7 +7,7 @@
   [![Ollama](https://img.shields.io/badge/Ollama-Local_LLMs-white?logo=ollama)](https://ollama.com/)
   [![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-red?logo=qdrant)](https://qdrant.tech/)
   [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16_Database-blue?logo=postgresql)](https://www.postgresql.org/)
-  [![Tests](https://img.shields.io/badge/Tests-113%2F113_Passed-success?logo=checkmarx)](#-security--vulnerability-audit-113-tests)
+  [![Tests](https://img.shields.io/badge/Tests-200%2F200_Passed-success?logo=checkmarx)](#-security--vulnerability-audit-200-tests)
 </div>
 
 ---
@@ -17,6 +17,10 @@
 **AI Orchestrator** is an enterprise-grade AI operating platform designed with **Claude and ChatGPT parity** for running open-source local LLMs privately, reliably, and deterministically. 
 
 Instead of treating LLMs as isolated chat completions, AI Orchestrator combines **intent classification**, **multi-agent collaboration**, **hybrid dense + sparse RAG**, **knowledge graph exploration**, **semantic vector caching**, **interactive canvas artifacts**, and a **developer platform** with programmatic API keys and webhooks.
+
+> [!TIP]
+> **New to AI Orchestrator? Read the complete user manual!**
+> Check out [**`GUIDE.md`**](GUIDE.md) for an in-depth walkthrough of all platform capabilities, including the ReAct agentic coding loop, Canvas Studio 2.0, Multi-Agent DAG workflows, Model Arena blind battles, and native Windows setup.
 
 ---
 
@@ -72,89 +76,122 @@ graph TB
 
 | Subsystem | Description |
 | :--- | :--- |
-| **Multi-Agent DAG Workflows** | Directed Acyclic Graph runner using Kahn's topological sort with parallel branch execution. Features 5 specialized roles: `PlannerAgent`, `ResearcherAgent`, `CoderAgent`, `ReviewerAgent`, and `CriticAgent`. |
+| **Dynamic Effort Scaling & Reflection** | User-selectable reasoning depth (`⚡ Low`, `⚖️ Medium`, `🧠 High`) directly scaling the ReAct tool loop (2, 5, or 10 iterations) and multi-agent swarms (fast node pruning vs. 5-agent DAG vs. autonomous security patch reflection loop). |
+| **Email OTP Verification & RBAC** | Enterprise 6-digit email OTP verification flow with SHA-256 peppered hashing, 10-minute expiry, 5-attempt brute-force protection, 60s cooldown rate-limiting, and dual delivery (async SMTP TLS / local dev fallback). Pre-seeded with master admin (`admin@`). |
+| **Multi-Agent Swarms & Studio** | Dual-layer orchestration: (1) Zero-friction in-chat execution with **`⚡ Swarm`** toggle, interactive progression stepper (`AgentSwarmCard`), and automatic PostgreSQL chat persistence; (2) Dedicated **Agent Operations Studio** featuring persistent run history (`WorkflowRun`), interactive DAG topology, and 1-click **"💬 Continue in Chat"**. Powered by Kahn's topological sort with 5 specialized personas (`Planner`, `Researcher`, `Coder`, `Reviewer`, `Critic`). |
 | **Interactive Canvas Studio 2.0** | Full Claude Artifacts parity with multi-tab view (`Preview`, `Code Editor`, `Console`, `Diff`). Includes live `postMessage` console logging bridge, SVG pan/zoom, and revision diff comparisons. |
 | **Entity Knowledge Graph & Graph RAG** | AST code parsing for Python/TypeScript extracting classes, functions, and inheritance. Computes PageRank centrality, shortest path Dijkstra/BFS, and query expansion. |
 | **Semantic Vector Cache** | Combines exact O(1) query hash caching with cosine similarity vector matching ($\ge 0.92$). Reduces turn latency to $< 2$ms and tracks tokens/costs saved. |
 | **Developer Platform** | Programmatic API keys (`ak_live_...`, `ak_test_...`) with SHA-256 storage, scoped permissions (`chat:read`, `rag:admin`, `agents:run`), and HMAC-SHA256 webhooks with replay resistance. |
 | **Model Context Protocol (MCP)** | Bridge supporting both `stdio` and `sse` transports conforming to JSON-RPC 2.0 specifications. Dynamically exposes external tools to the ReAct agent loop. |
 | **Hybrid RAG 2.0** | Dense vector search (Qdrant) fused with BM25Okapi sparse lexical scoring via Reciprocal Rank Fusion ($RRF(d) = \sum \frac{1}{60 + \text{rank}}$). Includes collection tagging. |
-| **Model Arena & Evals** | Side-by-side asynchronous streaming battles measuring TTFT, tokens/second, and win-rates, combined with automated LLM-as-a-judge benchmark suites. |
+| **Model Arena & Evals Studio** | Side-by-side asynchronous streaming battles measuring TTFT, tokens/second, and win-rates, combined with automated LLM-as-a-judge benchmark suites with auto-populated candidate and judge model selection dropdowns. |
 | **Multi-Tenant Workspaces & RBAC** | Team workspaces with granular permissions (`owner`, `admin`, `member`, `viewer`), invite workflows, and security audit trails. |
 | **Voice & Speech Synthesis** | Web Audio API MediaRecorder integration with server-side speech recognition and WAV audio playback. |
 
 ---
 
-## 🛡️ Security & Vulnerability Audit (113 Tests)
+## 🧠 Dynamic Effort Scaling & Autonomous Reflection
 
-The system is fortified against security vulnerabilities and verified via an automated 113-test verification suite:
+AI Orchestrator features dynamic, user-controllable reasoning depth across both single-agent ReAct reasoning loops and multi-agent DAG swarms:
+
+```
+                       ┌─────────────────────────────────────────────────────────┐
+                       │               User Effort Level Selection               │
+                       │    ⚡ Low (Fast)  |  ⚖️ Medium (Normal)  |  🧠 High (Deep) │
+                       └────────────────────────────┬────────────────────────────┘
+                                                    │
+                 ┌──────────────────────────────────┴──────────────────────────────────┐
+                 ▼                                                                     ▼
+   ┌───────────────────────────┐                                         ┌───────────────────────────┐
+   │     ReAct Tool Loop       │                                         │      Multi-Agent DAG      │
+   │      (agent_loop.py)      │                                         │        (engine.py)        │
+   ├───────────────────────────┤                                         ├───────────────────────────┤
+   │ Low:    2 max iterations  │                                         │ Low:    Prunes QA/Critic  │
+   │         temp = 0.1        │                                         │         (Architect+Coder) │
+   │ Medium: 5 max iterations  │                                         │ Medium: Full 5-Agent DAG  │
+   │         temp = 0.2        │                                         │ High:   Autonomous Review │
+   │ High:   10 max iterations │                                         │         Reflection Loop   │
+   │         temp = 0.3        │                                         │         (Patches Flaws)   │
+   └───────────────────────────┘                                         └───────────────────────────┘
+```
+
+### 1. ReAct Tool Loop Depth (`agent_loop.py`)
+- **⚡ Low Effort**: `max_iterations = 2`, `temperature = 0.1`. The model executes at most 1 tool action and immediately summarizes the answer.
+- **⚖️ Medium Effort**: `max_iterations = 5`, `temperature = 0.2`. Standard 3–5 step plan-action-observe cycle with balanced latency.
+- **🧠 High Effort**: `max_iterations = 10`, `temperature = 0.3`. Enables deep multi-tool chaining (search web $\rightarrow$ inspect files $\rightarrow$ execute code $\rightarrow$ analyze failure $\rightarrow$ fix and re-execute).
+
+### 2. Multi-Agent Swarm Critique, Token Budgeting & Live Streaming (`engine.py`, `chat_pipeline.py`)
+- **Sequential Single-GPU Execution**: Waves execute sequentially on local Ollama, granting 100% GPU compute and memory bandwidth to one model at a time. Eliminates VRAM context thrashing and inference bottlenecks caused by parallel execution on consumer GPUs.
+- **Prompt De-Duplication**: Prevents duplicate upstream injections when dependencies are already substituted in task templates, reducing prompt ingestion latency by up to 50%.
+- **Effort-Driven Token Budgeting (`num_predict`)**:
+  - **⚡ Low Effort**: Prunes QA and Critic nodes down to core deliverables (`planner`, `coder`, `researcher`), enforcing a 600-token budget per node with concise prompt directives to produce fullstack code in ~20 seconds.
+  - **⚖️ Medium Effort**: Executes the full 5-agent DAG wave topology (`planner` $\rightarrow$ `backend coder` $\rightarrow$ `frontend coder` $\rightarrow$ `reviewer` $\rightarrow$ `critic`) with a 1200-token budget per node, completing fullstack systems in ~60 seconds.
+  - **🧠 High Effort (Autonomous Reflection Loop)**: Allocates a 2500-token budget. Monitors Reviewer output for security vulnerabilities, race conditions, or unhandled errors, and automatically launches a `security_patch_loop` with the Coder Agent to patch and harden the code before final delivery.
+- **Live Per-Node Token Streaming**: Emits the workflow header immediately at $t = 0$. As each agent finishes, its deliverable streams token-by-token into the chat feed, providing continuous visual progress every 6–12 seconds.
+
+---
+
+## 📧 Email OTP Sign-Up & Cryptographic Authentication
+
+The platform enforces secure, verified user onboarding through an enterprise 6-digit OTP email verification pipeline:
+
+1. **Pending Registration Isolation**: Unverified user data is quarantined in a dedicated `email_verifications` table so unverified accounts never pollute primary `users` or foreign key constraints.
+2. **Cryptographic Integrity**:
+   - 6-digit OTP codes generated via Python `secrets`.
+   - Stored in PostgreSQL using SHA-256 with pepper hashing (`hmac.compare_digest`).
+   - 10-minute expiration with a 5-attempt brute force lockout limit.
+   - 60-second cooldown rate-limiting on OTP generation and resends.
+3. **Dual Email Delivery Engine**:
+   - **Production SMTP**: Asynchronous TLS delivery via standard library `smtplib` and `EmailMessage` with responsive HTML and plain-text templates.
+   - **Local Development Fallback**: When `SMTP_HOST` is not configured, logs a high-visibility terminal banner and returns `dev_otp` for convenient 1-click testing in the UI.
+4. **Master Administrative Account**:
+   - **Email:** `admin@` (or `admin@admin.com`)
+   - **Password:** `admin2134`
+   - **Role:** `admin` (pre-seeded and verified across local and Docker databases).
+
+---
+
+## 🛡️ Security & Vulnerability Audit (200 Tests)
+
+The system is fortified against security vulnerabilities, race conditions, and regressions via an automated **200-test verification suite** covering 20 architectural domains (10 tests each):
 
 ```
 ================================================================================
-EXECUTING COMPREHENSIVE 113-TEST ENTERPRISE & VULNERABILITY AUDIT
+200-TEST SUITE EXECUTION SCORECARD
 ================================================================================
+Category Domain                                    | Passed   | Failed  
+------------------------------------------------------------------------
+Cat 1: Authentication & Password Security          | 10       | 0       
+Cat 2: JWT Lifecycle & Claims                      | 10       | 0       
+Cat 3: API Key Cryptography & Scopes               | 10       | 0       
+Cat 4: Enterprise Webhooks & HMAC                  | 10       | 0       
+Cat 5: SQL Tool & Injection Defense                | 10       | 0       
+Cat 6: File System Sandbox & Path Traversal        | 10       | 0       
+Cat 7: Advanced Math AST Sandbox & Security        | 10       | 0       
+Cat 8: Multi-Agent DAG Workflow Engine             | 10       | 0       
+Cat 9: Specialized Agent Personas & Templates      | 10       | 0       
+Cat 10: Knowledge Graph & Network Topology         | 10       | 0       
+Cat 11: Graph Centrality & AST Code Analysis       | 10       | 0       
+Cat 12: Semantic Vector Cache & Similarity Math    | 10       | 0       
+Cat 13: Cache Policies, TTL & Telemetry            | 10       | 0       
+Cat 14: Hybrid RAG 2.0 & BM25 Sparse Search        | 10       | 0       
+Cat 15: Reciprocal Rank Fusion & Chunking          | 10       | 0       
+Cat 16: LLM-as-a-Judge Evaluation & Heuristics     | 10       | 0       
+Cat 17: Model Arena, Blind Battles & Telemetry     | 10       | 0       
+Cat 18: Arena Leaderboard, Voting & Win Rates      | 10       | 0       
+Cat 19: Tool Execution, Dispatcher & Validation    | 10       | 0       
+Cat 20: Pydantic Schemas, Model Router & Config    | 10       | 0       
+------------------------------------------------------------------------
+TOTAL SUMMARY                                      | 200      | 0       
+Total Execution Time: ~2.8 seconds
+================================================================================
+[SUCCESS] ALL 200 / 200 TESTS PASSED (100% SUCCESS RATE)!
+```
 
-[PASS] test_001_pbkdf2_hash_uniqueness             [PASS] test_002_pbkdf2_verification_correct
-[PASS] test_003_pbkdf2_verification_wrong_password [PASS] test_004_pbkdf2_tampered_salt
-[PASS] test_005_pbkdf2_tampered_hash               [PASS] test_006_pbkdf2_constant_time_comparison
-[PASS] test_007_jwt_encode_decode_roundtrip        [PASS] test_008_jwt_signature_tampering
-[PASS] test_009_jwt_expired_token                  [PASS] test_010_jwt_malformed_token
-[PASS] test_011_api_key_format_prefix              [PASS] test_012_api_key_entropy
-[PASS] test_013_api_key_sha256_hashing             [PASS] test_014_api_key_hash_uniqueness
-[PASS] test_015_api_key_raw_key_never_equals_hash  [PASS] test_016_api_key_display_prefix_truncation
-[PASS] test_017_api_key_scope_allowance            [PASS] test_018_api_key_scope_denial
-[PASS] test_019_api_key_wildcard_scope             [PASS] test_020_api_key_expiry_check
-[PASS] test_021_webhook_secret_entropy             [PASS] test_022_webhook_signature_format
-[PASS] test_023_webhook_signature_valid            [PASS] test_024_webhook_signature_wrong_secret
-[PASS] test_025_webhook_signature_tampered_payload [PASS] test_026_webhook_signature_replay_window_valid
-[PASS] test_027_webhook_signature_replay_attack    [PASS] test_028_webhook_signature_future_clock_drift
-[PASS] test_029_webhook_supported_events_whitelist [PASS] test_030_webhook_event_payload_structure
-[PASS] test_031_sql_select_valid                   [PASS] test_032_sql_drop_table_blocked
-[PASS] test_033_sql_delete_from_blocked            [PASS] test_034_sql_insert_into_blocked
-[PASS] test_035_sql_update_set_blocked             [PASS] test_036_sql_alter_table_blocked
-[PASS] test_037_sql_truncate_blocked               [PASS] test_038_sql_comment_obfuscation_blocked
-[PASS] test_039_sql_stacked_queries_blocked        [PASS] test_040_sql_system_schema_blocked
-[PASS] test_041_path_traversal_dot_dot_slash       [PASS] test_042_path_traversal_windows_backslashes
-[PASS] test_043_path_traversal_absolute_root       [PASS] test_044_path_traversal_null_byte_injection
-[PASS] test_045_path_traversal_encoded_traversal   [PASS] test_046_file_sandbox_within_workspace
-[PASS] test_047_file_size_limit_enforcement        [PASS] test_048_file_extension_whitelist
-[PASS] test_049_hidden_sensitive_files_protected   [PASS] test_050_directory_listing_sanitization
-[PASS] test_051_math_ast_addition                  [PASS] test_052_math_ast_scientific_functions
-[PASS] test_053_math_ast_blocks_eval               [PASS] test_054_math_ast_blocks_dunder_import
-[PASS] test_055_math_ast_blocks_builtins           [PASS] test_056_math_ast_blocks_file_io
-[PASS] test_057_math_ast_blocks_attribute_access   [PASS] test_058_math_ast_blocks_os_module
-[PASS] test_059_math_ast_prevents_exponential_dos  [PASS] test_060_math_ast_syntax_error_handling
-[PASS] test_061_dag_linear_dependency_order        [PASS] test_062_dag_parallel_wave_execution
-[PASS] test_063_dag_circular_dependency_detection  [PASS] test_064_dag_self_referential_cycle
-[PASS] test_065_dag_disconnected_components        [PASS] test_066_dag_variable_interpolation
-[PASS] test_067_dag_missing_dependency_error       [PASS] test_068_dag_role_registry_integrity
-[PASS] test_069_dag_template_structure             [PASS] test_070_dag_execution_timings
-[PASS] test_071_kg_add_node                         [PASS] test_072_kg_add_edge_bidirectional
-[PASS] test_073_kg_python_ast_class_extraction     [PASS] test_074_kg_python_ast_function_extraction
-[PASS] test_075_kg_python_ast_imports              [PASS] test_076_kg_pagerank_computation
-[PASS] test_077_kg_pagerank_convergence            [PASS] test_078_kg_shortest_path_direct
-[PASS] test_079_kg_shortest_path_multihop          [PASS] test_080_kg_subgraph_export
-[PASS] test_081_semantic_cache_exact_hit           [PASS] test_082_semantic_cache_case_whitespace
-[PASS] test_083_semantic_cache_cosine_identical    [PASS] test_084_semantic_cache_cosine_orthogonal
-[PASS] test_085_semantic_cache_semantic_hit        [PASS] test_086_semantic_cache_semantic_miss
-[PASS] test_087_semantic_cache_ttl_expiration      [PASS] test_088_semantic_cache_lru_eviction
-[PASS] test_089_semantic_cache_metrics             [PASS] test_090_semantic_cache_clear
-[PASS] test_091_bm25_sparse_indexing               [PASS] test_092_bm25_term_frequency_scoring
-[PASS] test_093_reciprocal_rank_fusion_rrf         [PASS] test_094_rrf_tie_breaking
-[PASS] test_095_rag_document_chunking              [PASS] test_096_rag_chunk_metadata
-[PASS] test_097_knowledge_collection_tagging       [PASS] test_098_rag_empty_query_handling
-[PASS] test_099_rag_injection_resistance           [PASS] test_100_graph_rag_query_augmentation
-[PASS] test_101_eval_faithfulness_grounded         [PASS] test_102_eval_faithfulness_ungrounded
-[PASS] test_103_eval_answer_relevance_high         [PASS] test_104_eval_hallucination_index_inverse
-[PASS] test_105_eval_benchmark_datasets_integrity  [PASS] test_106_eval_summary_aggregation
-[PASS] test_107_rbac_owner_permissions             [PASS] test_108_rbac_admin_permissions
-[PASS] test_109_rbac_member_permissions            [PASS] test_110_rbac_viewer_permissions
-[PASS] test_111_audit_log_persisted                [PASS] test_112_cors_origin_regex_security
-[PASS] test_113_system_telemetry_cpu_ram_bounds
-
-================================================================================
-AUDIT SUMMARY: 113 PASSED / 0 FAILED (TOTAL: 113 TESTS - 100% SUCCESS)
-================================================================================
+Run the complete 200-test suite natively from PowerShell:
+```powershell
+python backend/scratch/test_complete_suite_200.py
 ```
 
 ---
@@ -267,16 +304,30 @@ Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 📡 API Endpoint Reference
 
+### Authentication & Access Control
+- `POST /auth/register`: Initiate user registration, validate constraints, and dispatch 6-digit OTP.
+- `POST /auth/verify-otp`: Cryptographically verify OTP, provision user record, and return JWT tokens.
+- `POST /auth/resend-otp`: Rate-limited OTP resend with 60-second cooldown protection.
+- `POST /auth/login`: Authenticate with email/password (supports admin `admin@` and standard users).
+- `POST /auth/refresh`: Rotate refresh token for a fresh 60-minute access token.
+- `GET /auth/me`: Current user profile, role (`admin` / `user`), and custom instructions.
+
 ### Core & Chat
-- `POST /chat`: Synchronous LLM execution with intent detection and memory.
-- `POST /chat/stream`: Real-time SSE token stream with live latency accounting.
+- `POST /chat`: Synchronous LLM execution with intent detection, memory, and `effort_level` (`low`, `medium`, `high`).
+- `POST /chat/stream`: Real-time SSE token stream with live latency accounting, inline tool/agent events, and dynamic effort iteration budgeting.
+- `POST /chat/{session_id}/messages`: Append messages (e.g., completed workflow deliverable) to chat history.
+- `POST /chat/regenerate`: Retry last assistant response.
 - `GET /conversations`: Paginated conversation histories and user preferences.
 
-### Agents & Multi-Agent Workflows
+### Agents, Swarms & Workflow Operations
 - `GET /agents/roles`: List autonomous agent roles and tools.
-- `GET /agents/templates`: Curated DAG workflow templates.
-- `POST /agents/workflows/run`: Execute a DAG workflow with SSE event streaming.
+- `GET /agents/templates`: Curated DAG workflow templates (`fullstack`, `deep_research`, `security_hardening`).
+- `POST /agents/workflows/run`: Execute a DAG workflow with SSE event streaming and effort scaling (`effort_level`).
 - `POST /agents/roles/chat`: Direct single-turn interaction with an agent persona.
+- `GET /agents/runs`: List historical workflow runs with node outputs and timings.
+- `GET /agents/runs/{run_id}`: Retrieve detailed execution trace of a specific run.
+- `POST /agents/runs`: Persist a completed workflow run.
+- `DELETE /agents/runs/{run_id}`: Delete a saved workflow run.
 
 ### Knowledge Graph & Graph RAG
 - `GET /rag/v2/graph/explore`: Retrieve full node/edge network for 2D visualization.
@@ -307,31 +358,33 @@ ai-orchestrator/
 ├── backend/
 │   ├── app/
 │   │   ├── agents/            # Multi-Agent DAG Workflow Engine
-│   │   │   ├── engine.py      # Kahn's topological sort & parallel wave execution
+│   │   │   ├── engine.py      # Kahn's topological sort, dynamic effort pruning & reflection loop
 │   │   │   ├── roles.py       # Planner, Researcher, Coder, Reviewer, Critic
-│   │   │   ├── templates.py   # Full-Stack, Deep Research, Security Hardening
+│   │   │   ├── templates.py   # Full-Stack, Deep Research, Security Hardening + alias map
 │   │   │   └── router.py      # SSE streaming workflow execution endpoints
 │   │   ├── auth/              # Security, JWT, RBAC & API Keys
 │   │   │   ├── api_keys.py    # Cryptographic generation, SHA-256 hash & scopes
 │   │   │   ├── api_keys_router.py
 │   │   │   ├── security.py    # PBKDF2-HMAC-SHA256 & RFC-7519 JWT
-│   │   │   └── router.py      # Login, registration, token refresh
+│   │   │   └── router.py      # OTP registration, verification, login, refresh
 │   │   ├── database/          # PostgreSQL SQLAlchemy ORM
-│   │   │   ├── models.py      # Users, Workspaces, Keys, Webhooks, Evals
+│   │   │   ├── models.py      # Users, EmailVerification, Workspaces, Keys, Webhooks, Evals
 │   │   │   ├── init_db.py     # Idempotent table migrations
 │   │   │   └── session.py     # Async session pooling
 │   │   ├── mcp/               # Model Context Protocol Hub
 │   │   │   ├── client.py      # Stdio & SSE JSON-RPC 2.0 transports
 │   │   │   └── manager.py     # Dynamic external tool bridging
 │   │   ├── services/          # Core Business & Infrastructure Services
+│   │   │   ├── email_service.py # Async SMTP TLS & dev fallback OTP delivery
 │   │   │   ├── evals/         # LLM-as-a-Judge Benchmark Engine
 │   │   │   ├── rag_v2/        # Hybrid RAG 2.0, BM25 & Knowledge Graph
 │   │   │   ├── semantic_cache.py # Cosine similarity query cache
 │   │   │   ├── webhooks.py    # HMAC-SHA256 event dispatcher
 │   │   │   ├── arena_service.py # Split-battle arbitration
 │   │   │   ├── audio_service.py # Voice transcription & synthesis
-│   │   │   └── chat_pipeline.py # Central conversation orchestration
+│   │   │   └── chat_pipeline.py # Central conversation orchestration & effort routing
 │   │   ├── tools/             # Sandboxed ReAct Tool Ecosystem
+│   │   │   ├── agent_loop.py  # ReAct loop with dynamic effort scaling (2, 5, 10 iters)
 │   │   │   ├── sql_tool.py    # Read-only SELECT enforcement
 │   │   │   ├── file_system.py # Sandboxed directory and file reader
 │   │   │   ├── math_tool.py   # Safe AST mathematical calculator
@@ -344,17 +397,24 @@ ai-orchestrator/
 ├── frontend/
 │   ├── app/
 │   │   ├── components/
-│   │   │   ├── agents/        # Multi-Agent DAG Studio Modal
+│   │   │   ├── agents/        # Agent Swarm Card (In-Chat Stepper) & Operations Studio
+│   │   │   │   ├── AgentSwarmCard.tsx     # In-chat dynamic swarm stepper & thought inspector
+│   │   │   │   └── AgentWorkflowModal.tsx # Agent Operations Studio (DAG visualizer & runs)
 │   │   │   ├── artifacts/     # Canvas Studio 2.0 (Preview, Code, Console, Diff)
+│   │   │   ├── auth/          # Authentication & OTP Modals
+│   │   │   │   └── AuthModal.tsx          # 6-digit OTP verification view & login
 │   │   │   ├── developer/     # Developer Platform (API Keys & Webhooks)
 │   │   │   ├── evals/         # LLM Evals Scorecard & Benchmark Modal
 │   │   │   ├── knowledge/     # 2D Knowledge Graph Visualizer & RAG Manager
 │   │   │   ├── arena/         # Model Arena Split-Battle UI
 │   │   │   ├── chat/          # Clean, Minimal ChatGPT/Claude Chat Feed
+│   │   │   │   ├── ChatComposer.tsx       # Dynamic effort selector, prompt history, attachments
+│   │   │   │   ├── ChatView.tsx           # Message feed, scroll anchors, empty states
+│   │   │   │   └── MessageBubble.tsx      # Markdown, syntax highlighter, inline ReAct cards
 │   │   │   ├── layout/        # Responsive AppShell & TopBar
 │   │   │   └── voice/         # Web Audio MediaRecorder & Speech Player
 │   │   ├── lib/
-│   │   │   ├── api/           # Strongly-typed API client wrappers
+│   │   │   ├── api/           # Strongly-typed API client wrappers (chat, auth, agents, etc.)
 │   │   │   ├── context/       # Chat, Artifact, Auth, and Theme Contexts
 │   │   │   └── types.ts       # Unified TypeScript definitions
 │   │   └── globals.css

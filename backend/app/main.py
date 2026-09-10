@@ -629,6 +629,35 @@ async def get_chat_messages(
 
     return response_messages
 
+@app.post("/chat/{session_id}/messages")
+async def append_chat_message(
+    session_id: str,
+    payload: dict[str, Any],
+    current_user: User | None = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Append a message (e.g. completed multi-agent workflow deliverable) to conversation history."""
+    conv = await db.get(Conversation, session_id)
+    if not conv:
+        conv = Conversation(
+            id=session_id,
+            user_id=current_user.id if current_user else None,
+            title=payload.get("title", "Multi-Agent Workflow"),
+            intent_override="workflow",
+            effort_level="high",
+        )
+        db.add(conv)
+        await db.commit()
+    elif conv.user_id and current_user and conv.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied to this conversation")
+
+    role = payload.get("role", "assistant")
+    content = payload.get("content", "")
+    if content:
+        from app.services.memory_service import memory_service
+        await memory_service.add_message(db, session_id, role, content)
+    return {"success": True, "session_id": session_id}
+
 @app.get("/chat/recent-prompts")
 async def get_recent_prompts(db: AsyncSession = Depends(get_db)):
     query = (

@@ -60,6 +60,14 @@ export interface TokenResponse {
   user: User;
 }
 
+export interface OtpRegisterResponse {
+  success: boolean;
+  message: string;
+  email: string;
+  cooldown_seconds: number;
+  dev_otp?: string | null;
+}
+
 export interface Artifact {
   id: string;
   title: string;
@@ -285,6 +293,19 @@ export interface WorkflowEvent {
   error?: string;
   final_output?: string;
   all_outputs?: Record<string, string>;
+}
+
+export interface WorkflowRun {
+  id: string;
+  template_id: string;
+  template_name: string;
+  objective: string;
+  status: "completed" | "failed" | "running";
+  node_outputs: Record<string, string>;
+  node_timings: Record<string, number>;
+  final_output: string;
+  total_duration_ms: number;
+  created_at: string;
 }
 
 // --- Knowledge Graph ---

@@ -5,6 +5,7 @@ Single orchestration core shared by /chat and /chat/stream.
 import json
 import logging
 import time
+import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -94,12 +95,16 @@ class ChatPipeline:
         ):
             if event["type"] == "clarification":
                 yield f"data: {json.dumps({'type': 'clarification', 'questions': event['questions']})}\n\n"
+            elif event["type"] in ("thought", "tool_start"):
+                yield f"data: {json.dumps(event)}\n\n"
+            elif event["type"] == "tool_result":
+                yield f"data: {json.dumps(event)}\n\n"
             elif event["type"] == "tool":
                 tool_name = event.get("model", "tool")
                 yield f"data: {json.dumps({'type': 'tool_result', 'tool': tool_name, 'result': event['response'], 'elapsed_ms': event.get('latency_ms')})}\n\n"
                 yield f"data: {json.dumps({'type': 'token', 'token': event['response']})}\n\n"
             elif event["type"] == "token":
-                yield f"data: {json.dumps({'type': 'token', 'token': event['token']})}\n\n"
+                yield f"data: {json.dumps({'type': 'token', 'token': event.get('token', event.get('content', ''))})}\n\n"
             elif event["type"] == "done":
                 yield f"data: {json.dumps(event)}\n\n"
         
@@ -204,6 +209,202 @@ class ChatPipeline:
             routing, routing_latency_ms = await self._run_router(processed)
             model = routing["model"]
 
+        # Multi-Agent DAG Workflow execution directly from chat
+        is_workflow_requested = bool(
+            (intent_override and intent_override.startswith("workflow:"))
+            or message.strip().lower().startswith("/workflow")
+        )
+
+        if is_workflow_requested:
+            from app.agents.engine import workflow_engine
+            from app.agents.templates import TEMPLATE_MAP
+
+            template_key = "fullstack"
+            clean_input = message.strip()
+            if intent_override and intent_override.startswith("workflow:"):
+                template_key = intent_override.replace("workflow:", "").strip().lower()
+            elif clean_input.lower().startswith("/workflow"):
+                parts = clean_input.split(maxsplit=2)
+                if len(parts) >= 2 and parts[1].lower() in TEMPLATE_MAP:
+                    template_key = parts[1].lower()
+                    clean_input = parts[2] if len(parts) > 2 else clean_input
+                elif len(parts) >= 2:
+                    clean_input = clean_input[9:].strip()
+
+            workflow = (
+                TEMPLATE_MAP.get(template_key)
+                or TEMPLATE_MAP.get(f"{template_key}_feature")
+                or TEMPLATE_MAP.get("fullstack_feature")
+                or TEMPLATE_MAP.get("fullstack")
+                or next(iter(TEMPLATE_MAP.values()), None)
+            )
+
+            # Ensure model passed to workflow engine is a real LLM model
+            workflow_model = model if (model and not model.startswith("workflow:")) else "qwen2.5-coder:7b"
+
+            if workflow:
+                yield {
+                    "type": "thought",
+                    "content": f"Launching Multi-Agent DAG Workflow '{workflow.name}' with {len(workflow.nodes)} specialized agents."
+                }
+                header_text = f"# ⚡ Multi-Agent Workflow: {workflow.name}\n\n**Objective:** {clean_input}\n\n"
+                full_summary = header_text
+                # Stream initial header immediately so user gets immediate visual feedback
+                yield {"type": "token", "token": header_text}
+
+                node_count = 0
+                collected_outputs: dict[str, str] = {}
+                collected_timings: dict[str, float] = {}
+                final_out = ""
+
+                async for evt in workflow_engine.execute_workflow(
+                    workflow=workflow,
+                    initial_input=clean_input,
+                    model_override=workflow_model,
+                    effort_level=effort_level or "medium",
+                ):
+                    etype = evt.get("type")
+                    if etype == "node_start":
+                        nid = evt.get("node_id", "")
+                        name = evt.get("name", nid)
+                        role = evt.get("role", "")
+                        yield {
+                            "type": "tool_start",
+                            "tool": f"agent:{role}",
+                            "input": {"node": name, "role": role, "node_id": nid},
+                            "iteration": node_count + 1,
+                        }
+                    elif etype == "node_complete":
+                        node_count += 1
+                        nid = evt.get("node_id", "")
+                        output = evt.get("output", "")
+                        duration = evt.get("duration_ms", 0.0)
+                        collected_outputs[nid] = output
+                        collected_timings[nid] = duration
+                        yield {
+                            "type": "tool_result",
+                            "tool": f"agent:{nid}",
+                            "result": output[:350] + ("..." if len(output) > 350 else ""),
+                            "elapsed_ms": duration,
+                        }
+                        # Stream agent deliverable to the frontend chat feed immediately
+                        node_chunk = f"### 🤖 [{nid.upper()}] Agent Output ({duration:.0f}ms)\n\n{output}\n\n---\n\n"
+                        full_summary += node_chunk
+                        yield {"type": "token", "token": node_chunk}
+                    elif etype == "node_error":
+                        node_count += 1
+                        nid = evt.get("node_id", "")
+                        err = evt.get("error", "Unknown error")
+                        duration = evt.get("duration_ms", 0.0)
+                        yield {
+                            "type": "tool_result",
+                            "tool": f"agent:{nid}",
+                            "result": f"Error: {err}",
+                            "elapsed_ms": duration,
+                        }
+                        err_chunk = f"### ⚠️ [{nid.upper()}] Agent Issue ({duration:.0f}ms)\n\n> {err}\n\n---\n\n"
+                        full_summary += err_chunk
+                        yield {"type": "token", "token": err_chunk}
+                    elif etype == "workflow_error":
+                        err = evt.get("error", "Workflow error")
+                        err_chunk = f"\n\n> ❌ **Workflow Execution Error**: {err}\n"
+                        full_summary += err_chunk
+                        yield {"type": "token", "token": err_chunk}
+                    elif etype == "thought":
+                        yield evt
+                    elif etype == "workflow_complete":
+                        final_out = evt.get("final_output", "")
+                        if final_out:
+                            synthesis_chunk = f"### 🎯 Final Evaluation & Synthesis\n\n{final_out}\n"
+                            full_summary += synthesis_chunk
+                            yield {"type": "token", "token": synthesis_chunk}
+
+                total_latency_ms = round((time.perf_counter() - start_total) * 1000, 2)
+                try:
+                    await memory_service.add_message(db, session_id, "user", message)
+                    await memory_service.add_message(db, session_id, "assistant", full_summary)
+                except Exception as e:
+                    logger.error(f"Failed to add workflow messages to memory: {e}")
+
+                # Automatically persist run to WorkflowRun database table so it appears in Agent Operations Hub
+                try:
+                    from app.database.models import WorkflowRun
+                    wf_run = WorkflowRun(
+                        id=str(uuid.uuid4()),
+                        user_id=None,
+                        template_id=workflow.id,
+                        template_name=workflow.name,
+                        objective=clean_input,
+                        status="completed",
+                        node_outputs=collected_outputs,
+                        node_timings=collected_timings,
+                        final_output=final_out,
+                        total_duration_ms=total_latency_ms,
+                    )
+                    db.add(wf_run)
+                    await db.commit()
+                except Exception as e:
+                    logger.warning(f"Failed to persist WorkflowRun to DB: {e}")
+
+                yield {
+                    "type": "done",
+                    "intent": "workflow",
+                    "model": workflow.name,
+                    "latency_ms": total_latency_ms,
+                    "response": full_summary,
+                }
+                return
+
+        # Multi-loop agent execution when requested by prompt or coding/high-effort settings
+        is_multi_loop_requested = (
+            intent_override in ("coding", "agent")
+            or effort_level == "high"
+            or any(k in message.lower() for k in [
+                "step by step", "use tools", "using tools", "agent loop", "coding loop",
+                "then calculate", "and calculate", "check time and", "run loop", "multi loop", "multi-loop"
+            ])
+            or (effort_level == "medium" and any(k in message.lower() for k in ["calculate", "date", "time", "file", "directory", "sql", "math"]))
+        ) and not should_search_rag
+
+        if is_multi_loop_requested:
+            from app.tools.agent_loop import react_agent
+            full_response = ""
+            total_steps = 0
+            tools_used = []
+
+            async for event in react_agent.run_stream(
+                question=message,
+                model=model,
+                effort_level=effort_level or "medium",
+            ):
+                etype = event.get("type")
+                if etype in ("thought", "tool_start", "tool_result"):
+                    yield event
+                elif etype == "token":
+                    full_response += event.get("content", "")
+                    yield {"type": "token", "token": event.get("content", "")}
+                elif etype == "done":
+                    total_steps = event.get("total_steps", 1)
+                    tools_used = event.get("tools_used", [])
+
+            total_latency_ms = round((time.perf_counter() - start_total) * 1000, 2)
+            try:
+                await memory_service.add_message(db, session_id, "user", message)
+                await memory_service.add_message(db, session_id, "assistant", full_response)
+            except Exception as e:
+                logger.error(f"Failed to add multi-loop messages: {e}")
+
+            yield {
+                "type": "done",
+                "intent": "coding" if intent_override == "coding" else "reasoning",
+                "model": model,
+                "latency_ms": total_latency_ms,
+                "response": full_response,
+                "tools_used": tools_used,
+                "total_steps": total_steps,
+            }
+            return
+
         rag_context = ""
         if should_search_rag and session_docs:
             doc_ids = [str(d.id) for d in session_docs]
@@ -293,8 +494,9 @@ class ChatPipeline:
                     break
         except Exception as e:
             logger.error(f"Ollama streaming chat failed: {e}")
-            full_response += "\n[Error generating response]"
-            yield {"type": "token", "token": "\n[Error generating response]"}
+            err_text = f"\n[Error generating response: {e}]"
+            full_response += err_text
+            yield {"type": "token", "token": err_text}
 
         generation_latency_ms = round((time.perf_counter() - gen_start) * 1000, 2)
 

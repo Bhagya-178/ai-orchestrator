@@ -42,6 +42,7 @@ class AgentRole:
         task: str,
         context: Optional[dict[str, Any]] = None,
         model_override: Optional[str] = None,
+        max_tokens: Optional[int] = None,
     ) -> str:
         """Execute a prompt under this agent role's persona and context."""
         context_block = ""
@@ -51,15 +52,24 @@ class AgentRole:
                 context_block += f"\n--- [{k}] ---\n{str(v).strip()}\n"
 
         prompt = f"{self.system_prompt}\n{context_block}\n\n### Current Task:\n{task}"
-        target_model = model_override or self.default_model
+        if model_override and not model_override.startswith("workflow:"):
+            target_model = model_override
+        else:
+            target_model = self.default_model
 
         try:
+            gen_options: dict[str, Any] = {"temperature": self.temperature}
+            if max_tokens:
+                gen_options["num_predict"] = max_tokens
+
             response = await ollama.generate(
                 prompt=prompt,
                 model=target_model,
-                temperature=self.temperature,
+                options=gen_options,
             )
-            return response.strip()
+            if isinstance(response, dict):
+                response = response.get("response", "")
+            return str(response).strip()
         except Exception as ex:
             logger.error(f"Error executing agent role {self.id}: {ex}")
             return f"[{self.title} Execution Fallback]: Unable to complete turn ({ex}). Task: {task[:80]}"

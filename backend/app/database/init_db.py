@@ -91,6 +91,23 @@ async def init_db(max_retries: int = 15, delay: float = 2.0) -> None:
                 """)
             )
 
+            # Email verifications table for OTP
+            await conn.execute(
+                text("""
+                CREATE TABLE IF NOT EXISTS email_verifications (
+                    id SERIAL PRIMARY KEY,
+                    email VARCHAR UNIQUE NOT NULL,
+                    otp_hash VARCHAR NOT NULL,
+                    full_name VARCHAR DEFAULT '',
+                    hashed_password VARCHAR NOT NULL,
+                    attempts INTEGER DEFAULT 0,
+                    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                    last_sent_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                );
+                """)
+            )
+
             # Request logs additions
             await conn.execute(
                 text("ALTER TABLE request_logs ADD COLUMN IF NOT EXISTS session_id VARCHAR;")

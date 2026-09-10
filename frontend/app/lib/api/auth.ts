@@ -1,5 +1,5 @@
 import { fetchApi } from "./client";
-import { User, TokenResponse } from "../types";
+import { User, TokenResponse, OtpRegisterResponse } from "../types";
 
 export async function loginUser(email: string, password: string): Promise<TokenResponse> {
   const res = await fetchApi("/auth/login", {
@@ -16,11 +16,20 @@ export async function loginUser(email: string, password: string): Promise<TokenR
   return data;
 }
 
-export async function registerUser(email: string, password: string, fullName: string = ""): Promise<TokenResponse> {
+export async function registerUser(email: string, password: string, fullName: string = ""): Promise<OtpRegisterResponse> {
   const res = await fetchApi("/auth/register", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password, full_name: fullName }),
+  });
+  return await res.json();
+}
+
+export async function verifyOtpUser(email: string, otp: string): Promise<TokenResponse> {
+  const res = await fetchApi("/auth/verify-otp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, otp }),
   });
   const data: TokenResponse = await res.json();
   if (typeof window !== "undefined") {
@@ -29,6 +38,15 @@ export async function registerUser(email: string, password: string, fullName: st
     localStorage.setItem("ai_orchestrator_user", JSON.stringify(data.user));
   }
   return data;
+}
+
+export async function resendOtp(email: string): Promise<OtpRegisterResponse> {
+  const res = await fetchApi("/auth/resend-otp", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return await res.json();
 }
 
 export async function getCurrentUser(): Promise<User> {

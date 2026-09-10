@@ -58,11 +58,23 @@ class Settings:
     MAX_RAW_MESSAGES: int = 20
     SUMMARIZE_THRESHOLD: int = 15
 
-    # --- Authentication ---
+    # --- Authentication & OTP ---
     JWT_SECRET: str = "orchestrator-super-secret-key-change-in-prod-2026"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    OTP_EXPIRE_MINUTES: int = 10
+    OTP_RESEND_COOLDOWN_SECONDS: int = 60
+    OTP_MAX_ATTEMPTS: int = 5
+
+    # --- SMTP Email Service ---
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "AI Orchestrator"
+    SMTP_TLS: bool = True
 
 
 def _load_settings() -> Settings:
@@ -91,6 +103,16 @@ def _load_settings() -> Settings:
         JWT_ALGORITHM=os.getenv("JWT_ALGORITHM", "HS256"),
         ACCESS_TOKEN_EXPIRE_MINUTES=int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")),
         REFRESH_TOKEN_EXPIRE_DAYS=int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "30")),
+        OTP_EXPIRE_MINUTES=int(os.getenv("OTP_EXPIRE_MINUTES", "10")),
+        OTP_RESEND_COOLDOWN_SECONDS=int(os.getenv("OTP_RESEND_COOLDOWN_SECONDS", "60")),
+        OTP_MAX_ATTEMPTS=int(os.getenv("OTP_MAX_ATTEMPTS", "5")),
+        SMTP_HOST=os.getenv("SMTP_HOST", ""),
+        SMTP_PORT=int(os.getenv("SMTP_PORT", "587")),
+        SMTP_USER=os.getenv("SMTP_USER", ""),
+        SMTP_PASSWORD=os.getenv("SMTP_PASSWORD", ""),
+        SMTP_FROM_EMAIL=os.getenv("SMTP_FROM_EMAIL", ""),
+        SMTP_FROM_NAME=os.getenv("SMTP_FROM_NAME", "AI Orchestrator"),
+        SMTP_TLS=os.getenv("SMTP_TLS", "true").lower() in ("true", "1", "yes"),
     )
 
 

@@ -104,8 +104,10 @@ Do not write anything outside the JSON object."""
                 model=judge_model,
                 temperature=0.0,
             )
+            if isinstance(raw_judge, dict):
+                raw_judge = raw_judge.get("response", "")
             # Extract JSON
-            match = re.search(r"\{.*\}", raw_judge, re.DOTALL)
+            match = re.search(r"\{.*\}", str(raw_judge), re.DOTALL)
             if match:
                 parsed = json.loads(match.group(0))
                 return parsed
@@ -160,6 +162,8 @@ Do not write anything outside the JSON object."""
                     model=target_model,
                     temperature=0.2,
                 )
+                if isinstance(candidate_response, dict):
+                    candidate_response = candidate_response.get("response", "")
             except Exception as ex:
                 candidate_response = f"[Error querying target model]: {ex}"
 

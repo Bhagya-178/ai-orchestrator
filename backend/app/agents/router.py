@@ -9,19 +9,24 @@ Endpoints:
 """
 
 import json
+import uuid
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.engine import WorkflowDefinition, workflow_engine
 from app.agents.roles import AGENT_REGISTRY
 from app.agents.templates import TEMPLATES, TEMPLATE_MAP
 from app.auth.dependencies import get_optional_user
-from app.database.models import User
+from app.database.models import User, WorkflowRun
+from app.database.session import get_db
 
 router = APIRouter(prefix="/agents", tags=["Agents"])
+
 
 
 class ExecuteWorkflowRequest(BaseModel):
@@ -29,6 +34,7 @@ class ExecuteWorkflowRequest(BaseModel):
     custom_workflow: Optional[WorkflowDefinition] = None
     input: str = Field(..., min_length=1, description="Initial prompt / requirement for the workflow")
     model_override: Optional[str] = None
+    effort_level: Optional[str] = "medium"
 
 
 class RoleChatRequest(BaseModel):
@@ -99,6 +105,7 @@ async def run_workflow_stream(
                 workflow=workflow,
                 initial_input=req.input,
                 model_override=req.model_override,
+                effort_level=req.effort_level or "medium",
             ):
                 payload = json.dumps(event)
                 yield f"data: {payload}\n\n"
@@ -138,3 +145,132 @@ async def chat_with_role(
         "title": role.title,
         "response": output,
     }
+
+
+class SaveWorkflowRunRequest(BaseModel):
+    id: Optional[str] = None
+    template_id: str
+    template_name: str
+    objective: str
+    status: str = "completed"
+    node_outputs: dict[str, Any] = Field(default_factory=dict)
+    node_timings: dict[str, float] = Field(default_factory=dict)
+    final_output: str = ""
+    total_duration_ms: float = 0.0
+
+
+@router.get("/runs")
+async def list_workflow_runs(
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """List previous workflow runs for the current user or guest session."""
+    query = select(WorkflowRun)
+    if current_user:
+        query = query.where(WorkflowRun.user_id == current_user.id)
+    else:
+        query = query.where(WorkflowRun.user_id.is_(None))
+    query = query.order_by(desc(WorkflowRun.created_at)).limit(50)
+    res = await db.execute(query)
+    runs = res.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "template_id": r.template_id,
+            "template_name": r.template_name,
+            "objective": r.objective,
+            "status": r.status,
+            "node_outputs": r.node_outputs or {},
+            "node_timings": r.node_timings or {},
+            "final_output": r.final_output,
+            "total_duration_ms": r.total_duration_ms,
+            "created_at": r.created_at.isoformat() if r.created_at else "",
+        }
+        for r in runs
+    ]
+
+
+@router.get("/runs/{run_id}")
+async def get_workflow_run(
+    run_id: str,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve full details of a specific workflow run."""
+    run = await db.get(WorkflowRun, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Workflow run not found")
+    if run.user_id and current_user and run.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
+    return {
+        "id": run.id,
+        "template_id": run.template_id,
+        "template_name": run.template_name,
+        "objective": run.objective,
+        "status": run.status,
+        "node_outputs": run.node_outputs or {},
+        "node_timings": run.node_timings or {},
+        "final_output": run.final_output,
+        "total_duration_ms": run.total_duration_ms,
+        "created_at": run.created_at.isoformat() if run.created_at else "",
+    }
+
+
+@router.post("/runs")
+async def save_workflow_run(
+    req: SaveWorkflowRunRequest,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Persist a completed workflow run."""
+    run_id = req.id or str(uuid.uuid4())
+    existing = await db.get(WorkflowRun, run_id)
+    if existing:
+        existing.status = req.status
+        existing.node_outputs = req.node_outputs
+        existing.node_timings = req.node_timings
+        existing.final_output = req.final_output
+        existing.total_duration_ms = req.total_duration_ms
+        await db.commit()
+        await db.refresh(existing)
+        target = existing
+    else:
+        target = WorkflowRun(
+            id=run_id,
+            user_id=current_user.id if current_user else None,
+            template_id=req.template_id,
+            template_name=req.template_name,
+            objective=req.objective,
+            status=req.status,
+            node_outputs=req.node_outputs,
+            node_timings=req.node_timings,
+            final_output=req.final_output,
+            total_duration_ms=req.total_duration_ms,
+        )
+        db.add(target)
+        await db.commit()
+        await db.refresh(target)
+
+    return {
+        "id": target.id,
+        "status": target.status,
+        "message": "Workflow run saved successfully",
+    }
+
+
+@router.delete("/runs/{run_id}")
+async def delete_workflow_run(
+    run_id: str,
+    current_user: Optional[User] = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a saved workflow run."""
+    run = await db.get(WorkflowRun, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Workflow run not found")
+    if run.user_id and current_user and run.user_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied")
+    await db.delete(run)
+    await db.commit()
+    return {"success": True}
+

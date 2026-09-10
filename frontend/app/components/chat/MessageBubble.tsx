@@ -11,6 +11,7 @@ import { useChat } from "@/app/lib/context/ChatContext";
 import { useArtifact } from "@/app/lib/context/ArtifactContext";
 import SpeechPlayer from "../voice/SpeechPlayer";
 import ToolExecutionCard from "../tools/ToolExecutionCard";
+import AgentSwarmCard from "../agents/AgentSwarmCard";
 
 const MessageBubble = React.memo(function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
@@ -197,13 +198,21 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
             </div>
           ) : (
             <>
-              {message.toolSteps && message.toolSteps.length > 0 && (
-                <div className="flex flex-col gap-2 mb-3 w-full">
-                  {message.toolSteps.map((step, idx) => (
-                    <ToolExecutionCard key={idx} step={step} />
-                  ))}
-                </div>
-              )}
+              {message.toolSteps && message.toolSteps.length > 0 && (() => {
+                const agentSteps = message.toolSteps.filter((s) => s.tool?.startsWith("agent:"));
+                const otherSteps = message.toolSteps.filter((s) => !s.tool?.startsWith("agent:"));
+
+                return (
+                  <div className="flex flex-col gap-2 mb-3 w-full">
+                    {agentSteps.length > 0 && (
+                      <AgentSwarmCard steps={agentSteps} isGenerating={isGenerating} />
+                    )}
+                    {otherSteps.map((step, idx) => (
+                      <ToolExecutionCard key={idx} step={step} />
+                    ))}
+                  </div>
+                );
+              })()}
               {message.content ? (
                 <div className={`prose prose-sm md:prose-base max-w-none dark:prose-invert ${isUser ? "" : "prose-slate dark:prose-p:text-gray-300"}`}>
                   <ReactMarkdown components={components}>

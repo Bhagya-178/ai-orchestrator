@@ -13,22 +13,30 @@ import {
   Layers,
   HelpCircle,
   Lock,
+  Edit3,
+  List,
+  Cpu,
 } from "lucide-react";
 import { useAuth } from "@/app/lib/context/AuthContext";
 import { BenchmarkInfo, EvalRunSummary, EvalRunDetail } from "@/app/lib/types";
 import { listBenchmarks, runBenchmark, listEvalHistory, getEvalDetail } from "@/app/lib/api/evals";
+import { getAvailableModels } from "@/app/lib/api/health";
 
 interface EvalsDashboardModalProps {
   isOpen: boolean;
   onClose: () => void;
+  availableModels?: string[];
 }
 
-export default function EvalsDashboardModal({ isOpen, onClose }: EvalsDashboardModalProps) {
+export default function EvalsDashboardModal({ isOpen, onClose, availableModels }: EvalsDashboardModalProps) {
   const { isAuthenticated, setShowAuthModal, setAuthModalMode } = useAuth();
   const [benchmarks, setBenchmarks] = useState<BenchmarkInfo[]>([]);
   const [selectedBenchmarkId, setSelectedBenchmarkId] = useState<string>("");
+  const [modelList, setModelList] = useState<string[]>([]);
   const [targetModel, setTargetModel] = useState("qwen2.5:1.5b");
   const [judgeModel, setJudgeModel] = useState("qwen3:8b");
+  const [isCustomTarget, setIsCustomTarget] = useState(false);
+  const [isCustomJudge, setIsCustomJudge] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
 
   const [activeRun, setActiveRun] = useState<EvalRunDetail | null>(null);
@@ -43,7 +51,11 @@ export default function EvalsDashboardModal({ isOpen, onClose }: EvalsDashboardM
 
   const loadInitialData = async () => {
     try {
-      const [bList, hList] = await Promise.all([listBenchmarks(), listEvalHistory()]);
+      const [bList, hList, fetchedModels] = await Promise.all([
+        listBenchmarks(),
+        listEvalHistory(),
+        availableModels && availableModels.length > 0 ? Promise.resolve(availableModels) : getAvailableModels(),
+      ]);
       setBenchmarks(bList);
       if (bList.length > 0 && !selectedBenchmarkId) {
         setSelectedBenchmarkId(bList[0].id);
@@ -52,6 +64,22 @@ export default function EvalsDashboardModal({ isOpen, onClose }: EvalsDashboardM
       if (hList.length > 0) {
         const detail = await getEvalDetail(hList[0].id);
         setActiveRun(detail);
+      }
+
+      // Filter out embedding models
+      const generativeModels = (fetchedModels || []).filter(
+        (m) => !m.includes("embed") && !m.includes("bge-m3") && !m.includes("nomic")
+      );
+      if (generativeModels.length > 0) {
+        setModelList(generativeModels);
+        setTargetModel((prev) =>
+          generativeModels.includes(prev) ? prev : generativeModels.find((m) => m.includes("1.5b")) || generativeModels[0]
+        );
+        setJudgeModel((prev) =>
+          generativeModels.includes(prev)
+            ? prev
+            : generativeModels.find((m) => m.includes("qwen3") || m.includes("8b")) || generativeModels[generativeModels.length - 1]
+        );
       }
     } catch (e: any) {
       console.error(e);
@@ -137,28 +165,116 @@ export default function EvalsDashboardModal({ isOpen, onClose }: EvalsDashboardM
               </select>
             </div>
 
+            {/* Target Model Selection */}
             <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                Target Model (Candidate)
-              </label>
-              <input
-                type="text"
-                value={targetModel}
-                onChange={(e) => setTargetModel(e.target.value)}
-                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-xs font-mono bg-transparent"
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                  Target Model (Candidate)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCustomTarget(!isCustomTarget)}
+                  className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  title={isCustomTarget ? "Select from installed models" : "Type custom model name"}
+                >
+                  {isCustomTarget ? <List className="w-3 h-3" /> : <Edit3 className="w-3 h-3" />}
+                  <span>{isCustomTarget ? "List" : "Custom"}</span>
+                </button>
+              </div>
+
+              {isCustomTarget ? (
+                <input
+                  type="text"
+                  value={targetModel}
+                  onChange={(e) => setTargetModel(e.target.value)}
+                  placeholder="e.g. qwen2.5:1.5b"
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-xs font-mono bg-[var(--card)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              ) : (
+                <select
+                  value={targetModel}
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") {
+                      setIsCustomTarget(true);
+                    } else {
+                      setTargetModel(e.target.value);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-xs font-mono bg-[var(--card)] cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  {modelList.length > 0 ? (
+                    modelList.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="qwen2.5:1.5b">qwen2.5:1.5b</option>
+                      <option value="qwen2.5-coder:7b">qwen2.5-coder:7b</option>
+                      <option value="deepseek-r1:8b">deepseek-r1:8b</option>
+                      <option value="qwen3:8b">qwen3:8b</option>
+                    </>
+                  )}
+                  <option value="__custom__">✏️ Custom Model Name...</option>
+                </select>
+              )}
             </div>
 
+            {/* Judge Model Selection */}
             <div>
-              <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 block mb-1">
-                Judge Model (Evaluator)
-              </label>
-              <input
-                type="text"
-                value={judgeModel}
-                onChange={(e) => setJudgeModel(e.target.value)}
-                className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-xs font-mono bg-transparent"
-              />
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                  Judge Model (Evaluator)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsCustomJudge(!isCustomJudge)}
+                  className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  title={isCustomJudge ? "Select from installed models" : "Type custom model name"}
+                >
+                  {isCustomJudge ? <List className="w-3 h-3" /> : <Edit3 className="w-3 h-3" />}
+                  <span>{isCustomJudge ? "List" : "Custom"}</span>
+                </button>
+              </div>
+
+              {isCustomJudge ? (
+                <input
+                  type="text"
+                  value={judgeModel}
+                  onChange={(e) => setJudgeModel(e.target.value)}
+                  placeholder="e.g. qwen3:8b"
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-xs font-mono bg-[var(--card)] focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              ) : (
+                <select
+                  value={judgeModel}
+                  onChange={(e) => {
+                    if (e.target.value === "__custom__") {
+                      setIsCustomJudge(true);
+                    } else {
+                      setJudgeModel(e.target.value);
+                    }
+                  }}
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-xs font-mono bg-[var(--card)] cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  {modelList.length > 0 ? (
+                    modelList.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="qwen3:8b">qwen3:8b (Evaluator)</option>
+                      <option value="deepseek-r1:8b">deepseek-r1:8b (Evaluator)</option>
+                      <option value="qwen2.5-coder:7b">qwen2.5-coder:7b</option>
+                      <option value="qwen2.5:1.5b">qwen2.5:1.5b</option>
+                    </>
+                  )}
+                  <option value="__custom__">✏️ Custom Model Name...</option>
+                </select>
+              )}
             </div>
 
             <button

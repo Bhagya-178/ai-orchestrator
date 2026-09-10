@@ -89,3 +89,23 @@ export async function getRecentPrompts(): Promise<string[]> {
     return [];
   }
 }
+
+export async function appendChatMessage(
+  sessionId: string,
+  content: string,
+  role: "user" | "assistant" = "assistant",
+  title?: string
+): Promise<boolean> {
+  try {
+    const res = await fetchApi(`chat/${sessionId}/messages`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role, content, title }),
+    });
+    return res.ok;
+  } catch (err) {
+    console.error("Failed to append chat message:", err);
+    return false;
+  }
+}
+

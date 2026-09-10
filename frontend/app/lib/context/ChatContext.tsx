@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from "react";
 import { ChatMessage, UploadedDocument } from "../types";
-import { streamChat, getChatMessages } from "../api/chat";
+import { streamChat, getChatMessages, appendChatMessage } from "../api/chat";
 import { createConversation, getConversation, updateConversationSettings } from "../api/conversations";
 import { listDocuments, reassignDocumentSession } from "../api/documents";
 
@@ -11,6 +11,7 @@ interface ChatContextType {
   setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
   isGenerating: boolean;
   sendMessage: (content: string) => Promise<void>;
+  appendMessage: (role: "user" | "assistant", content: string, title?: string) => Promise<void>;
   activeDocument: UploadedDocument | null;
   setActiveDocument: (doc: UploadedDocument | null) => void;
   currentConversationId: string;
@@ -330,6 +331,38 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     await sendMessage(lastUserPrompt);
   }, [isGenerating, messages, sendMessage]);
 
+  const appendMessage = useCallback(async (role: "user" | "assistant", content: string, title?: string) => {
+    if (!content.trim()) return;
+
+    let sessionId = currentConversationId;
+    if (messages.length === 0 || sessionId === "default-session" || sessionId.length < 10) {
+      const derivedTitle = title || (content.trim().length > 40 ? content.trim().substring(0, 40) + "..." : content.trim());
+      try {
+        const newConv = await createConversation(derivedTitle);
+        sessionId = newConv.id;
+        setCurrentConversationId(sessionId);
+        setCurrentTitle(derivedTitle);
+        setConversationVersion((v) => v + 1);
+      } catch (err) {
+        console.error("Failed to create conversation for appended message:", err);
+      }
+    }
+
+    const newMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      role,
+      content,
+    };
+
+    setMessages((prev) => [...prev, newMsg]);
+
+    try {
+      await appendChatMessage(sessionId, content, role, title);
+    } catch (err) {
+      console.error("Failed to persist appended message to backend:", err);
+    }
+  }, [currentConversationId, messages.length]);
+
   return (
     <ChatContext.Provider
       value={{
@@ -337,6 +370,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setMessages,
         isGenerating,
         sendMessage,
+        appendMessage,
         editMessage,
         regenerateLastResponse,
         activeDocument,

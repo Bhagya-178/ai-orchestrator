@@ -120,3 +120,20 @@ class TokenResponse(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+
+class OtpRegisterResponse(BaseModel):
+    success: bool = True
+    message: str
+    email: str
+    cooldown_seconds: int = 60
+    dev_otp: str | None = None
+
+
+class VerifyOtpRequest(BaseModel):
+    email: str = Field(..., min_length=3)
+    otp: str = Field(..., min_length=6, max_length=6)
+
+
+class ResendOtpRequest(BaseModel):
+    email: str = Field(..., min_length=3)

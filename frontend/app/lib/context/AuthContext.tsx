@@ -1,8 +1,16 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
-import { User } from "../types";
-import { getCurrentUser, loginUser, logoutUser, registerUser, updateCurrentUser } from "../api/auth";
+import { User, OtpRegisterResponse } from "../types";
+import {
+  getCurrentUser,
+  loginUser,
+  logoutUser,
+  registerUser,
+  verifyOtpUser,
+  resendOtp,
+  updateCurrentUser,
+} from "../api/auth";
 
 const GUEST_MESSAGE_LIMIT = 5;
 
@@ -11,13 +19,19 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName?: string) => Promise<void>;
+  register: (email: string, password: string, fullName?: string) => Promise<OtpRegisterResponse>;
+  verifyOtp: (otp: string) => Promise<void>;
+  resendOtp: () => Promise<OtpRegisterResponse>;
   logout: () => Promise<void>;
   updateProfile: (data: { full_name?: string; custom_instructions?: string; password?: string }) => Promise<void>;
   showAuthModal: boolean;
   setShowAuthModal: (val: boolean) => void;
-  authModalMode: "login" | "register";
-  setAuthModalMode: (val: "login" | "register") => void;
+  authModalMode: "login" | "register" | "verify_otp";
+  setAuthModalMode: (val: "login" | "register" | "verify_otp") => void;
+  pendingEmail: string;
+  setPendingEmail: (val: string) => void;
+  devOtp: string | null;
+  setDevOtp: (val: string | null) => void;
   guestMessageCount: number;
   guestMessageLimit: number;
   isGuestLimitReached: boolean;
@@ -31,7 +45,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState<"login" | "register">("login");
+  const [authModalMode, setAuthModalMode] = useState<"login" | "register" | "verify_otp">("login");
+  const [pendingEmail, setPendingEmail] = useState<string>("");
+  const [devOtp, setDevOtp] = useState<string | null>(null);
   const [guestMessageCount, setGuestMessageCount] = useState<number>(0);
 
   // Initialize guest counter from localStorage
@@ -106,9 +122,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = useCallback(async (email: string, password: string, fullName: string = "") => {
     const res = await registerUser(email, password, fullName);
+    setPendingEmail(email);
+    setDevOtp(res.dev_otp || null);
+    setAuthModalMode("verify_otp");
+    return res;
+  }, []);
+
+  const verifyOtp = useCallback(async (otp: string) => {
+    if (!pendingEmail) {
+      throw new Error("No pending registration email found. Please register again.");
+    }
+    const res = await verifyOtpUser(pendingEmail, otp);
     setUser(res.user);
     setShowAuthModal(false);
-  }, []);
+    setPendingEmail("");
+    setDevOtp(null);
+    setAuthModalMode("login");
+  }, [pendingEmail]);
+
+  const resendOtpAction = useCallback(async () => {
+    if (!pendingEmail) {
+      throw new Error("No pending registration email found. Please register again.");
+    }
+    const res = await resendOtp(pendingEmail);
+    if (res.dev_otp) {
+      setDevOtp(res.dev_otp);
+    }
+    return res;
+  }, [pendingEmail]);
 
   const logout = useCallback(async () => {
     await logoutUser();
@@ -131,12 +172,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         register,
+        verifyOtp,
+        resendOtp: resendOtpAction,
         logout,
         updateProfile,
         showAuthModal,
         setShowAuthModal,
         authModalMode,
         setAuthModalMode,
+        pendingEmail,
+        setPendingEmail,
+        devOtp,
+        setDevOtp,
         guestMessageCount,
         guestMessageLimit: GUEST_MESSAGE_LIMIT,
         isGuestLimitReached,

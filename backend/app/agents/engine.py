@@ -80,6 +80,13 @@ def detect_cycles_and_toposort(nodes: list[WorkflowNode]) -> list[list[str]]:
     return waves
 
 
+EFFORT_TOKEN_BUDGET = {
+    "low": 600,
+    "medium": 1200,
+    "high": 2500,
+}
+
+
 class WorkflowExecutionEngine:
     """Executes multi-agent DAG workflows with live telemetry streaming."""
 
@@ -91,15 +98,38 @@ class WorkflowExecutionEngine:
         workflow: WorkflowDefinition,
         initial_input: str = "",
         model_override: Optional[str] = None,
+        effort_level: str = "medium",
     ) -> AsyncGenerator[dict[str, Any], None]:
         """
-        Execute workflow wave-by-wave, yielding real-time events.
+        Execute workflow wave-by-wave with effort-driven dynamic scaling and reflection loops.
         """
         start_time = time.perf_counter()
-        node_map = {n.id: n for n in workflow.nodes}
+        clean_effort = effort_level.lower() if effort_level else "medium"
+        max_tokens = EFFORT_TOKEN_BUDGET.get(clean_effort, 1200)
+
+        # 1. Low-Effort Scaling: Prune non-essential QA/Critic nodes for rapid turnaround
+        active_nodes = workflow.nodes
+        if clean_effort == "low" and len(workflow.nodes) > 2:
+            core_roles = {"planner", "coder", "researcher"}
+            kept = [n for n in workflow.nodes if n.role in core_roles]
+            if kept:
+                kept_ids = {n.id for n in kept}
+                active_nodes = [
+                    WorkflowNode(
+                        id=n.id,
+                        name=n.name,
+                        role=n.role,
+                        task=n.task,
+                        depends_on=[dep for dep in n.depends_on if dep in kept_ids],
+                        model=n.model,
+                    )
+                    for n in kept
+                ]
+
+        node_map = {n.id: n for n in active_nodes}
 
         try:
-            waves = detect_cycles_and_toposort(workflow.nodes)
+            waves = detect_cycles_and_toposort(active_nodes)
         except ValueError as err:
             yield {
                 "type": "workflow_error",
@@ -111,8 +141,9 @@ class WorkflowExecutionEngine:
             "type": "workflow_start",
             "workflow_id": workflow.id,
             "workflow_name": workflow.name,
-            "total_nodes": len(workflow.nodes),
+            "total_nodes": len(active_nodes),
             "waves_count": len(waves),
+            "effort_level": clean_effort,
         }
 
         node_outputs: dict[str, str] = {}
@@ -125,7 +156,8 @@ class WorkflowExecutionEngine:
                 "node_ids": wave,
             }
 
-            # Run all nodes in the current wave concurrently
+            # Sequential wave execution ensures local Ollama instance receives 100% GPU bandwidth
+            # and prevents concurrency thrashing / inference lockups on single-GPU hardware.
             async def run_single_node(nid: str) -> tuple[str, str, float, Optional[str]]:
                 node = node_map[nid]
                 role_obj = AGENT_REGISTRY.get(node.role, AGENT_REGISTRY["planner"])
@@ -139,9 +171,17 @@ class WorkflowExecutionEngine:
                 if initial_input and "{{input}}" in task_prompt:
                     task_prompt = task_prompt.replace("{{input}}", initial_input)
 
-                # Context of direct dependencies
-                dep_context = {dep: node_outputs.get(dep, "") for dep in node.depends_on}
-                if initial_input and "user_objective" not in dep_context:
+                if clean_effort == "low":
+                    task_prompt += "\n\n(Important: Keep response concise, modular, and focused on essential implementation without excessive boilerplate.)"
+
+                # Context of direct dependencies (omit those already interpolated to prevent prompt doubling)
+                dep_context = {}
+                for dep in node.depends_on:
+                    placeholder = f"{{{{{dep}.output}}}}"
+                    if placeholder not in node.task:
+                        dep_context[dep] = node_outputs.get(dep, "")
+
+                if initial_input and "{{input}}" not in node.task and "user_objective" not in dep_context:
                     dep_context["user_objective"] = initial_input
 
                 node_start = time.perf_counter()
@@ -151,6 +191,7 @@ class WorkflowExecutionEngine:
                         task=task_prompt,
                         context=dep_context,
                         model_override=node.model or model_override,
+                        max_tokens=max_tokens,
                     )
                 except Exception as ex:
                     logger.exception(f"Node {nid} failed: {ex}")
@@ -160,7 +201,7 @@ class WorkflowExecutionEngine:
                 duration = (time.perf_counter() - node_start) * 1000.0
                 return nid, output, duration, error_msg
 
-            # Notify node starts
+            # Execute wave sequentially with immediate telemetry per node
             for nid in wave:
                 n = node_map[nid]
                 yield {
@@ -170,10 +211,7 @@ class WorkflowExecutionEngine:
                     "role": n.role,
                 }
 
-            # Execute wave concurrently
-            results = await asyncio.gather(*(run_single_node(nid) for nid in wave))
-
-            for nid, out, dur, err in results:
+                nid, out, dur, err = await run_single_node(nid)
                 node_outputs[nid] = out
                 node_timings[nid] = dur
 
@@ -190,6 +228,54 @@ class WorkflowExecutionEngine:
                         "node_id": nid,
                         "output": out,
                         "duration_ms": round(dur, 1),
+                    }
+
+        # 2. High-Effort Autonomous Reflection Loop:
+        # If security or QA reviewer detected vulnerabilities or issues, loop back to Coder agent
+        if clean_effort == "high":
+            reviewer_outputs = [
+                node_outputs[nid]
+                for nid in node_outputs
+                if nid in node_map and node_map[nid].role == "reviewer"
+            ]
+            if reviewer_outputs:
+                combined_reviews = "\n\n".join(reviewer_outputs)
+                has_critique = any(
+                    k in combined_reviews.lower()
+                    for k in ["vulnerability", "issue", "risk", "flaw", "bug", "missing", "security", "warning", "patch", "sanitize"]
+                )
+                if has_critique:
+                    yield {
+                        "type": "thought",
+                        "content": "🛡️ High Effort Autonomous Reflection: Reviewer identified findings. Triggering autonomous patch cycle with Coder Agent...",
+                    }
+                    patch_id = "security_patch_loop"
+                    yield {
+                        "type": "node_start",
+                        "node_id": patch_id,
+                        "name": "Security Hardening & Remediation Loop",
+                        "role": "coder",
+                    }
+                    patch_start = time.perf_counter()
+                    coder_agent = AGENT_REGISTRY.get("coder", AGENT_REGISTRY["planner"])
+                    patch_task = (
+                        f"Review the security audit and vulnerability findings below:\n\n{combined_reviews}\n\n"
+                        f"Implement hardened fixes, input validation, parameterized queries, and defensive safeguards to resolve every issue."
+                    )
+                    patch_output = await coder_agent.execute(
+                        task=patch_task,
+                        context=node_outputs,
+                        model_override=model_override,
+                        max_tokens=max_tokens,
+                    )
+                    patch_dur = (time.perf_counter() - patch_start) * 1000.0
+                    node_outputs[patch_id] = patch_output
+                    node_timings[patch_id] = patch_dur
+                    yield {
+                        "type": "node_complete",
+                        "node_id": patch_id,
+                        "output": patch_output,
+                        "duration_ms": round(patch_dur, 1),
                     }
 
         total_duration = (time.perf_counter() - start_time) * 1000.0

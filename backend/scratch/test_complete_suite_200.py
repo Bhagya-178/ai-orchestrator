@@ -1288,10 +1288,10 @@ def main():
     print("=" * 80)
 
     if failed_tests == 0 and passed_tests == 200:
-        print("\n🎉 ALL 200 / 200 TESTS PASSED (100% SUCCESS RATE)!\n")
+        print("\n[SUCCESS] ALL 200 / 200 TESTS PASSED (100% SUCCESS RATE)!\n")
         sys.exit(0)
     else:
-        print(f"\n⚠️ SUITE FAILED: {failed_tests} failed test(s) out of {passed_tests + failed_tests}.\n")
+        print(f"\n[FAILURE] SUITE FAILED: {failed_tests} failed test(s) out of {passed_tests + failed_tests}.\n")
         sys.exit(1)
 
 

@@ -76,26 +76,41 @@ class OllamaClient:
         model: str,
         prompt: str,
         options: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        """Non-streaming text generation."""
+        temperature: float | None = None,
+        return_raw: bool = False,
+        **kwargs: Any,
+    ) -> str | dict[str, Any]:
+        """Non-streaming text generation. Returns text response by default or dict if return_raw=True."""
         payload: dict[str, Any] = {
             "model": model,
             "prompt": prompt.strip(),
             "stream": False,
             "keep_alive": settings.OLLAMA_KEEP_ALIVE,
         }
-        if options:
-            payload["options"] = options
+        merged_options = dict(options or {})
+        if temperature is not None:
+            merged_options["temperature"] = temperature
+        for k, v in kwargs.items():
+            merged_options[k] = v
+        if merged_options:
+            payload["options"] = merged_options
 
         response = await self.client.post("/api/generate", json=payload)
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+        if return_raw:
+            return data
+        if isinstance(data, dict):
+            return data.get("response", "")
+        return str(data)
 
     async def generate_stream(
         self,
         model: str,
         prompt: str,
         options: dict[str, Any] | None = None,
+        temperature: float | None = None,
+        **kwargs: Any,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Streaming text generation — yields parsed dict chunks."""
         payload: dict[str, Any] = {
@@ -104,8 +119,13 @@ class OllamaClient:
             "stream": True,
             "keep_alive": settings.OLLAMA_KEEP_ALIVE,
         }
-        if options:
-            payload["options"] = options
+        merged_options = dict(options or {})
+        if temperature is not None:
+            merged_options["temperature"] = temperature
+        for k, v in kwargs.items():
+            merged_options[k] = v
+        if merged_options:
+            payload["options"] = merged_options
 
         async with httpx.AsyncClient(
             base_url=settings.OLLAMA_URL,
@@ -126,6 +146,8 @@ class OllamaClient:
         model: str,
         messages: list[dict[str, str]],
         options: dict[str, Any] | None = None,
+        temperature: float | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """Non-streaming chat completion."""
         payload: dict[str, Any] = {
@@ -134,8 +156,13 @@ class OllamaClient:
             "stream": False,
             "keep_alive": settings.OLLAMA_KEEP_ALIVE,
         }
-        if options:
-            payload["options"] = options
+        merged_options = dict(options or {})
+        if temperature is not None:
+            merged_options["temperature"] = temperature
+        for k, v in kwargs.items():
+            merged_options[k] = v
+        if merged_options:
+            payload["options"] = merged_options
 
         response = await self.client.post("/api/chat", json=payload)
         response.raise_for_status()

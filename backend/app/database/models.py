@@ -64,6 +64,22 @@ class RefreshToken(Base):
     user = relationship("User", back_populates="refresh_tokens")
 
 
+class EmailVerification(Base):
+    """Pending user registration and 6-digit OTP email verification."""
+
+    __tablename__ = "email_verifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    otp_hash = Column(String, nullable=False)
+    full_name = Column(String, default="")
+    hashed_password = Column(String, nullable=False)
+    attempts = Column(Integer, default=0)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    last_sent_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class RequestLog(Base):
     """Telemetry log for every chat request processed."""
 
@@ -331,4 +347,22 @@ class EvaluationRun(Base):
     summary_scores = Column(JSONB, default=dict)  # {"faithfulness": 0.92, "relevance": 0.88, ...}
     detailed_results = Column(JSONB, default=list)
     duration_seconds = Column(Float, default=0.0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class WorkflowRun(Base):
+    """Execution record for Multi-Agent DAG workflows."""
+
+    __tablename__ = "workflow_runs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    template_id = Column(String, index=True, nullable=False)
+    template_name = Column(String, nullable=False)
+    objective = Column(Text, nullable=False)
+    status = Column(String, default="completed")  # "completed" | "failed" | "running"
+    node_outputs = Column(JSONB, default=dict)
+    node_timings = Column(JSONB, default=dict)
+    final_output = Column(Text, default="")
+    total_duration_ms = Column(Float, default=0.0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())

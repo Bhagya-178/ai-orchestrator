@@ -57,11 +57,23 @@ export default function TopBar() {
   const [isWorkspacesOpen, setIsWorkspacesOpen] = useState(false);
   const [isKnowledgeOpen, setIsKnowledgeOpen] = useState(false);
   const [isAgentsOpen, setIsAgentsOpen] = useState(false);
+  const [workflowInitialPrompt, setWorkflowInitialPrompt] = useState("");
   const [isGraphOpen, setIsGraphOpen] = useState(false);
   const [isDeveloperOpen, setIsDeveloperOpen] = useState(false);
   const [isEvalsOpen, setIsEvalsOpen] = useState(false);
 
   const [models, setModels] = useState<string[]>(["qwen2.5:1.5b", "qwen3:8b"]);
+
+  useEffect(() => {
+    const handleOpenWorkflow = (e: any) => {
+      setIsAgentsOpen(true);
+      if (e.detail?.prompt) {
+        setWorkflowInitialPrompt(e.detail.prompt);
+      }
+    };
+    window.addEventListener("open-agent-workflow", handleOpenWorkflow);
+    return () => window.removeEventListener("open-agent-workflow", handleOpenWorkflow);
+  }, []);
 
   useEffect(() => {
     getAvailableModels().then(setModels).catch(console.error);
@@ -452,7 +464,11 @@ export default function TopBar() {
 
       <AgentWorkflowModal
         isOpen={isAgentsOpen}
-        onClose={() => setIsAgentsOpen(false)}
+        initialPrompt={workflowInitialPrompt}
+        onClose={() => {
+          setIsAgentsOpen(false);
+          setWorkflowInitialPrompt("");
+        }}
       />
 
       <GraphVisualizerModal
@@ -468,6 +484,7 @@ export default function TopBar() {
       <EvalsDashboardModal
         isOpen={isEvalsOpen}
         onClose={() => setIsEvalsOpen(false)}
+        availableModels={models}
       />
     </>
   );

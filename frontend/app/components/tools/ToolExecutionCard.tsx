@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Wrench, ChevronDown, ChevronUp, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { Wrench, ChevronDown, ChevronUp, CheckCircle2, Clock, AlertCircle, Bot } from "lucide-react";
 import { ToolStepEvent } from "@/app/lib/types";
 
 interface ToolExecutionCardProps {
@@ -13,6 +13,8 @@ export default function ToolExecutionCard({ step }: ToolExecutionCardProps) {
 
   const isComplete = Boolean(step.result);
   const isError = Boolean(step.message && step.type === "error");
+  const isAgent = Boolean(step.tool?.startsWith("agent:"));
+  const cleanToolName = isAgent ? step.tool!.replace("agent:", "") : (step.tool || "tool");
 
   return (
     <div className="my-2 rounded-xl border border-[var(--border)] bg-[var(--card)] text-xs overflow-hidden transition-all shadow-sm">
@@ -21,11 +23,14 @@ export default function ToolExecutionCard({ step }: ToolExecutionCardProps) {
         className="w-full flex items-center justify-between px-3.5 py-2.5 bg-black/[0.02] dark:bg-white/[0.03] hover:bg-black/[0.05] dark:hover:bg-white/[0.06] transition-colors text-left"
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
-            <Wrench className="w-3.5 h-3.5" />
+          <div className={`p-1.5 rounded-lg ${isAgent ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400' : 'bg-blue-500/10 text-blue-600 dark:text-blue-400'}`}>
+            {isAgent ? <Bot className="w-3.5 h-3.5" /> : <Wrench className="w-3.5 h-3.5" />}
           </div>
           <span className="font-semibold text-gray-900 dark:text-white truncate">
-            Tool Call: <span className="font-mono text-blue-600 dark:text-blue-400">{step.tool || "agent_tool"}</span>
+            {isAgent ? "Agent: " : "Tool Call: "}
+            <span className={`font-mono ${isAgent ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-blue-600 dark:text-blue-400'}`}>
+              {cleanToolName}
+            </span>
           </span>
           {step.elapsed_ms !== undefined && (
             <span className="flex items-center gap-1 text-[11px] text-gray-500 dark:text-gray-400 bg-black/5 dark:bg-white/5 px-2 py-0.5 rounded-md">

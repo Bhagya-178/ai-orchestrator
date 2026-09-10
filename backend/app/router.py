@@ -16,6 +16,13 @@ class ModelRouter:
         """
         intent = processed.get("intent", "general")
 
+        # Never treat multi-agent workflow pseudo-intents as direct model names
+        if intent.startswith("workflow:"):
+            return {
+                "intent": intent,
+                "model": MODEL_REGISTRY.get("coding", "qwen2.5-coder:7b")
+            }
+
         # If direct model name is selected (e.g. 'deepseek-r1:8b', 'qwen2.5-coder:7b', or contains ':')
         if ":" in intent or intent in ("qwen3:8b", "deepseek-r1:8b", "qwen2.5-coder:7b", "gemma4:e4b", "qwen2.5:1.5b"):
             return {

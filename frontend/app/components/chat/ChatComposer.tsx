@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { Paperclip, ArrowUp, FileText, X, Sparkles, AlertCircle, Square } from "lucide-react";
+import { Paperclip, ArrowUp, FileText, X, Sparkles, AlertCircle, Square, Layers } from "lucide-react";
 import { useChat } from "@/app/lib/context/ChatContext";
 import { useAuth } from "@/app/lib/context/AuthContext";
 import { uploadDocument } from "@/app/lib/api/documents";
@@ -313,6 +313,41 @@ export default function ChatComposer() {
               disabled={isGenerating}
             />
 
+            {/* Quick Multi-Agent Swarm Mode Toggle */}
+            <button
+              type="button"
+              onClick={() => {
+                if (intentOverride?.startsWith("workflow:")) {
+                  setIntentOverride("auto");
+                  updateSettings("auto", undefined);
+                } else {
+                  setIntentOverride("workflow:fullstack");
+                  updateSettings("workflow:fullstack", undefined);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                intentOverride?.startsWith("workflow:")
+                  ? "bg-purple-600 text-white shadow-xs"
+                  : "bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:hover:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40"
+              }`}
+              title={intentOverride?.startsWith("workflow:") ? "Multi-Agent Swarm active (click to disable)" : "Activate Multi-Agent Swarm mode"}
+            >
+              <Sparkles className="w-3 h-3" />
+              <span>⚡ Swarm</span>
+            </button>
+
+            {/* Open Studio with current input */}
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("open-agent-workflow", { detail: { prompt: message } }));
+              }}
+              className="p-1.5 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors cursor-pointer shrink-0"
+              title="Open Agent Operations Studio"
+            >
+              <Layers className="w-4 h-4" />
+            </button>
+
             {/* Document Context Pill — unique toggle control */}
             {showContextPill && activeDocument.status !== "uploading" && (
               <button
@@ -356,6 +391,11 @@ export default function ChatComposer() {
                   <option value="auto" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100 font-semibold">
                     ✨ Auto Model (Smart)
                   </option>
+                  <optgroup label="Multi-Agent DAG Workflows" className="bg-white dark:bg-[#18181b] text-purple-600 dark:text-purple-400 font-semibold">
+                    <option value="workflow:fullstack" className="text-gray-900 dark:text-gray-100">⚡ Full-Stack Feature Flow (5 Agents)</option>
+                    <option value="workflow:factcheck" className="text-gray-900 dark:text-gray-100">🔍 Deep Fact-Check & Verification (3 Agents)</option>
+                    <option value="workflow:vulnerability" className="text-gray-900 dark:text-gray-100">🛡️ Vulnerability & Security Audit (4 Agents)</option>
+                  </optgroup>
                   <optgroup label="Intent Routing" className="bg-white dark:bg-[#18181b] text-gray-500 font-medium">
                     <option value="general" className="text-gray-900 dark:text-gray-100">General Chat</option>
                     <option value="coding" className="text-gray-900 dark:text-gray-100">Coding Specialist</option>
@@ -376,21 +416,20 @@ export default function ChatComposer() {
                   value={effortLevel}
                   onChange={(e) => {
                     const val = e.target.value;
-                    if (!isAuthenticated && val === "high") {
-                      setAuthModalMode("login");
-                      setShowAuthModal(true);
-                      return;
-                    }
                     setEffortLevel(val);
                     updateSettings(undefined, val);
                   }}
                   className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-[11px] font-medium text-gray-600 dark:text-gray-300 outline-none cursor-pointer py-1 px-2 rounded-lg transition-all"
-                  title="Effort Level"
+                  title="Effort & Reasoning Depth"
                 >
-                  <option value="low" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Low Effort</option>
-                  <option value="medium" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">Medium Effort</option>
+                  <option value="low" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
+                    ⚡ Low (Fast · 2 iters)
+                  </option>
+                  <option value="medium" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
+                    ⚖️ Medium (5 iters)
+                  </option>
                   <option value="high" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
-                    High Effort {!isAuthenticated ? "(Sign In)" : ""}
+                    🧠 High (10 iters + Reflection)
                   </option>
                 </select>
               </div>

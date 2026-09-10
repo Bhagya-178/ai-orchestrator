@@ -128,4 +128,11 @@ TEMPLATES: list[WorkflowDefinition] = [
     ),
 ]
 
-TEMPLATE_MAP = {t.id: t for t in TEMPLATES}
+TEMPLATE_MAP: dict[str, WorkflowDefinition] = {t.id: t for t in TEMPLATES}
+
+# Shorthand aliases used by frontend selector and chat shortcuts
+TEMPLATE_MAP["fullstack"] = TEMPLATE_MAP["fullstack_feature"]
+TEMPLATE_MAP["factcheck"] = TEMPLATE_MAP["deep_research"]
+TEMPLATE_MAP["research"] = TEMPLATE_MAP["deep_research"]
+TEMPLATE_MAP["vulnerability"] = TEMPLATE_MAP["security_hardening"]
+TEMPLATE_MAP["security"] = TEMPLATE_MAP["security_hardening"]
