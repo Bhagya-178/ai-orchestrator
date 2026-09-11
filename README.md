@@ -87,7 +87,6 @@ graph TB
 | **Hybrid RAG 2.0** | Dense vector search (Qdrant) fused with BM25Okapi sparse lexical scoring via Reciprocal Rank Fusion ($RRF(d) = \sum \frac{1}{60 + \text{rank}}$). Includes collection tagging. |
 | **Model Arena & Evals Studio** | Side-by-side asynchronous streaming battles measuring TTFT, tokens/second, and win-rates, combined with automated LLM-as-a-judge benchmark suites with auto-populated candidate and judge model selection dropdowns. |
 | **Multi-Tenant Workspaces & RBAC** | Team workspaces with granular permissions (`owner`, `admin`, `member`, `viewer`), invite workflows, and security audit trails. |
-| **Voice & Speech Synthesis** | Web Audio API MediaRecorder integration with server-side speech recognition and WAV audio playback. |
 
 ---
 
@@ -399,7 +398,6 @@ ai-orchestrator/
 │   │   │   ├── semantic_cache.py # Cosine similarity query cache
 │   │   │   ├── webhooks.py    # HMAC-SHA256 event dispatcher
 │   │   │   ├── arena_service.py # Split-battle arbitration
-│   │   │   ├── audio_service.py # Voice transcription & synthesis
 │   │   │   └── chat_pipeline.py # Central conversation orchestration & effort routing
 │   │   ├── tools/             # Sandboxed ReAct Tool Ecosystem
 │   │   │   ├── agent_loop.py  # ReAct loop with dynamic effort scaling (2, 5, 10 iters)
@@ -429,8 +427,7 @@ ai-orchestrator/
 │   │   │   │   ├── ChatComposer.tsx       # Dynamic effort selector, prompt history, attachments
 │   │   │   │   ├── ChatView.tsx           # Message feed, scroll anchors, empty states
 │   │   │   │   └── MessageBubble.tsx      # Markdown, syntax highlighter, inline ReAct cards
-│   │   │   ├── layout/        # Responsive AppShell & TopBar
-│   │   │   └── voice/         # Web Audio MediaRecorder & Speech Player
+│   │   │   └── layout/        # Responsive AppShell & TopBar
 │   │   ├── lib/
 │   │   │   ├── api/           # Strongly-typed API client wrappers (chat, auth, agents, etc.)
 │   │   │   ├── context/       # Chat, Artifact, Auth, and Theme Contexts

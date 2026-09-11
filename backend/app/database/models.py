@@ -366,3 +366,17 @@ class WorkflowRun(Base):
     final_output = Column(Text, default="")
     total_duration_ms = Column(Float, default=0.0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ArenaVote(Base):
+    """Persistent record of user evaluation preference between two models in the Model Arena."""
+
+    __tablename__ = "arena_votes"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    prompt = Column(Text, nullable=False)
+    model_a = Column(String, nullable=False, index=True)
+    model_b = Column(String, nullable=False, index=True)
+    winner = Column(String, nullable=False)  # "A" | "B" | "tie" | "both_bad"
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

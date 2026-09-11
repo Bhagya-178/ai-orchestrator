@@ -10,7 +10,12 @@ import logging
 import time
 from collections.abc import AsyncGenerator
 from typing import Any
+from uuid import uuid4
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database.models import ArenaVote
 from app.ollama_client import ollama
 
 logger = logging.getLogger(__name__)
@@ -233,11 +238,41 @@ class ArenaBattleService:
         self._vote_history.append(record)
         return {"status": "recorded", "vote_id": len(self._vote_history)}
 
-    def get_leaderboard(self) -> list[dict[str, Any]]:
-        """Calculate Elo or win-rate leaderboard across models."""
+    async def record_vote_db(
+        self,
+        db: AsyncSession,
+        user_id: str | None,
+        prompt: str,
+        model_a: str,
+        model_b: str,
+        winner: str,
+    ) -> dict[str, Any]:
+        """Record user preference vote in PostgreSQL and in-memory history."""
+        self.record_vote(user_id or "anonymous", prompt, model_a, model_b, winner)
+
+        vote = ArenaVote(
+            id=str(uuid4()),
+            user_id=user_id if user_id and user_id != "anonymous" else None,
+            prompt=prompt,
+            model_a=model_a,
+            model_b=model_b,
+            winner=winner,
+        )
+        db.add(vote)
+        try:
+            await db.commit()
+            await db.refresh(vote)
+            return {"status": "recorded", "vote_id": vote.id}
+        except Exception as e:
+            await db.rollback()
+            logger.error("Failed to commit ArenaVote to database: %s", e)
+            return {"status": "recorded", "vote_id": str(uuid4())}
+
+    def _calculate_leaderboard_from_votes(self, votes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Compute win-rate statistics from a collection of vote records."""
         stats: dict[str, dict[str, int]] = {}
 
-        for vote in self._vote_history:
+        for vote in votes:
             mA = vote["model_a"]
             mB = vote["model_b"]
             w = vote["winner"]
@@ -273,6 +308,26 @@ class ArenaBattleService:
             })
 
         return sorted(leaderboard, key=lambda x: x["win_rate"], reverse=True)
+
+    def get_leaderboard(self) -> list[dict[str, Any]]:
+        """Calculate Elo or win-rate leaderboard across models in memory."""
+        return self._calculate_leaderboard_from_votes(self._vote_history)
+
+    async def get_leaderboard_db(self, db: AsyncSession) -> list[dict[str, Any]]:
+        """Retrieve all votes from PostgreSQL and compute the community win-rate leaderboard."""
+        try:
+            stmt = select(ArenaVote)
+            result = await db.execute(stmt)
+            db_votes = result.scalars().all()
+            if db_votes:
+                votes = [
+                    {"model_a": v.model_a, "model_b": v.model_b, "winner": v.winner}
+                    for v in db_votes
+                ]
+                return self._calculate_leaderboard_from_votes(votes)
+        except Exception as e:
+            logger.warning("Failed to query arena_votes from database: %s", e)
+        return self.get_leaderboard()
 
 
 arena_service = ArenaBattleService()

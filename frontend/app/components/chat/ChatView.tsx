@@ -9,29 +9,29 @@ import ArtifactViewer from "../artifacts/ArtifactViewer";
 
 const STARTER_PROMPTS = [
   {
-    icon: <Lightbulb className="w-3.5 h-3.5 text-amber-500" />,
-    title: "Explain Concept",
+    icon: <Lightbulb className="w-4 h-4 text-amber-500" />,
+    title: "Explain a concept",
     prompt: "Explain how neural network attention mechanisms work with a simple real-world analogy.",
   },
   {
-    icon: <Code className="w-3.5 h-3.5 text-blue-500" />,
-    title: "Code Assistant",
+    icon: <Code className="w-4 h-4 text-blue-500" />,
+    title: "Write code",
     prompt: "Write a high-performance Python script to analyze CSV logs and detect anomalies.",
   },
   {
-    icon: <Sparkles className="w-3.5 h-3.5 text-purple-500" />,
-    title: "Interactive Canvas",
+    icon: <Sparkles className="w-4 h-4 text-purple-500" />,
+    title: "Build an interactive UI",
     prompt: "Create an interactive HTML and JavaScript financial compound interest calculator with a clean dark mode UI.",
   },
   {
-    icon: <BookOpen className="w-3.5 h-3.5 text-emerald-500" />,
-    title: "Study Guide",
+    icon: <BookOpen className="w-4 h-4 text-emerald-500" />,
+    title: "Study guide",
     prompt: "Create a structured study guide with key takeaways and quiz questions on distributed consensus algorithms.",
   },
 ];
 
 export default function ChatView() {
-  const { messages, currentConversationId, sendMessage } = useChat();
+  const { messages, currentConversationId, sendMessage, isGenerating } = useChat();
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomAnchorRef = useRef<HTMLDivElement>(null);
   const [showScrollBottom, setShowScrollBottom] = useState(false);
@@ -60,36 +60,32 @@ export default function ChatView() {
       bottomAnchorRef.current.scrollIntoView({ behavior, block: "end" });
     }
     userScrolledUpRef.current = false;
-    setShowScrollBottom(false);
+    setShowScrollBottom((prev) => (prev ? false : prev));
   }, []);
 
-  // When user manually scrolls with mouse wheel or touch, acknowledge manual interaction
   const handleUserInteraction = useCallback(() => {
     isProgrammaticScrollRef.current = false;
   }, []);
 
-  // Detect user scroll position: show button and pause auto-scroll if scrolled up
   const handleScroll = useCallback(() => {
     if (!scrollRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-    // While smooth programmatic scroll is in progress, ignore distance until it settles
     if (isProgrammaticScrollRef.current) {
       if (distanceFromBottom <= 50) {
         isProgrammaticScrollRef.current = false;
         userScrolledUpRef.current = false;
-        setShowScrollBottom(false);
+        setShowScrollBottom((prev) => (prev ? false : prev));
       }
       return;
     }
 
     const isUp = distanceFromBottom > 120;
-    setShowScrollBottom(isUp);
+    setShowScrollBottom((prev) => (prev !== isUp ? isUp : prev));
     userScrolledUpRef.current = isUp;
   }, []);
 
-  // When switching conversations or opening a past chat, jump directly to bottom
   useEffect(() => {
     if (currentConversationId !== lastConversationIdRef.current) {
       lastConversationIdRef.current = currentConversationId;
@@ -99,7 +95,6 @@ export default function ChatView() {
     }
   }, [currentConversationId, scrollToBottom]);
 
-  // When messages change (new user prompt or streaming tokens)
   useEffect(() => {
     const prevCount = lastMessageCountRef.current;
     const currentCount = messages.length;
@@ -107,10 +102,8 @@ export default function ChatView() {
 
     if (currentCount === 0) return;
 
-    // If a new message was added
     if (currentCount > prevCount) {
       const lastMsg = messages[messages.length - 1];
-      // User sent a new message -> always scroll down immediately
       if (lastMsg?.role === "user") {
         userScrolledUpRef.current = false;
         scrollToBottom("smooth");
@@ -118,70 +111,84 @@ export default function ChatView() {
       }
     }
 
-    // While streaming tokens, keep scrolled to bottom if user has not scrolled up
     if (!userScrolledUpRef.current) {
-      scrollToBottom("smooth");
+      // During active generation / streaming, use "auto" to prevent animation restarts and scroll thrashing
+      scrollToBottom(isGenerating ? "auto" : "smooth");
     }
-  }, [messages, scrollToBottom]);
+  }, [messages, isGenerating, scrollToBottom]);
 
+  // ── Empty State ──
   if (messages.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-4 h-full relative overflow-hidden">
-        <div className="flex flex-col items-center justify-center max-w-lg w-full mt-[-6vh] mb-4 text-center">
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-gray-900 dark:text-white mb-2">AI Orchestrator</h1>
-          <p className="text-[1rem] text-gray-500 dark:text-gray-400 mb-6">Your local AI workspace.</p>
-          
-          {/* Starter Prompt Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-w-lg w-full mb-4 text-left">
-            {STARTER_PROMPTS.map((starter, i) => (
-              <button
-                key={i}
-                onClick={() => sendMessage(starter.prompt)}
-                className="p-3 rounded-xl border border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 bg-black/[0.02] dark:bg-white/[0.02] hover:bg-black/5 dark:hover:bg-white/5 transition-all text-left group cursor-pointer shadow-xs"
-              >
-                <div className="flex items-center gap-2 text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1">
-                  {starter.icon}
-                  <span>{starter.title}</span>
-                </div>
-                <p className="text-[11px] text-gray-400 line-clamp-2 leading-relaxed">
-                  {starter.prompt}
-                </p>
-              </button>
-            ))}
+        {/* Hero */}
+        <div className="flex flex-col items-center text-center mb-8 mt-[-8vh]">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center mb-4 shadow-md">
+            <span className="text-white font-bold text-sm tracking-tight">AI</span>
           </div>
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[var(--foreground)] mb-2">
+            AI Orchestrator
+          </h1>
+          <p className="text-[var(--muted)] text-base max-w-xs">
+            Your local AI workspace. Ask anything.
+          </p>
         </div>
 
-        <div className="w-full max-w-[800px] mt-auto lg:mt-0 lg:absolute lg:bottom-0">
+        {/* Starter cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-[680px] mb-6">
+          {STARTER_PROMPTS.map((starter, i) => (
+            <button
+              key={i}
+              onClick={() => sendMessage(starter.prompt)}
+              className="flex items-start gap-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--sidebar)] hover:bg-black/5 dark:hover:bg-white/5 hover:border-[var(--foreground)]/10 transition-all text-left group cursor-pointer"
+            >
+              <div className="mt-0.5 shrink-0">{starter.icon}</div>
+              <div>
+                <div className="text-sm font-semibold text-[var(--foreground)] mb-0.5">
+                  {starter.title}
+                </div>
+                <p className="text-xs text-[var(--muted)] line-clamp-2 leading-relaxed">
+                  {starter.prompt}
+                </p>
+              </div>
+            </button>
+          ))}
+        </div>
+
+        {/* Composer */}
+        <div className="w-full max-w-[760px] mt-auto lg:mt-0 lg:absolute lg:bottom-0">
           <ChatComposer />
         </div>
       </div>
     );
   }
 
+  // ── Active Chat ──
   return (
     <div className="flex-1 flex flex-col h-full relative min-h-0">
-      <div 
+      {/* Scrollable message feed */}
+      <div
         ref={scrollRef}
         onScroll={handleScroll}
         onWheel={handleUserInteraction}
         onTouchMove={handleUserInteraction}
-        className="flex-1 overflow-y-auto px-4 py-6 scroll-smooth"
+        className="flex-1 overflow-y-auto px-4 py-8 scroll-smooth"
       >
-        <div className="max-w-[800px] mx-auto flex flex-col gap-8 pb-4">
+        <div className="max-w-[760px] mx-auto flex flex-col gap-8 pb-4">
           {messages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} />
           ))}
-          {/* Generous bottom spacer so the entire response and copy buttons sit comfortably above the chat box */}
-          <div ref={bottomAnchorRef} className="h-44 sm:h-52 w-full pointer-events-none shrink-0" />
+          {/* Bottom anchor + spacer for the fixed composer */}
+          <div ref={bottomAnchorRef} className="h-40 sm:h-48 w-full pointer-events-none shrink-0" />
         </div>
       </div>
 
-      {/* Floating Scroll to Bottom Button (Claude / ChatGPT style) */}
+      {/* Scroll to bottom button */}
       {showScrollBottom && (
-        <div className="absolute bottom-36 sm:bottom-40 right-6 sm:right-10 z-30">
+        <div className="absolute bottom-36 sm:bottom-40 right-6 z-30">
           <button
             onClick={() => scrollToBottom("smooth")}
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-white dark:bg-[#27272a] text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-white/10 shadow-lg hover:bg-gray-50 dark:hover:bg-[#323236] transition-all hover:scale-105 active:scale-95"
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] shadow-[var(--shadow)] hover:bg-black/5 dark:hover:bg-white/5 transition-all hover:scale-105 active:scale-95"
             title="Scroll to bottom"
           >
             <ArrowDown className="w-4 h-4" />
@@ -189,11 +196,14 @@ export default function ChatView() {
         </div>
       )}
 
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[var(--background)] via-[var(--background)] to-transparent pt-10">
-        <ChatComposer />
+      {/* Pinned composer with gradient fade above */}
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[var(--background)] via-[var(--background)]/95 to-transparent pt-10 pointer-events-none">
+        <div className="pointer-events-auto">
+          <ChatComposer />
+        </div>
       </div>
 
-      {/* Claude-style Artifact Canvas */}
+      {/* Canvas / Artifact viewer */}
       <ArtifactViewer />
     </div>
   );

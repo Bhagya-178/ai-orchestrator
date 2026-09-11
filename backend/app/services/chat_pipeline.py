@@ -359,15 +359,15 @@ class ChatPipeline:
                 }
                 return
 
-        # Multi-loop agent execution when requested by prompt or coding/high-effort settings
+        # Multi-loop agent execution ONLY when explicitly requested by prompt or agent mode
+        clean_msg = message.lower()
         is_multi_loop_requested = (
-            intent_override in ("coding", "agent")
-            or effort_level == "high"
-            or any(k in message.lower() for k in [
-                "step by step", "use tools", "using tools", "agent loop", "coding loop",
-                "then calculate", "and calculate", "check time and", "run loop", "multi loop", "multi-loop"
+            intent_override in ("agent", "tool_loop")
+            or clean_msg.startswith("/agent")
+            or any(k in clean_msg for k in [
+                "use tools", "using tools", "agent loop", "coding loop",
+                "run loop", "multi loop", "multi-loop"
             ])
-            or (effort_level == "medium" and any(k in message.lower() for k in ["calculate", "date", "time", "file", "directory", "sql", "math"]))
         ) and not should_search_rag
 
         if is_multi_loop_requested:
@@ -467,30 +467,41 @@ class ChatPipeline:
         system_content = "You are a highly capable AI assistant. Answer directly, clearly, and concisely. Do not hallucinate or invent fictional plots, facts, or characters. If you are unsure, admit it."
         if custom_system_prompt and custom_system_prompt.strip():
             system_content = f"{custom_system_prompt.strip()}\n\n{system_content}"
+        is_summary_request = any(
+            w in message.lower()
+            for w in ("summary", "summarize", "overview", "report", "detail", "outline", "breakdown", "explain all", "summery")
+        )
+
         generation_options: dict[str, Any] = {}
 
         if should_search_rag:
             if effort_level == "low":
-                system_content += " Answer the question directly, concisely, and accurately in 1-3 sentences based strictly on the provided document context. Do not include unnecessary background."
-                generation_options["num_predict"] = 350
+                system_content += " Answer the question directly, concisely, and accurately based strictly on the provided document context."
+                generation_options["num_ctx"] = 8192
+                generation_options["num_predict"] = 1024
                 generation_options["temperature"] = 0.1
-            elif effort_level == "high":
-                system_content += " Answer thoroughly, comprehensively, and in detail based on the provided document context. Include citations, section references, and step-by-step reasoning where appropriate."
-                generation_options["num_predict"] = 2048
+            elif effort_level in ("high", "max"):
+                system_content += " Answer thoroughly, comprehensively, and in detail based on the provided document context. Complete all sections, bullet points, and learning outcomes fully without truncating."
+                generation_options["num_ctx"] = 16384
+                generation_options["num_predict"] = 8192
                 generation_options["temperature"] = 0.2
             else:  # medium or default
-                system_content += " Answer clearly, accurately, and balanced based on the provided document context."
-                generation_options["num_predict"] = 1024
+                system_content += " Answer clearly, accurately, and balanced based on the provided document context. Ensure all sections and points are completed fully without cutting off mid-sentence."
+                generation_options["num_ctx"] = 16384
+                generation_options["num_predict"] = 4096 if is_summary_request else 3072
                 generation_options["temperature"] = 0.2
         elif effort_level == "low":
-            system_content += " KEEP YOUR RESPONSE EXTREMELY CONCISE AND BRIEF. ONE OR TWO SENTENCES MAXIMUM. DO NOT ELABORATE."
-            generation_options["num_predict"] = 250
-        elif effort_level == "high":
-            system_content += " PROVIDE A VERY DETAILED, STEP-BY-STEP, COMPREHENSIVE ANSWER. SHOW ALL YOUR REASONING AND EXPLAIN THOROUGHLY."
-            generation_options["num_predict"] = 2048
-        else:  # medium or default
-            system_content += " PROVIDE A BALANCED, MODERATE-LENGTH ANSWER. EXPLAIN THE KEY POINTS CLEARLY AND SUCCINCTLY WITHOUT BEING OVERLY BRIEF OR UNNECESSARILY VERBOSE."
+            system_content += " KEEP YOUR RESPONSE CONCISE AND BRIEF."
+            generation_options["num_ctx"] = 8192
             generation_options["num_predict"] = 1024
+        elif effort_level in ("high", "max"):
+            system_content += " PROVIDE A VERY DETAILED, STEP-BY-STEP, COMPREHENSIVE ANSWER. SHOW ALL YOUR REASONING AND EXPLAIN THOROUGHLY. COMPLETE ALL SECTIONS FULLY."
+            generation_options["num_ctx"] = 16384
+            generation_options["num_predict"] = 8192
+        else:  # medium or default
+            system_content += " PROVIDE A BALANCED, THOROUGH ANSWER. EXPLAIN THE KEY POINTS CLEARLY AND SUCCINCTLY. COMPLETE ALL EXPLANATIONS FULLY."
+            generation_options["num_ctx"] = 16384
+            generation_options["num_predict"] = 4096 if is_summary_request else 3072
 
         messages.insert(0, {
             "role": "system",
@@ -512,6 +523,11 @@ class ChatPipeline:
 
                 if data.get("done"):
                     done_chunk = data
+                    logger.info(
+                        "Ollama stream done. reason=%s, eval_count=%s",
+                        data.get("done_reason"),
+                        data.get("eval_count"),
+                    )
                     break
         except Exception as e:
             logger.error(f"Ollama streaming chat failed: {e}")

@@ -265,6 +265,30 @@ async def init_db(max_retries: int = 15, delay: float = 2.0) -> None:
                 """)
             )
 
+            # Model Arena Votes table
+            await conn.execute(
+                text("""
+                CREATE TABLE IF NOT EXISTS arena_votes (
+                    id VARCHAR PRIMARY KEY,
+                    user_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
+                    prompt TEXT NOT NULL,
+                    model_a VARCHAR NOT NULL,
+                    model_b VARCHAR NOT NULL,
+                    winner VARCHAR NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                );
+                """)
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_arena_votes_model_a ON arena_votes(model_a);")
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_arena_votes_model_b ON arena_votes(model_b);")
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_arena_votes_created_at ON arena_votes(created_at);")
+            )
+
             # Provision or synchronize administrative user via environment configuration
             from app.config import settings
             import secrets
@@ -367,18 +391,7 @@ async def init_db(max_retries: int = 15, delay: float = 2.0) -> None:
                   AND (c.title IS NULL OR c.title = 'New Conversation' OR c.title = 'New Chat' OR c.title = '');
                 """)
             )
-
-            # Assign any orphaned conversations and documents to admin
-            await conn.execute(
-                text("UPDATE conversations SET user_id = :admin_id WHERE user_id IS NULL;"),
-                {"admin_id": admin_id}
-            )
-            await conn.execute(
-                text("UPDATE documents SET user_id = :admin_id WHERE user_id IS NULL;"),
-                {"admin_id": admin_id}
-            )
-
-        logger.info("Checked column and table migrations successfully with Auth and User Isolation.")
+        logger.info("Checked column and table migrations successfully.")
     except Exception as e:
         logger.warning("Auto-migration check skipped or failed: %s", e)
 

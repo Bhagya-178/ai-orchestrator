@@ -129,6 +129,7 @@ export default function ConversationList({ onSelect }: { onSelect: () => void })
         <ul className="space-y-0.5">
           {filteredConversations.map((conv) => {
             const isActive = conv.id === currentConversationId;
+            const cleanTitle = (conv.title || "New Chat").replace(/\s+/g, " ").trim();
             const isEditing = editingId === conv.id;
 
             return (
@@ -168,22 +169,24 @@ export default function ConversationList({ onSelect }: { onSelect: () => void })
                         loadConversation(conv.id);
                         onSelect();
                       }}
-                      className={`w-full text-left px-2.5 py-2 rounded-lg text-sm transition-colors pr-24 leading-snug flex items-center gap-1.5
+                      className={`w-full text-left px-2.5 py-2 rounded-lg text-[13px] transition-all leading-snug flex items-start gap-1.5 group-hover:pr-20
                         ${isActive
                           ? "bg-black/8 dark:bg-white/10 font-medium text-gray-900 dark:text-gray-100"
                           : "text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-gray-100"
                         }
                       `}
-                      title={conv.title}
+                      title={cleanTitle}
                     >
                       {conv.is_pinned && (
-                        <Pin className="w-3 h-3 text-blue-500 fill-blue-500 shrink-0" />
+                        <Pin className="w-3 h-3 text-blue-500 fill-blue-500 shrink-0 mt-0.5" />
                       )}
-                      <span className="block truncate">{conv.title}</span>
+                      <span className="block break-words line-clamp-2 transition-all">
+                        {cleanTitle}
+                      </span>
                     </button>
 
                     {/* Action Bar (Hover Buttons) */}
-                    <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 dark:bg-[#18181b]/90 backdrop-blur-xs rounded-md shadow-xs py-0.5 px-0.5">
+                    <div className="absolute right-1 top-1.5 flex items-center opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 dark:bg-[#18181b]/95 backdrop-blur-xs rounded-md shadow-xs py-0.5 px-0.5 border border-black/5 dark:border-white/10 z-10">
                       {/* Pin Button */}
                       <button
                         onClick={(e) => handleTogglePin(e, conv)}

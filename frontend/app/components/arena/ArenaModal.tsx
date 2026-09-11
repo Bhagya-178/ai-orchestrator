@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { X, Swords, Zap, Award, RotateCcw, Eye, EyeOff, Square, AlertCircle, CheckCircle2 } from "lucide-react";
+import { X, Swords, Zap, Award, RotateCcw, Eye, EyeOff, Square, AlertCircle, CheckCircle2, Trophy } from "lucide-react";
 import { streamArenaBattle, recordArenaVote, getArenaLeaderboard } from "@/app/lib/api/arena";
 import { ArenaMetrics, LeaderboardEntry } from "@/app/lib/types";
 
@@ -31,10 +31,16 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
   const [metricsB, setMetricsB] = useState<ArenaMetrics | null>(null);
   const [isBattling, setIsBattling] = useState(false);
   const [revealed, setRevealed] = useState(false);
-  const [votedWinner, setVotedWinner] = useState<string | null>(null);
+  const [votedWinner, setVotedWinner] = useState<"A" | "B" | "tie" | "both_bad" | null>(null);
 
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Dedicated scroll refs for smooth 60fps auto-scroll without layout thrash
+  const scrollRefA = useRef<HTMLDivElement>(null);
+  const scrollRefB = useRef<HTMLDivElement>(null);
+  const isUserScrollingARef = useRef(false);
+  const isUserScrollingBRef = useRef(false);
 
   useEffect(() => {
     if (playableModels.length > 0) {
@@ -48,6 +54,32 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
       getArenaLeaderboard().then(setLeaderboard).catch(console.error);
     }
   }, [activeTab]);
+
+  // High-performance direct auto-scroll for Column A during streaming
+  useEffect(() => {
+    if (isBattling && !isUserScrollingARef.current && scrollRefA.current) {
+      scrollRefA.current.scrollTop = scrollRefA.current.scrollHeight;
+    }
+  }, [streamA, isBattling]);
+
+  // High-performance direct auto-scroll for Column B during streaming
+  useEffect(() => {
+    if (isBattling && !isUserScrollingBRef.current && scrollRefB.current) {
+      scrollRefB.current.scrollTop = scrollRefB.current.scrollHeight;
+    }
+  }, [streamB, isBattling]);
+
+  const handleScrollA = () => {
+    if (!scrollRefA.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRefA.current;
+    isUserScrollingARef.current = scrollHeight - scrollTop - clientHeight > 40;
+  };
+
+  const handleScrollB = () => {
+    if (!scrollRefB.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRefB.current;
+    isUserScrollingBRef.current = scrollHeight - scrollTop - clientHeight > 40;
+  };
 
   if (!isOpen) return null;
 
@@ -70,6 +102,10 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
     setMetricsB(null);
     setRevealed(false);
     setVotedWinner(null);
+    isUserScrollingARef.current = false;
+    isUserScrollingBRef.current = false;
+    if (scrollRefA.current) scrollRefA.current.scrollTop = 0;
+    if (scrollRefB.current) scrollRefB.current.scrollTop = 0;
   };
 
   const handleStartBattle = async () => {
@@ -90,6 +126,11 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
     setRevealed(false);
     setVotedWinner(null);
     setIsBattling(true);
+    isUserScrollingARef.current = false;
+    isUserScrollingBRef.current = false;
+
+    if (scrollRefA.current) scrollRefA.current.scrollTop = 0;
+    if (scrollRefB.current) scrollRefB.current.scrollTop = 0;
 
     abortRef.current = new AbortController();
 
@@ -149,10 +190,10 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-5xl max-h-[90vh] bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
+      <div className="relative w-full max-w-5xl h-[92vh] max-h-[900px] bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+        <div className="flex items-center justify-between px-6 py-3.5 border-b border-[var(--border)] shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400">
               <Swords className="w-5 h-5" />
@@ -168,7 +209,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
             <div className="flex items-center p-1 bg-black/5 dark:bg-white/5 rounded-xl text-xs font-medium">
               <button
                 onClick={() => setActiveTab("battle")}
-                className={`px-3 py-1 rounded-lg transition-colors ${
+                className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
                   activeTab === "battle" ? "bg-white dark:bg-black/40 text-gray-900 dark:text-white shadow-sm" : "text-gray-500"
                 }`}
               >
@@ -176,7 +217,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
               </button>
               <button
                 onClick={() => setActiveTab("leaderboard")}
-                className={`px-3 py-1 rounded-lg transition-colors ${
+                className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
                   activeTab === "leaderboard" ? "bg-white dark:bg-black/40 text-gray-900 dark:text-white shadow-sm" : "text-gray-500"
                 }`}
               >
@@ -186,7 +227,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
 
             <button
               onClick={onClose}
-              className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors"
+              className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -195,15 +236,16 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
 
         {/* Content Body */}
         {activeTab === "battle" ? (
-          <div className="flex-1 flex flex-col p-5 overflow-y-auto space-y-4">
+          <div className="flex-1 flex flex-col p-4 sm:p-5 overflow-hidden gap-3 min-h-0">
             {/* Control Bar */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-3.5 rounded-xl bg-black/5 dark:bg-white/5 border border-[var(--border)] text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-[var(--border)] text-xs shrink-0">
               <div>
                 <label className="text-[11px] font-medium text-gray-500 block mb-1">Model A</label>
                 <select
                   value={modelA}
                   onChange={(e) => setModelA(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"
+                  disabled={isBattling}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] font-mono text-xs cursor-pointer"
                 >
                   {playableModels.map((m) => (
                     <option key={m} value={m}>{m}</option>
@@ -216,7 +258,8 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                 <select
                   value={modelB}
                   onChange={(e) => setModelB(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)]"
+                  disabled={isBattling}
+                  className="w-full px-2.5 py-1.5 rounded-lg bg-[var(--background)] border border-[var(--border)] font-mono text-xs cursor-pointer"
                 >
                   {playableModels.map((m) => (
                     <option key={m} value={m}>{m}</option>
@@ -228,7 +271,8 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                 <button
                   type="button"
                   onClick={() => setBlind(!blind)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-black/5 text-xs font-medium"
+                  disabled={isBattling}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--background)] hover:bg-black/5 dark:hover:bg-white/5 text-xs font-medium cursor-pointer transition-colors"
                 >
                   {blind ? <EyeOff className="w-3.5 h-3.5 text-orange-500" /> : <Eye className="w-3.5 h-3.5 text-blue-500" />}
                   <span>{blind ? "Blind: ON" : "Blind: OFF"}</span>
@@ -243,7 +287,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                   type="button"
                   onClick={handleReset}
                   title="Reset battle"
-                  className="p-1.5 rounded-lg border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/5 text-gray-500 transition-colors"
+                  className="p-1.5 rounded-lg border border-[var(--border)] hover:bg-black/5 dark:hover:bg-white/5 text-gray-500 transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
                 </button>
@@ -251,7 +295,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                 {isBattling ? (
                   <button
                     onClick={handleStopBattle}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium shadow transition-all"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium shadow-xs transition-all cursor-pointer"
                   >
                     <Square className="w-3.5 h-3.5 fill-current" />
                     <span>Stop</span>
@@ -260,7 +304,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                   <button
                     onClick={handleStartBattle}
                     disabled={!prompt.trim() || playableModels.length === 0}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium shadow transition-all disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 px-3.5 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-lg font-medium shadow-xs transition-all disabled:opacity-50 cursor-pointer"
                   >
                     <Zap className="w-3.5 h-3.5" />
                     <span>Start Battle</span>
@@ -271,14 +315,14 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
 
             {/* Error Banner */}
             {generalError && (
-              <div className="flex items-center justify-between p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs animate-in fade-in duration-150">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs shrink-0 animate-in fade-in duration-150">
                 <div className="flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{generalError}</span>
                 </div>
                 <button
                   onClick={() => setGeneralError(null)}
-                  className="p-1 hover:bg-red-500/20 rounded-md transition-colors"
+                  className="p-1 hover:bg-red-500/20 rounded-md transition-colors cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -286,33 +330,102 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
             )}
 
             {/* Prompt input */}
-            <div className="relative">
+            <div className="relative shrink-0">
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
+                disabled={isBattling}
                 placeholder="Enter prompt to battle models..."
                 rows={2}
-                className="w-full p-3 text-xs rounded-xl bg-black/5 dark:bg-white/5 border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-orange-500/40 resize-none font-sans"
+                className="w-full p-2.5 text-xs rounded-xl bg-black/5 dark:bg-white/5 border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-orange-500/40 resize-none font-sans"
               />
             </div>
 
-            {/* Split Screen Stream Results */}
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 min-h-[320px]">
+            {/* Prominent Winner Reveal Banner */}
+            {votedWinner && (
+              <div className="p-3 rounded-xl bg-gradient-to-r from-emerald-500/15 via-emerald-500/5 to-transparent border border-emerald-500/30 flex items-center justify-between shrink-0 animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                    <Trophy className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs font-bold text-gray-900 dark:text-white flex items-center gap-1.5 flex-wrap">
+                      {votedWinner === "A" && (
+                        <>
+                          <span className="text-emerald-600 dark:text-emerald-400">🏆 Model A Won!</span>
+                          <span className="px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 font-mono text-[11px] text-gray-900 dark:text-gray-100">{modelA}</span>
+                          <span className="text-gray-400 font-normal">defeated Model B ({modelB})</span>
+                        </>
+                      )}
+                      {votedWinner === "B" && (
+                        <>
+                          <span className="text-emerald-600 dark:text-emerald-400">🏆 Model B Won!</span>
+                          <span className="px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 font-mono text-[11px] text-gray-900 dark:text-gray-100">{modelB}</span>
+                          <span className="text-gray-400 font-normal">defeated Model A ({modelA})</span>
+                        </>
+                      )}
+                      {votedWinner === "tie" && (
+                        <>
+                          <span className="text-blue-600 dark:text-blue-400">🤝 It's a Tie!</span>
+                          <span className="text-gray-500 font-normal">Both {modelA} and {modelB} performed equally well</span>
+                        </>
+                      )}
+                      {votedWinner === "both_bad" && (
+                        <>
+                          <span className="text-orange-600 dark:text-orange-400">👎 Both Bad</span>
+                          <span className="text-gray-500 font-normal">Neither model satisfied the prompt requirements</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                      Both model identities unblinded & vote saved to benchmark leaderboard
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleReset}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-white/10 border border-[var(--border)] text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-black/5 dark:hover:bg-white/15 transition-colors shadow-2xs shrink-0 cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>New Round</span>
+                </button>
+              </div>
+            )}
+
+            {/* Split Screen Stream Results — Independent, Butter-Smooth Scrolling */}
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 min-h-0">
               {/* Column Model A */}
-              <div className="flex flex-col border border-[var(--border)] rounded-xl bg-[var(--background)] overflow-hidden">
-                <div className="flex items-center justify-between px-3.5 py-2 border-b border-[var(--border)] bg-black/[0.02] dark:bg-white/[0.02]">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-xs text-gray-900 dark:text-white">
-                      {blind && !revealed ? "Model A (Hidden)" : modelA}
+              <div className={`flex flex-col border rounded-xl bg-[var(--background)] overflow-hidden transition-all duration-200 min-h-0 ${
+                votedWinner === "A"
+                  ? "border-emerald-500 ring-2 ring-emerald-500/25 shadow-md"
+                  : votedWinner === "B"
+                  ? "border-[var(--border)] opacity-85"
+                  : "border-[var(--border)]"
+              }`}>
+                {/* Column Header */}
+                <div className={`flex items-center justify-between px-3.5 py-2 border-b shrink-0 transition-colors ${
+                  votedWinner === "A"
+                    ? "bg-emerald-500/10 border-emerald-500/30"
+                    : "bg-black/[0.02] dark:bg-white/[0.02] border-[var(--border)]"
+                }`}>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {votedWinner === "A" && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-600 text-white flex items-center gap-1 shadow-2xs shrink-0">
+                        🏆 WINNER
+                      </span>
+                    )}
+                    <span className="font-semibold text-xs text-gray-900 dark:text-white truncate">
+                      {blind && !revealed ? "Model A (Hidden)" : `Model A · ${modelA}`}
                     </span>
                     {isBattling && !metricsA && !errorA && (
-                      <span className="px-1.5 py-0.2 rounded text-[9px] bg-blue-500/10 text-blue-600 animate-pulse font-medium">
+                      <span className="px-1.5 py-0.5 rounded text-[9px] bg-blue-500/10 text-blue-600 animate-pulse font-medium shrink-0">
                         Generating...
                       </span>
                     )}
                   </div>
                   {metricsA && (
-                    <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                    <div className="flex items-center gap-2 text-[10px] text-gray-500 shrink-0">
                       <span className="font-mono bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded">
                         {metricsA.tokens_per_second} tok/s
                       </span>
@@ -320,7 +433,13 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                     </div>
                   )}
                 </div>
-                <div className="flex-1 p-3.5 text-xs text-gray-800 dark:text-gray-200 overflow-y-auto whitespace-pre-wrap font-sans">
+
+                {/* Column Body with Hardware-Accelerated Momentum Scroll */}
+                <div 
+                  ref={scrollRefA}
+                  onScroll={handleScrollA}
+                  className="flex-1 p-3.5 text-xs text-gray-800 dark:text-gray-200 overflow-y-auto whitespace-pre-wrap font-sans overscroll-contain leading-relaxed"
+                >
                   {errorA ? (
                     <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-start gap-2">
                       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -340,20 +459,36 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
               </div>
 
               {/* Column Model B */}
-              <div className="flex flex-col border border-[var(--border)] rounded-xl bg-[var(--background)] overflow-hidden">
-                <div className="flex items-center justify-between px-3.5 py-2 border-b border-[var(--border)] bg-black/[0.02] dark:bg-white/[0.02]">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-xs text-gray-900 dark:text-white">
-                      {blind && !revealed ? "Model B (Hidden)" : modelB}
+              <div className={`flex flex-col border rounded-xl bg-[var(--background)] overflow-hidden transition-all duration-200 min-h-0 ${
+                votedWinner === "B"
+                  ? "border-emerald-500 ring-2 ring-emerald-500/25 shadow-md"
+                  : votedWinner === "A"
+                  ? "border-[var(--border)] opacity-85"
+                  : "border-[var(--border)]"
+              }`}>
+                {/* Column Header */}
+                <div className={`flex items-center justify-between px-3.5 py-2 border-b shrink-0 transition-colors ${
+                  votedWinner === "B"
+                    ? "bg-emerald-500/10 border-emerald-500/30"
+                    : "bg-black/[0.02] dark:bg-white/[0.02] border-[var(--border)]"
+                }`}>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {votedWinner === "B" && (
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-600 text-white flex items-center gap-1 shadow-2xs shrink-0">
+                        🏆 WINNER
+                      </span>
+                    )}
+                    <span className="font-semibold text-xs text-gray-900 dark:text-white truncate">
+                      {blind && !revealed ? "Model B (Hidden)" : `Model B · ${modelB}`}
                     </span>
                     {isBattling && (metricsA || errorA) && !metricsB && !errorB && (
-                      <span className="px-1.5 py-0.2 rounded text-[9px] bg-purple-500/10 text-purple-600 animate-pulse font-medium">
+                      <span className="px-1.5 py-0.5 rounded text-[9px] bg-purple-500/10 text-purple-600 animate-pulse font-medium shrink-0">
                         Generating...
                       </span>
                     )}
                   </div>
                   {metricsB && (
-                    <div className="flex items-center gap-2 text-[10px] text-gray-500">
+                    <div className="flex items-center gap-2 text-[10px] text-gray-500 shrink-0">
                       <span className="font-mono bg-purple-500/10 text-purple-600 px-1.5 py-0.5 rounded">
                         {metricsB.tokens_per_second} tok/s
                       </span>
@@ -361,7 +496,13 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                     </div>
                   )}
                 </div>
-                <div className="flex-1 p-3.5 text-xs text-gray-800 dark:text-gray-200 overflow-y-auto whitespace-pre-wrap font-sans">
+
+                {/* Column Body with Hardware-Accelerated Momentum Scroll */}
+                <div 
+                  ref={scrollRefB}
+                  onScroll={handleScrollB}
+                  className="flex-1 p-3.5 text-xs text-gray-800 dark:text-gray-200 overflow-y-auto whitespace-pre-wrap font-sans overscroll-contain leading-relaxed"
+                >
                   {errorB ? (
                     <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-start gap-2">
                       <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -385,51 +526,76 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
               </div>
             </div>
 
-            {/* Voting Bar */}
+            {/* Voting Bar — Pinned at bottom, always cleanly visible */}
             {(streamA || streamB || errorA || errorB) && (
-              <div className="pt-2 border-t border-[var(--border)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-500">Which response is better?</span>
+              <div className="pt-2 border-t border-[var(--border)] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5 shrink-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Which response is better?
+                  </span>
                   {votedWinner && (
-                    <span className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20 animate-in fade-in">
-                      <CheckCircle2 className="w-3 h-3" />
+                    <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20 animate-in fade-in">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                       Vote recorded: {votedWinner.toUpperCase()} (models revealed!)
                     </span>
                   )}
                 </div>
+
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => handleVote("A")}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                      votedWinner === "A" ? "bg-orange-600 text-white border-orange-600 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border)]"
+                    disabled={isBattling}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
+                      votedWinner === "A"
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-400/40"
+                        : "hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border)] text-gray-700 dark:text-gray-200"
                     }`}
                   >
-                    👈 Model A
+                    👈 Model A {revealed ? `(${modelA})` : ""}
                   </button>
                   <button
                     onClick={() => handleVote("B")}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                      votedWinner === "B" ? "bg-orange-600 text-white border-orange-600 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border)]"
+                    disabled={isBattling}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
+                      votedWinner === "B"
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-400/40"
+                        : "hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border)] text-gray-700 dark:text-gray-200"
                     }`}
                   >
-                    Model B 👉
+                    Model B 👉 {revealed ? `(${modelB})` : ""}
                   </button>
                   <button
                     onClick={() => handleVote("tie")}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                      votedWinner === "tie" ? "bg-orange-600 text-white border-orange-600 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border)]"
+                    disabled={isBattling}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
+                      votedWinner === "tie"
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : "hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border)] text-gray-700 dark:text-gray-200"
                     }`}
                   >
                     🤝 Tie
                   </button>
                   <button
                     onClick={() => handleVote("both_bad")}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${
-                      votedWinner === "both_bad" ? "bg-orange-600 text-white border-orange-600 shadow-sm" : "hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border)]"
+                    disabled={isBattling}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all cursor-pointer ${
+                      votedWinner === "both_bad"
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : "hover:bg-black/5 dark:hover:bg-white/5 border-[var(--border)] text-gray-700 dark:text-gray-200"
                     }`}
                   >
                     👎 Both Bad
                   </button>
+
+                  {!revealed && (
+                    <button
+                      onClick={() => setRevealed(true)}
+                      className="px-2.5 py-1.5 text-xs font-medium rounded-lg border border-[var(--border)] text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                      title="Reveal model identities without voting"
+                    >
+                      Reveal Models
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -466,7 +632,7 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
                     leaderboard.map((entry, idx) => (
                       <tr key={entry.model} className="hover:bg-black/[0.02] dark:hover:bg-white/[0.02]">
                         <td className="px-4 py-3 font-semibold text-gray-900 dark:text-white">#{idx + 1}</td>
-                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-white">{entry.model}</td>
+                        <td className="px-4 py-3 font-mono font-medium text-gray-900 dark:text-white">{entry.model}</td>
                         <td className="px-4 py-3 font-mono font-semibold text-emerald-600 dark:text-emerald-400">
                           {entry.win_rate}%
                         </td>

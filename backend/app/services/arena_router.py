@@ -6,9 +6,11 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_optional_user
 from app.database.models import User
+from app.database.session import get_db
 from app.services.arena_service import arena_service
 
 router = APIRouter(prefix="/arena", tags=["Model Arena"])
@@ -61,10 +63,12 @@ async def stream_arena_battle(
 async def record_arena_vote(
     body: VoteRequest,
     current_user: User | None = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Record user evaluation preference between Model A and Model B."""
-    return arena_service.record_vote(
-        user_id=current_user.id if current_user else "anonymous",
+    """Record user evaluation preference between Model A and Model B in database."""
+    return await arena_service.record_vote_db(
+        db=db,
+        user_id=current_user.id if current_user else None,
         prompt=body.prompt,
         model_a=body.model_a,
         model_b=body.model_b,
@@ -75,6 +79,7 @@ async def record_arena_vote(
 @router.get("/leaderboard")
 async def get_arena_leaderboard(
     current_user: User | None = Depends(get_optional_user),
+    db: AsyncSession = Depends(get_db),
 ):
-    """Retrieve community win-rate leaderboard across models."""
-    return arena_service.get_leaderboard()
+    """Retrieve community win-rate leaderboard across models from database."""
+    return await arena_service.get_leaderboard_db(db)

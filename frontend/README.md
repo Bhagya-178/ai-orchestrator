@@ -25,7 +25,7 @@ Designed with **Claude and ChatGPT parity**, the frontend provides a distraction
 - **Quick `⚡ Swarm` Toggle**: 1-click button in the composer toolbar to execute full-stack multi-agent swarms without manual DAG configuration.
 - **Inline ReAct & Agent Swarm Cards (`ToolExecutionCard.tsx`)**: Invocations of external tools and swarm agent roles stream directly into the conversation turn with dedicated `Bot` icons, role badges (`Agent: <role>`), execution timings, collapsible parameter/result inspectors, and error handling.
 - **Prompt History Navigation**: Up and Down arrow key history traversal (persisted to localStorage and pre-seeded from database) allowing seamless prompt recall just like modern AI interfaces.
-- **Interactive Message Controls**: In-place prompt editing with branching, message regeneration, clipboard copy with fallback, and Web Speech / audio playback.
+- **Interactive Message Controls**: In-place prompt editing with branching, message regeneration, and clipboard copy with fallback.
 - **Document Context Pill**: Non-intrusive attachment pill for PDF, DOCX, and TXT files with one-click context toggling and status indicators.
 
 ### 2. 6-Digit Email OTP Verification & Access Control (`AuthModal.tsx`)
@@ -73,7 +73,7 @@ frontend/
 ├── app/
 │   ├── components/
 │   │   ├── chat/              # Core Chat Experience
-│   │   │   ├── ChatComposer.tsx     # Dynamic effort selector, file upload, voice, history navigation
+│   │   │   ├── ChatComposer.tsx     # Dynamic effort selector, file upload, history navigation
 │   │   │   ├── ChatView.tsx         # Message feed, scroll anchors, empty states
 │   │   │   └── MessageBubble.tsx    # Markdown, syntax highlighter, inline ReAct cards
 │   │   ├── auth/              # Authentication & Verification
@@ -94,8 +94,7 @@ frontend/
 │   │   ├── evals/             # LLM Evaluation Dashboard Modal
 │   │   ├── arena/             # Model Arena Split-Battle Modal
 │   │   ├── workspaces/        # Workspace Switcher & Team RBAC Modal
-│   │   ├── layout/            # AppShell, TopBar, and Sidebar Overlays
-│   │   └── voice/             # Web Audio MediaRecorder & SpeechPlayer
+│   │   └── layout/            # AppShell, TopBar, and Sidebar Overlays
 │   │
 │   ├── lib/
 │   │   ├── api/               # Abstracted, strongly-typed API client SDK

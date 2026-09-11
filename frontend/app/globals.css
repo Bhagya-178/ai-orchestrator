@@ -2,34 +2,46 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* ── Design Tokens ── */
 :root {
   --background: #ffffff;
-  --foreground: #09090b;
-  --muted: #71717a;
+  --sidebar: #f9f9f9;
+  --foreground: #1a1a1a;
+  --muted: #737373;
   --card: #ffffff;
-  --border: #e4e4e7;
-  --shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
-  --send-btn: #18181b;
-  --send-btn-hover: #09090b;
+  --border: #e5e5e5;
+  --border-subtle: #f2f2f2;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.08);
+  --send-btn: #1a1a1a;
+  --send-btn-hover: #333333;
   --send-btn-fg: #ffffff;
-  --send-btn-disabled: #d4d4d8;
-  --send-btn-disabled-fg: #a1a1aa;
+  --send-btn-disabled: #e5e5e5;
+  --send-btn-disabled-fg: #a3a3a3;
+  --user-bubble: #f4f4f4;
 }
 
 .dark {
-  --background: #09090b;
-  --foreground: #fafafa;
-  --muted: #a1a1aa;
-  --card: #18181b;
-  --border: #27272a;
-  --shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
-  --send-btn: #fafafa;
-  --send-btn-hover: #e4e4e7;
-  --send-btn-fg: #09090b;
-  --send-btn-disabled: #27272a;
-  --send-btn-disabled-fg: #52525b;
+  --background: #0a0a0a;
+  --sidebar: #111111;
+  --foreground: #ececec;
+  --muted: #878787;
+  --card: #141414;
+  --border: #222222;
+  --border-subtle: #191919;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.7), 0 4px 12px rgba(0, 0, 0, 0.5);
+  --send-btn: #ececec;
+  --send-btn-hover: #d4d4d4;
+  --send-btn-fg: #0a0a0a;
+  --send-btn-disabled: #222222;
+  --send-btn-disabled-fg: #525252;
+  --user-bubble: #1e1e1e;
 }
 
+/* ── Base ── */
 html {
   scroll-behavior: smooth;
 }
@@ -55,16 +67,16 @@ textarea {
 }
 
 ::selection {
-  background: rgba(24, 24, 27, 0.15);
+  background: rgba(37, 99, 235, 0.12);
 }
 
 .dark ::selection {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(59, 130, 246, 0.18);
 }
 
 /* ── Prose (markdown) ── */
 .prose a {
-  color: #3b82f6;
+  color: #2563eb;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -81,10 +93,10 @@ textarea {
 }
 
 .prose code {
-  background: rgba(24, 24, 27, 0.06);
-  border: 1px solid rgba(24, 24, 27, 0.08);
-  border-radius: 0.35rem;
-  padding: 0.12rem 0.35rem;
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.35rem;
   font-size: 0.875em;
 }
 
@@ -93,46 +105,46 @@ textarea {
   border-color: rgba(255, 255, 255, 0.1);
 }
 
-/* ── Code block wrapper ── */
+/* ── Code block ── */
 .code-block {
   position: relative;
-  margin-top: 0.75rem;
+  margin: 0.75rem 0;
+  border-radius: 0.75rem;
   overflow: hidden;
-  border: 1px solid rgba(24, 24, 27, 0.1);
-  border-radius: 0.85rem;
-  background: #f9f9f8;
+  border: 1px solid var(--border);
+  background: #fafafa;
 }
 
 .dark .code-block {
-  border-color: rgba(255, 255, 255, 0.08);
-  background: #141414;
+  background: #0d0d0d;
 }
 
 .code-block pre {
   margin: 0;
   overflow-x: auto;
-  padding: 0.85rem 0.9rem 0.9rem;
-  font-size: 0.76rem;
-  line-height: 1.5;
+  padding: 0.9rem 1rem;
+  font-size: 0.8rem;
+  line-height: 1.6;
 }
 
 .copy-button {
   position: absolute;
-  top: 0.65rem;
-  right: 0.65rem;
-  border: 1px solid rgba(24, 24, 27, 0.1);
-  background: rgba(255, 255, 255, 0.85);
-  color: #27272a;
-  border-radius: 0.5rem;
-  padding: 0.32rem 0.55rem;
-  font-size: 0.68rem;
+  top: 0.5rem;
+  right: 0.5rem;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
+  color: #525252;
+  border-radius: 0.4rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.7rem;
   cursor: pointer;
+  transition: all 0.15s;
 }
 
 .dark .copy-button {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(30, 30, 30, 0.9);
-  color: #d4d4d8;
+  border-color: var(--border);
+  background: rgba(20, 20, 20, 0.92);
+  color: #a3a3a3;
 }
 
 /* ── Send button ── */
@@ -151,10 +163,10 @@ textarea {
   cursor: not-allowed;
 }
 
-/* ── Scrollbar polish ── */
+/* ── Scrollbar ── */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -162,10 +174,10 @@ textarea {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(24, 24, 27, 0.15);
+  background: rgba(0, 0, 0, 0.12);
   border-radius: 99px;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
 }

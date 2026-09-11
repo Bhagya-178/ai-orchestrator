@@ -22,6 +22,12 @@ To solve complex questions or perform actions, you can reason step by step and i
 You have access to the following tools:
 {tool_descriptions}
 
+IMPORTANT INSTRUCTIONS:
+- If the question can be answered using your existing knowledge (such as explaining concepts, theory, definitions, or writing code), DO NOT invoke any tool! Immediately output:
+Thought: I now know the final answer
+Final Answer: [your full, detailed response to the user]
+- Only invoke a tool if you genuinely need external execution or computation that requires one of [{tool_names}]. Never output placeholder tool names like "tool".
+
 Use the following format strictly:
 
 Question: the input question you must answer
@@ -150,6 +156,17 @@ class ReActAgent:
                 return
 
             tool_name = action_match.group(1).strip()
+            # If the LLM output a generic placeholder like "tool" or an unknown tool name,
+            # don't emit a bogus tool call or waste time looping. Treat the answer directly.
+            if tool_name.lower() in ("tool", "none", "null", "undefined") or not tool_registry.get(tool_name):
+                clean_text = step_text.replace("Thought:", "").split("Action:")[0].strip()
+                if not clean_text:
+                    clean_text = response_text.replace("Thought:", "").strip()
+                if clean_text:
+                    yield {"type": "token", "content": clean_text}
+                yield {"type": "done", "total_steps": iteration, "tools_used": tools_used}
+                return
+
             raw_input = action_input_match.group(1).strip() if action_input_match else "{}"
 
             # Parse input kwargs

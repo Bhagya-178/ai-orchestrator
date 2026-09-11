@@ -5,9 +5,7 @@ import { Paperclip, ArrowUp, FileText, X, Sparkles, AlertCircle, Square, Layers 
 import { useChat } from "@/app/lib/context/ChatContext";
 import { useAuth } from "@/app/lib/context/AuthContext";
 import { uploadDocument } from "@/app/lib/api/documents";
-import { getRecentPrompts } from "@/app/lib/api/chat";
 import DocumentAttachment from "../documents/DocumentAttachment";
-import VoiceInputButton from "../voice/VoiceInputButton";
 import GuestLimitModal from "../auth/GuestLimitModal";
 
 export default function ChatComposer() {
@@ -29,6 +27,7 @@ export default function ChatComposer() {
   } = useChat();
 
   const {
+    user,
     isAuthenticated,
     isGuestLimitReached,
     guestMessageCount,
@@ -48,22 +47,16 @@ export default function ChatComposer() {
   const historyIndexRef = useRef<number>(-1);
   const draftRef = useRef<string>("");
 
-  // Pre-seed prompt history from database on load so ArrowUp works immediately
+  // Clear stale legacy guest prompt cache and reset history index on chat change
   useEffect(() => {
-    getRecentPrompts().then((dbPrompts) => {
-      if (dbPrompts && dbPrompts.length > 0) {
-        try {
-          const raw = localStorage.getItem("ai_orchestrator_prompt_history");
-          const existing: string[] = raw ? JSON.parse(raw) : [];
-          const merged = Array.from(new Set([...dbPrompts, ...existing]));
-          if (merged.length > 50) merged.splice(0, merged.length - 50);
-          localStorage.setItem("ai_orchestrator_prompt_history", JSON.stringify(merged));
-        } catch {
-          // ignore storage errors
-        }
-      }
-    });
-  }, []);
+    historyIndexRef.current = -1;
+    draftRef.current = "";
+    try {
+      localStorage.removeItem("ai_orchestrator_prompt_history");
+    } catch {
+      // ignore
+    }
+  }, [currentConversationId]);
 
   const resizeTextarea = () => {
     if (textareaRef.current) {
@@ -78,36 +71,48 @@ export default function ChatComposer() {
     resizeTextarea();
   };
 
-  // Persistent prompt history helpers (like ChatGPT / Claude / Shell)
-  const getCombinedPromptHistory = () => {
-    let saved: string[] = [];
-    try {
-      const raw = localStorage.getItem("ai_orchestrator_prompt_history");
-      if (raw) saved = JSON.parse(raw);
-    } catch {
-      saved = [];
-    }
-
+  // Prompt history resolution: strictly uses messages from the CURRENT conversation
+  const getPromptHistory = () => {
+    // 1. Current conversation's user messages always take precedence
     const sessionPrompts = messages
       .filter((m) => m.role === "user" && m.content.trim())
       .map((m) => m.content.trim());
 
-    // Merge: older saved prompts first, followed by session prompts, no adjacent duplicates
-    const combined = Array.from(new Set([...saved, ...sessionPrompts]));
-    return combined;
+    if (sessionPrompts.length > 0) {
+      return sessionPrompts;
+    }
+
+    // 2. Only in a brand-new conversation before first prompt: check user-scoped cache
+    if (user?.id) {
+      try {
+        const raw = localStorage.getItem(`ai_orchestrator_prompts_${user.id}`);
+        if (raw) {
+          const saved: string[] = JSON.parse(raw);
+          if (Array.isArray(saved) && saved.length > 0) {
+            return saved;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    return [];
   };
 
   const persistPrompt = (promptText: string) => {
+    // Only persist for authenticated users to prevent guest input pollution
+    if (!user?.id) return;
     try {
-      let saved: string[] = [];
-      const raw = localStorage.getItem("ai_orchestrator_prompt_history");
-      if (raw) saved = JSON.parse(raw);
-      const filtered = saved.filter((p) => p !== promptText);
-      filtered.push(promptText);
-      if (filtered.length > 50) filtered.shift();
-      localStorage.setItem("ai_orchestrator_prompt_history", JSON.stringify(filtered));
+      const storageKey = `ai_orchestrator_prompts_${user.id}`;
+      const raw = localStorage.getItem(storageKey);
+      let saved: string[] = raw ? JSON.parse(raw) : [];
+      saved = saved.filter((p) => p !== promptText);
+      saved.push(promptText);
+      if (saved.length > 30) saved.shift();
+      localStorage.setItem(storageKey, JSON.stringify(saved));
     } catch {
-      // ignore storage errors
+      // ignore
     }
   };
 
@@ -139,6 +144,14 @@ export default function ChatComposer() {
       return;
     }
 
+    // Escape: cancel prompt history navigation and restore draft
+    if (e.key === "Escape" && historyIndexRef.current !== -1) {
+      e.preventDefault();
+      setMessage(draftRef.current);
+      historyIndexRef.current = -1;
+      return;
+    }
+
     // Up Arrow: retrieve previous user prompt
     if (e.key === "ArrowUp" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
       const textarea = textareaRef.current;
@@ -146,7 +159,7 @@ export default function ChatComposer() {
       const isAtStart = textarea ? textarea.selectionStart === 0 && !message.slice(0, textarea.selectionStart).includes("\n") : true;
 
       if (isEmpty || isAtStart) {
-        const userPrompts = getCombinedPromptHistory();
+        const userPrompts = getPromptHistory();
 
         if (userPrompts.length > 0) {
           e.preventDefault();
@@ -173,7 +186,7 @@ export default function ChatComposer() {
     // Down Arrow: navigate forward in history or restore unsubmitted draft
     if (e.key === "ArrowDown" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
       if (historyIndexRef.current !== -1) {
-        const userPrompts = getCombinedPromptHistory();
+        const userPrompts = getPromptHistory();
 
         e.preventDefault();
         if (historyIndexRef.current < userPrompts.length - 1) {
@@ -256,7 +269,7 @@ export default function ChatComposer() {
         </div>
       )}
       
-      <div className="relative flex flex-col bg-[#f7f7f5] dark:bg-[#18181b] border border-gray-200 dark:border-white/10 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-zinc-200 dark:focus-within:ring-white/10 focus-within:border-gray-300 dark:focus-within:border-white/20 transition-all shadow-sm">
+      <div className="relative flex flex-col bg-[var(--user-bubble)] border border-[var(--border)] rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500/15 focus-within:border-blue-300/50 dark:focus-within:border-blue-500/30 transition-all shadow-sm">
         
         {/* Document upload preview (only during initial upload) */}
         {activeDocument && activeDocument.status === "uploading" && (
@@ -303,11 +316,6 @@ export default function ChatComposer() {
                 <Paperclip className="w-4 h-4" />
               </label>
             </div>
-
-            <VoiceInputButton 
-              onTranscribed={(spokenText) => setMessage((prev) => prev ? `${prev} ${spokenText}` : spokenText)}
-              disabled={isGenerating}
-            />
 
             {/* Quick Multi-Agent Swarm Mode Toggle & Studio (hidden when RAG is active) */}
             {!isRagActive && (
@@ -452,22 +460,22 @@ export default function ChatComposer() {
                 }`}
                 title={
                   isRagActive
-                    ? "RAG Retrieval Depth & Generation Effort"
+                    ? "Effort & Token Budget: Controls retrieved chunks and max output tokens (up to 8k)"
                     : isSwarmActive
                     ? "Swarm Iterations & Reflection Depth"
-                    : "Effort Level"
+                    : "Effort & Token Budget: Controls response depth and max output tokens (up to 8k)"
                 }
               >
                 {isRagActive ? (
                   <>
                     <option value="low" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
-                      ⚡ Low (Fast · 2 Chunks)
+                      ⚡ Low (2 Chunks · 1k tokens)
                     </option>
                     <option value="medium" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
-                      ⚖️ Medium (5 Chunks)
+                      ⚖️ Medium (5 Chunks · 4k tokens)
                     </option>
                     <option value="high" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
-                      🧠 High (Deep · 8 Chunks)
+                      🧠 High (8 Chunks · 8k tokens)
                     </option>
                   </>
                 ) : isSwarmActive ? (
@@ -476,22 +484,22 @@ export default function ChatComposer() {
                       ⚡ Low (Fast · 2 iters)
                     </option>
                     <option value="medium" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
-                      ⚖️ Medium (5 iters)
+                      ⚖️ Medium (5 iters · 4k tokens)
                     </option>
                     <option value="high" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
-                      🧠 High (10 iters + Reflection)
+                      🧠 High (10 iters + Reflection · 8k)
                     </option>
                   </>
                 ) : (
                   <>
                     <option value="low" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
-                      ⚡ Low
+                      ⚡ Low (Concise · 1k tokens)
                     </option>
                     <option value="medium" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
-                      ⚖️ Medium
+                      ⚖️ Medium (Standard · 4k tokens)
                     </option>
                     <option value="high" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
-                      🧠 High
+                      🧠 High (Comprehensive · 8k tokens)
                     </option>
                   </>
                 )}

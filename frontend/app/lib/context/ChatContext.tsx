@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode, useCallback, useRef } from "react";
+import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useMemo } from "react";
 import { ChatMessage, UploadedDocument } from "../types";
 import { streamChat, getChatMessages, appendChatMessage } from "../api/chat";
 import { createConversation, getConversation, updateConversationSettings } from "../api/conversations";
@@ -46,6 +46,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [conversationVersion, setConversationVersion] = useState(0);
   
   const abortControllerRef = useRef<AbortController | null>(null);
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  messagesRef.current = messages;
 
   const loadConversation = useCallback(async (id: string) => {
     setCurrentConversationId(id);
@@ -157,7 +159,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsGenerating(false);
   }, []);
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = useCallback(async (content: string) => {
     // Prevent sending message if generating or document is still uploading
     if (!content.trim() || isGenerating || (activeDocument && activeDocument.status === 'uploading')) return;
 
@@ -169,7 +171,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     abortControllerRef.current = abortController;
 
     let sessionId = currentConversationId;
-    if (messages.length === 0) {
+    if (messagesRef.current.length === 0) {
       const derivedTitle = content.trim().length > 40 ? content.trim().substring(0, 40) + "..." : content.trim();
       setCurrentTitle(derivedTitle);
 
@@ -198,54 +200,94 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       content: content.trim(),
       attachedDocument: activeDocument ? activeDocument : undefined
     };
-    
-    setMessages(prev => [...prev, newUserMsg]);
-    setIsGenerating(true);
-
     const assistantId = crypto.randomUUID();
+
+    // Single batch update for user message and assistant placeholder
     setMessages(prev => [
       ...prev,
+      newUserMsg,
       {
         id: assistantId,
         role: "assistant",
         content: "",
       }
     ]);
+    setIsGenerating(true);
 
     let fullResponse = "";
-    
+    let updateScheduled = false;
+    let rafHandle: number | null = null;
+
+    const flushTokenUpdate = () => {
+      updateScheduled = false;
+      const responseToFlush = fullResponse;
+      setMessages(prev => {
+        const lastMsg = prev[prev.length - 1];
+        if (lastMsg && lastMsg.id === assistantId) {
+          const newPrev = [...prev];
+          newPrev[newPrev.length - 1] = { ...lastMsg, content: responseToFlush };
+          return newPrev;
+        }
+        return prev.map(msg => msg.id === assistantId ? { ...msg, content: responseToFlush } : msg);
+      });
+    };
+
+    const scheduleTokenUpdate = () => {
+      if (!updateScheduled) {
+        updateScheduled = true;
+        if (typeof window !== "undefined" && window.requestAnimationFrame) {
+          rafHandle = window.requestAnimationFrame(() => {
+            rafHandle = null;
+            flushTokenUpdate();
+          });
+        } else {
+          rafHandle = setTimeout(() => {
+            rafHandle = null;
+            flushTokenUpdate();
+          }, 16) as unknown as number;
+        }
+      }
+    };
+
     try {
       await streamChat(
         newUserMsg.content,
         sessionId,
         (token) => {
           fullResponse += token;
-          setMessages(prev => {
-            // Optimization: avoid mapping over all messages
-            const lastMsg = prev[prev.length - 1];
-            if (lastMsg.id === assistantId) {
-              const newPrev = [...prev];
-              newPrev[newPrev.length - 1] = { ...lastMsg, content: fullResponse };
-              return newPrev;
-            }
-            return prev.map(msg => msg.id === assistantId ? { ...msg, content: fullResponse } : msg);
-          });
+          scheduleTokenUpdate();
         },
         (metadata) => {
+          if (rafHandle !== null) {
+            if (typeof window !== "undefined" && window.cancelAnimationFrame) {
+              window.cancelAnimationFrame(rafHandle);
+            } else {
+              clearTimeout(rafHandle);
+            }
+            rafHandle = null;
+          }
+          updateScheduled = false;
+
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const md = metadata as any;
           setMessages(prev => {
             const lastMsg = prev[prev.length - 1];
-            if (lastMsg.id === assistantId) {
+            if (lastMsg && lastMsg.id === assistantId) {
               const newPrev = [...prev];
-              newPrev[newPrev.length - 1] = { ...lastMsg, model: md.model, latencyMs: md.latency_ms };
+              newPrev[newPrev.length - 1] = {
+                ...lastMsg,
+                content: fullResponse,
+                model: md?.model,
+                latencyMs: md?.latency_ms
+              };
               return newPrev;
             }
             return prev.map(msg => 
               msg.id === assistantId ? { 
                 ...msg, 
-                model: md.model,
-                latencyMs: md.latency_ms
+                content: fullResponse,
+                model: md?.model,
+                latencyMs: md?.latency_ms
               } : msg
             );
           });
@@ -255,6 +297,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         effortLevel,
         abortController.signal,
         (toolStep) => {
+          if (rafHandle !== null) {
+            if (typeof window !== "undefined" && window.cancelAnimationFrame) {
+              window.cancelAnimationFrame(rafHandle);
+            } else {
+              clearTimeout(rafHandle);
+            }
+            rafHandle = null;
+          }
+          updateScheduled = false;
+
           setMessages(prev => {
             const lastMsg = prev[prev.length - 1];
             if (lastMsg && lastMsg.id === assistantId) {
@@ -262,19 +314,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               const newPrev = [...prev];
               newPrev[newPrev.length - 1] = {
                 ...lastMsg,
+                content: fullResponse,
                 toolSteps: [...currentSteps, toolStep],
               };
               return newPrev;
             }
             return prev.map(msg =>
               msg.id === assistantId
-                ? { ...msg, toolSteps: [...(msg.toolSteps || []), toolStep] }
+                ? { ...msg, content: fullResponse, toolSteps: [...(msg.toolSteps || []), toolStep] }
                 : msg
             );
           });
         }
       );
     } catch (error: any) {
+      if (rafHandle !== null) {
+        if (typeof window !== "undefined" && window.cancelAnimationFrame) {
+          window.cancelAnimationFrame(rafHandle);
+        } else {
+          clearTimeout(rafHandle);
+        }
+        rafHandle = null;
+      }
+      updateScheduled = false;
+
       if (error.name === 'AbortError') {
         console.log("Generation aborted");
       } else {
@@ -286,6 +349,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         );
       }
     } finally {
+      if (rafHandle !== null) {
+        if (typeof window !== "undefined" && window.cancelAnimationFrame) {
+          window.cancelAnimationFrame(rafHandle);
+        } else {
+          clearTimeout(rafHandle);
+        }
+        rafHandle = null;
+      }
+      if (updateScheduled) {
+        flushTokenUpdate();
+      }
+
       if (abortControllerRef.current === abortController) {
         setIsGenerating(false);
         abortControllerRef.current = null;
@@ -293,26 +368,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         setConversationVersion(v => v + 1);
       }
     }
-  };
+  }, [
+    isGenerating,
+    activeDocument,
+    currentConversationId,
+    useDocumentContext,
+    intentOverride,
+    effortLevel,
+  ]);
 
   const editMessage = useCallback(async (messageId: string, newContent: string) => {
     if (isGenerating || !newContent.trim()) return;
-    const msgIndex = messages.findIndex(m => m.id === messageId);
+    const msgIndex = messagesRef.current.findIndex(m => m.id === messageId);
     if (msgIndex === -1) return;
 
     // Prune subsequent messages to branch cleanly
     setMessages(prev => prev.slice(0, msgIndex));
     // Send updated prompt
     await sendMessage(newContent);
-  }, [isGenerating, messages, sendMessage]);
+  }, [isGenerating, sendMessage]);
 
   const regenerateLastResponse = useCallback(async () => {
-    if (isGenerating || messages.length < 2) return;
+    if (isGenerating || messagesRef.current.length < 2) return;
     // Find last user message
     let lastUserPrompt = "";
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === "user") {
-        lastUserPrompt = messages[i].content;
+    const msgs = messagesRef.current;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === "user") {
+        lastUserPrompt = msgs[i].content;
         break;
       }
     }
@@ -329,13 +412,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     });
 
     await sendMessage(lastUserPrompt);
-  }, [isGenerating, messages, sendMessage]);
+  }, [isGenerating, sendMessage]);
 
   const appendMessage = useCallback(async (role: "user" | "assistant", content: string, title?: string) => {
     if (!content.trim()) return;
 
     let sessionId = currentConversationId;
-    if (messages.length === 0 || sessionId === "default-session" || sessionId.length < 10) {
+    if (messagesRef.current.length === 0 || sessionId === "default-session" || sessionId.length < 10) {
       const derivedTitle = title || (content.trim().length > 40 ? content.trim().substring(0, 40) + "..." : content.trim());
       try {
         const newConv = await createConversation(derivedTitle);
@@ -361,35 +444,54 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       console.error("Failed to persist appended message to backend:", err);
     }
-  }, [currentConversationId, messages.length]);
+  }, [currentConversationId]);
+
+  const contextValue = useMemo(() => ({
+    messages,
+    setMessages,
+    isGenerating,
+    sendMessage,
+    appendMessage,
+    editMessage,
+    regenerateLastResponse,
+    activeDocument,
+    setActiveDocument: handleSetActiveDocument,
+    currentConversationId,
+    currentTitle,
+    loadConversation,
+    clearChat,
+    useDocumentContext,
+    setUseDocumentContext,
+    intentOverride,
+    setIntentOverride,
+    effortLevel,
+    setEffortLevel,
+    updateSettings,
+    stopGeneration,
+    conversationVersion,
+  }), [
+    messages,
+    isGenerating,
+    sendMessage,
+    appendMessage,
+    editMessage,
+    regenerateLastResponse,
+    activeDocument,
+    handleSetActiveDocument,
+    currentConversationId,
+    currentTitle,
+    loadConversation,
+    clearChat,
+    useDocumentContext,
+    intentOverride,
+    effortLevel,
+    updateSettings,
+    stopGeneration,
+    conversationVersion,
+  ]);
 
   return (
-    <ChatContext.Provider
-      value={{
-        messages,
-        setMessages,
-        isGenerating,
-        sendMessage,
-        appendMessage,
-        editMessage,
-        regenerateLastResponse,
-        activeDocument,
-        setActiveDocument: handleSetActiveDocument,
-        currentConversationId,
-        currentTitle,
-        loadConversation,
-        clearChat,
-        useDocumentContext,
-        setUseDocumentContext,
-        intentOverride,
-        setIntentOverride,
-        effortLevel,
-        setEffortLevel,
-        updateSettings,
-        stopGeneration,
-        conversationVersion,
-      }}
-    >
+    <ChatContext.Provider value={contextValue}>
       {children}
     </ChatContext.Provider>
   );

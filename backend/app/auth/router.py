@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, text
 
 from app.auth.dependencies import get_current_user
 from app.auth.security import (
@@ -356,6 +356,20 @@ async def login_user(
         )
 
     access_token, refresh_token = await _issue_token_pair(db, user)
+
+    # Automatically claim any unassigned/guest conversations created on this machine
+    try:
+        await db.execute(
+            text("UPDATE conversations SET user_id = :user_id WHERE user_id IS NULL;"),
+            {"user_id": user.id},
+        )
+        await db.execute(
+            text("UPDATE documents SET user_id = :user_id WHERE user_id IS NULL;"),
+            {"user_id": user.id},
+        )
+        await db.commit()
+    except Exception:
+        pass
 
     return TokenResponse(
         access_token=access_token,

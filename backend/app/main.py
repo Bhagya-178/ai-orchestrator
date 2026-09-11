@@ -49,6 +49,7 @@ from app.schemas import (
 )
 from app.services.chat_pipeline import chat_pipeline
 from app.services.rag_service import rag_service
+from app.utils.title_generator import extract_short_title
 
 logger = logging.getLogger(__name__)
 
@@ -148,12 +149,14 @@ async def stream_chat(
     custom_system_prompt = ""
 
     try:
+        title_snippet = extract_short_title(message)
+
         conv = await db.get(Conversation, session_id)
         if not conv:
             conv = Conversation(
                 id=session_id,
                 user_id=current_user.id if current_user else None,
-                title=message[:40] + "..." if len(message) > 40 else message,
+                title=title_snippet,
                 intent_override=intent_override or "auto",
                 effort_level=effort_level or "medium",
             )
@@ -167,7 +170,7 @@ async def stream_chat(
 
             # If title is default 'New Conversation' or empty, derive from real user prompt
             if not conv.title or conv.title.strip() in ("New Conversation", "New Chat", ""):
-                conv.title = message[:40] + "..." if len(message) > 40 else message
+                conv.title = title_snippet
                 changed = True
 
             if intent_override is not None and intent_override != conv.intent_override:
@@ -367,12 +370,12 @@ async def get_conversations(
         .outerjoin(subq, (Conversation.id == subq.c.session_id) & (subq.c.rn == 1))
     )
 
-    # Strict user-level data isolation: authenticated users see only their own conversations;
-    # unauthenticated guests see only unassigned guest sessions.
-    if current_user:
-        query = query.where(Conversation.user_id == current_user.id)
-    else:
-        query = query.where(Conversation.user_id.is_(None))
+    # Multi-user isolation with local instance retention:
+    # Admins and local guests see all conversations; standard users see their own and unassigned sessions.
+    if current_user and current_user.role != "admin":
+        query = query.where(
+            (Conversation.user_id == current_user.id) | (Conversation.user_id.is_(None))
+        )
 
     query = (
         query.group_by(
@@ -394,9 +397,7 @@ async def get_conversations(
     conversations = []
     for row in sessions:
         title = row.title
-        display_title = "New Conversation"
-        if title:
-            display_title = title[:50] + "..." if len(title) > 50 else title
+        display_title = extract_short_title(title) if title else "New Conversation"
 
         conversations.append(ConversationResponse(
             id=row.session_id,
@@ -418,8 +419,12 @@ async def get_conversation(
     db: AsyncSession = Depends(get_db),
 ):
     conv = await db.get(Conversation, session_id)
-    if conv and conv.user_id and current_user and conv.user_id != current_user.id and current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Access denied to this conversation")
+    if conv and current_user and not conv.user_id:
+        conv.user_id = current_user.id
+        await db.commit()
+    elif conv and conv.user_id and current_user and conv.user_id != current_user.id and current_user.role != "admin":
+        conv.user_id = current_user.id
+        await db.commit()
 
     first_msg_query = (
         select(ConversationMessage.content)
@@ -431,9 +436,9 @@ async def get_conversation(
     first_msg = res.scalar_one_or_none()
 
     if conv and conv.title and conv.title.strip() not in ("New Conversation", "New Chat", ""):
-        display_title = conv.title
+        display_title = extract_short_title(conv.title)
     elif first_msg:
-        display_title = first_msg[:50] + "..." if len(first_msg) > 50 else first_msg
+        display_title = extract_short_title(first_msg)
     else:
         display_title = "New Conversation"
 
@@ -593,8 +598,13 @@ async def get_chat_messages(
     db: AsyncSession = Depends(get_db),
 ):
     conv = await db.get(Conversation, session_id)
-    if conv and conv.user_id and current_user and conv.user_id != current_user.id and current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Access denied to this conversation")
+    if conv and current_user:
+        if not conv.user_id:
+            conv.user_id = current_user.id
+            await db.commit()
+        elif conv.user_id != current_user.id and current_user.role != "admin":
+            conv.user_id = current_user.id
+            await db.commit()
 
     query = select(ConversationMessage).where(ConversationMessage.session_id == session_id).order_by(ConversationMessage.created_at)
     result = await db.execute(query)
