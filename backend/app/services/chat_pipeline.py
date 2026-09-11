@@ -203,7 +203,11 @@ class ChatPipeline:
             routing, routing_latency_ms = await self._run_router(processed)
             model = routing["model"]
         elif should_search_rag:
-            model = settings.RAG_MODEL
+            # If user selected low effort without explicit model, pick fast processor model
+            if effort_level == "low":
+                model = settings.PROCESSOR_MODEL or "qwen2.5:1.5b"
+            else:
+                model = settings.RAG_MODEL
             routing_latency_ms = 0.0
         else:
             routing, routing_latency_ms = await self._run_router(processed)
@@ -408,17 +412,25 @@ class ChatPipeline:
         rag_context = ""
         if should_search_rag and session_docs:
             doc_ids = [str(d.id) for d in session_docs]
+            # Dynamic chunk retrieval limit based on effort level
+            if effort_level == "low":
+                chunk_limit = 2
+            elif effort_level == "high":
+                chunk_limit = 8
+            else:
+                chunk_limit = 4
+
             try:
                 rag_results = await rag_service.search(
                     query=message,
-                    limit=5,
+                    limit=chunk_limit,
                     score_threshold=0.3,
                     document_ids=doc_ids,
                 )
                 
                 if not rag_results:
                     logger.debug("No chunks met semantic threshold. Fetching raw chunks directly from Postgres.")
-                    rag_results = await rag_service.get_raw_chunks(db, doc_ids, limit=5)
+                    rag_results = await rag_service.get_raw_chunks(db, doc_ids, limit=chunk_limit)
                     
                 logger.debug(f"needs_rag={needs_rag}, query={processed['optimized_prompt']}, results={len(rag_results)}")
                 for r in rag_results:
@@ -458,9 +470,18 @@ class ChatPipeline:
         generation_options: dict[str, Any] = {}
 
         if should_search_rag:
-            # Document RAG queries require full explanations without artificial truncation
-            system_content += " Answer thoroughly, accurately, and completely based on the provided document context."
-            generation_options["num_predict"] = 2048
+            if effort_level == "low":
+                system_content += " Answer the question directly, concisely, and accurately in 1-3 sentences based strictly on the provided document context. Do not include unnecessary background."
+                generation_options["num_predict"] = 350
+                generation_options["temperature"] = 0.1
+            elif effort_level == "high":
+                system_content += " Answer thoroughly, comprehensively, and in detail based on the provided document context. Include citations, section references, and step-by-step reasoning where appropriate."
+                generation_options["num_predict"] = 2048
+                generation_options["temperature"] = 0.2
+            else:  # medium or default
+                system_content += " Answer clearly, accurately, and balanced based on the provided document context."
+                generation_options["num_predict"] = 1024
+                generation_options["temperature"] = 0.2
         elif effort_level == "low":
             system_content += " KEEP YOUR RESPONSE EXTREMELY CONCISE AND BRIEF. ONE OR TWO SENTENCES MAXIMUM. DO NOT ELABORATE."
             generation_options["num_predict"] = 250

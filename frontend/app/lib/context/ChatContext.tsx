@@ -251,8 +251,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           });
         },
         useDocumentContext,
-        activeDocument && useDocumentContext ? "auto" : intentOverride,
-        activeDocument && useDocumentContext ? "high" : effortLevel,
+        intentOverride,
+        effortLevel,
         abortController.signal,
         (toolStep) => {
           setMessages(prev => {

@@ -6,7 +6,6 @@ import { useChat } from "@/app/lib/context/ChatContext";
 import { useAuth } from "@/app/lib/context/AuthContext";
 import { uploadDocument } from "@/app/lib/api/documents";
 import { getRecentPrompts } from "@/app/lib/api/chat";
-import { getAvailableModels } from "@/app/lib/api/health";
 import DocumentAttachment from "../documents/DocumentAttachment";
 import VoiceInputButton from "../voice/VoiceInputButton";
 import GuestLimitModal from "../auth/GuestLimitModal";
@@ -48,18 +47,6 @@ export default function ChatComposer() {
   // Message history navigation (like ChatGPT / Claude / Shell)
   const historyIndexRef = useRef<number>(-1);
   const draftRef = useRef<string>("");
-
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
-
-  // Fetch available models from backend
-  useEffect(() => {
-    getAvailableModels()
-      .then((models) => {
-        const chatModels = models.filter((m) => !m.includes("embed") && !m.includes("bge-m3"));
-        setAvailableModels(chatModels);
-      })
-      .catch(console.error);
-  }, []);
 
   // Pre-seed prompt history from database on load so ArrowUp works immediately
   useEffect(() => {
@@ -245,6 +232,15 @@ export default function ChatComposer() {
   // The pill persists as long as the conversation has a document
   const showContextPill = !!activeDocument;
   const isRagActive = Boolean(activeDocument && useDocumentContext);
+  const isSwarmActive = Boolean(intentOverride?.startsWith("workflow:"));
+
+  // Auto-reset workflow intent if user switches into RAG mode
+  useEffect(() => {
+    if (isRagActive && intentOverride?.startsWith("workflow:")) {
+      setIntentOverride("auto");
+      updateSettings("auto", undefined);
+    }
+  }, [isRagActive, intentOverride, setIntentOverride, updateSettings]);
 
   return (
     <div className="w-full max-w-[800px] mx-auto p-4 pb-6 mt-auto">
@@ -313,40 +309,44 @@ export default function ChatComposer() {
               disabled={isGenerating}
             />
 
-            {/* Quick Multi-Agent Swarm Mode Toggle */}
-            <button
-              type="button"
-              onClick={() => {
-                if (intentOverride?.startsWith("workflow:")) {
-                  setIntentOverride("auto");
-                  updateSettings("auto", undefined);
-                } else {
-                  setIntentOverride("workflow:fullstack");
-                  updateSettings("workflow:fullstack", undefined);
-                }
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
-                intentOverride?.startsWith("workflow:")
-                  ? "bg-purple-600 text-white shadow-xs"
-                  : "bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:hover:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40"
-              }`}
-              title={intentOverride?.startsWith("workflow:") ? "Multi-Agent Swarm active (click to disable)" : "Activate Multi-Agent Swarm mode"}
-            >
-              <Sparkles className="w-3 h-3" />
-              <span>⚡ Swarm</span>
-            </button>
+            {/* Quick Multi-Agent Swarm Mode Toggle & Studio (hidden when RAG is active) */}
+            {!isRagActive && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (intentOverride?.startsWith("workflow:")) {
+                      setIntentOverride("auto");
+                      updateSettings("auto", undefined);
+                    } else {
+                      setIntentOverride("workflow:fullstack");
+                      updateSettings("workflow:fullstack", undefined);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
+                    intentOverride?.startsWith("workflow:")
+                      ? "bg-purple-600 text-white shadow-xs"
+                      : "bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:hover:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40"
+                  }`}
+                  title={intentOverride?.startsWith("workflow:") ? "Multi-Agent Swarm active (click to disable)" : "Activate Multi-Agent Swarm mode"}
+                >
+                  <Sparkles className="w-3 h-3" />
+                  <span>⚡ Swarm</span>
+                </button>
 
-            {/* Open Studio with current input */}
-            <button
-              type="button"
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent("open-agent-workflow", { detail: { prompt: message } }));
-              }}
-              className="p-1.5 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors cursor-pointer shrink-0"
-              title="Open Agent Operations Studio"
-            >
-              <Layers className="w-4 h-4" />
-            </button>
+                {/* Open Studio with current input */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(new CustomEvent("open-agent-workflow", { detail: { prompt: message } }));
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors cursor-pointer shrink-0"
+                  title="Open Agent Operations Studio"
+                >
+                  <Layers className="w-4 h-4" />
+                </button>
+              </>
+            )}
 
             {/* Document Context Pill — unique toggle control */}
             {showContextPill && activeDocument.status !== "uploading" && (
@@ -370,70 +370,133 @@ export default function ChatComposer() {
               </button>
             )}
 
-            {/* If a document is attached and context is enabled, show simple indicator and HIDE dropdowns */}
-            {isRagActive ? (
-              <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/25 px-2 py-0.5 rounded-md shrink-0">
-                {activeDocument?.status === "uploading" ? "Uploading..." : "RAG active"}
+            {activeDocument?.status === "uploading" && (
+              <span className="text-[11px] font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/25 px-2 py-0.5 rounded-md shrink-0 animate-pulse">
+                Uploading...
               </span>
-            ) : (
-              /* Manual Controls — only visible when no document is active */
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <select
-                  value={intentOverride}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setIntentOverride(val);
-                    updateSettings(val, undefined);
-                  }}
-                  className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-[11px] font-medium text-gray-600 dark:text-gray-300 outline-none cursor-pointer py-1 px-2 rounded-lg transition-all max-w-[150px] truncate"
-                  title="Select AI Model or Mode"
-                >
-                  <option value="auto" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100 font-semibold">
-                    ✨ Auto Model (Smart)
-                  </option>
+            )}
+
+            {/* Model & Effort Controls — fully enabled in standard, Swarm, and RAG document mode */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <select
+                value={intentOverride}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setIntentOverride(val);
+                  updateSettings(val, undefined);
+                }}
+                className={`bg-black/5 dark:bg-white/5 border text-[11px] font-medium outline-none cursor-pointer py-1 px-2 rounded-lg transition-all max-w-[170px] truncate ${
+                  isRagActive
+                    ? "border-blue-300 dark:border-blue-500/40 text-blue-700 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-950/30"
+                    : isSwarmActive
+                    ? "border-purple-300 dark:border-purple-700/60 text-purple-700 dark:text-purple-300 bg-purple-50/60 dark:bg-purple-950/30"
+                    : "border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-gray-600 dark:text-gray-300"
+                }`}
+                title={isRagActive ? "Select Model for Document Q&A" : "Select AI Model or Mode"}
+              >
+                <option value="auto" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100 font-semibold">
+                  {isRagActive ? "✨ Auto RAG Model" : "✨ Auto Model (Smart)"}
+                </option>
+                {isRagActive && (
+                  <optgroup label="Fast RAG Models" className="bg-white dark:bg-[#18181b] text-blue-600 dark:text-blue-400 font-semibold">
+                    <option value="qwen2.5:1.5b" className="text-gray-900 dark:text-gray-100 font-medium">
+                      ⚡ qwen2.5:1.5b (Ultra Fast)
+                    </option>
+                    <option value="gemma4:e4b" className="text-gray-900 dark:text-gray-100 font-medium">
+                      🎯 gemma4:e4b (Accurate)
+                    </option>
+                    <option value="qwen2.5-coder:7b" className="text-gray-900 dark:text-gray-100 font-medium">
+                      💻 qwen2.5-coder:7b (Code & Docs)
+                    </option>
+                    <option value="qwen3:8b" className="text-gray-900 dark:text-gray-100 font-medium">
+                      📖 qwen3:8b (Deep Analysis)
+                    </option>
+                  </optgroup>
+                )}
+                {!isRagActive && (
                   <optgroup label="Multi-Agent DAG Workflows" className="bg-white dark:bg-[#18181b] text-purple-600 dark:text-purple-400 font-semibold">
                     <option value="workflow:fullstack" className="text-gray-900 dark:text-gray-100">⚡ Full-Stack Feature Flow (5 Agents)</option>
                     <option value="workflow:factcheck" className="text-gray-900 dark:text-gray-100">🔍 Deep Fact-Check & Verification (3 Agents)</option>
                     <option value="workflow:vulnerability" className="text-gray-900 dark:text-gray-100">🛡️ Vulnerability & Security Audit (4 Agents)</option>
                   </optgroup>
-                  <optgroup label="Intent Routing" className="bg-white dark:bg-[#18181b] text-gray-500 font-medium">
-                    <option value="general" className="text-gray-900 dark:text-gray-100">General Chat</option>
-                    <option value="coding" className="text-gray-900 dark:text-gray-100">Coding Specialist</option>
-                    <option value="reasoning" className="text-gray-900 dark:text-gray-100">Deep Reasoning</option>
-                    <option value="study" className="text-gray-900 dark:text-gray-100">Study / Research</option>
-                  </optgroup>
-                  {availableModels.length > 0 && (
-                    <optgroup label="Installed Local Models" className="bg-white dark:bg-[#18181b] text-gray-500 font-medium">
-                      {availableModels.map((m) => (
-                        <option key={m} value={m} className="text-gray-900 dark:text-gray-100">
-                          {m}
-                        </option>
-                      ))}
+                )}
+                <optgroup label={isRagActive ? "All Models & Modes" : "Intent Routing"} className="bg-white dark:bg-[#18181b] text-gray-500 font-medium">
+                  <option value="general" className="text-gray-900 dark:text-gray-100">General Chat</option>
+                  <option value="coding" className="text-gray-900 dark:text-gray-100">Coding Specialist</option>
+                  <option value="reasoning" className="text-gray-900 dark:text-gray-100">Deep Reasoning</option>
+                  <option value="study" className="text-gray-900 dark:text-gray-100">Study / Research</option>
+                </optgroup>
+                {intentOverride &&
+                  !["auto", "general", "coding", "reasoning", "study", "qwen2.5:1.5b", "gemma4:e4b", "qwen2.5-coder:7b", "qwen3:8b"].includes(intentOverride) &&
+                  !intentOverride.startsWith("workflow:") && (
+                    <optgroup label="Selected from Settings" className="bg-white dark:bg-[#18181b] text-blue-600 dark:text-blue-400 font-semibold">
+                      <option value={intentOverride} className="text-gray-900 dark:text-gray-100 font-medium">
+                        ⚙️ {intentOverride}
+                      </option>
                     </optgroup>
                   )}
-                </select>
-                <select
-                  value={effortLevel}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setEffortLevel(val);
-                    updateSettings(undefined, val);
-                  }}
-                  className="bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-[11px] font-medium text-gray-600 dark:text-gray-300 outline-none cursor-pointer py-1 px-2 rounded-lg transition-all"
-                  title="Effort & Reasoning Depth"
-                >
-                  <option value="low" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
-                    ⚡ Low (Fast · 2 iters)
-                  </option>
-                  <option value="medium" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
-                    ⚖️ Medium (5 iters)
-                  </option>
-                  <option value="high" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
-                    🧠 High (10 iters + Reflection)
-                  </option>
-                </select>
-              </div>
-            )}
+              </select>
+              <select
+                value={effortLevel}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setEffortLevel(val);
+                  updateSettings(undefined, val);
+                }}
+                className={`bg-black/5 dark:bg-white/5 border text-[11px] font-medium outline-none cursor-pointer py-1 px-2 rounded-lg transition-all ${
+                  isRagActive
+                    ? "border-blue-300 dark:border-blue-500/40 text-blue-700 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-950/30"
+                    : isSwarmActive
+                    ? "border-purple-300 dark:border-purple-700/60 text-purple-700 dark:text-purple-300 bg-purple-50/60 dark:bg-purple-950/30"
+                    : "border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-gray-600 dark:text-gray-300"
+                }`}
+                title={
+                  isRagActive
+                    ? "RAG Retrieval Depth & Generation Effort"
+                    : isSwarmActive
+                    ? "Swarm Iterations & Reflection Depth"
+                    : "Effort Level"
+                }
+              >
+                {isRagActive ? (
+                  <>
+                    <option value="low" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
+                      ⚡ Low (Fast · 2 Chunks)
+                    </option>
+                    <option value="medium" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
+                      ⚖️ Medium (5 Chunks)
+                    </option>
+                    <option value="high" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
+                      🧠 High (Deep · 8 Chunks)
+                    </option>
+                  </>
+                ) : isSwarmActive ? (
+                  <>
+                    <option value="low" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
+                      ⚡ Low (Fast · 2 iters)
+                    </option>
+                    <option value="medium" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
+                      ⚖️ Medium (5 iters)
+                    </option>
+                    <option value="high" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
+                      🧠 High (10 iters + Reflection)
+                    </option>
+                  </>
+                ) : (
+                  <>
+                    <option value="low" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
+                      ⚡ Low
+                    </option>
+                    <option value="medium" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
+                      ⚖️ Medium
+                    </option>
+                    <option value="high" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100">
+                      🧠 High
+                    </option>
+                  </>
+                )}
+              </select>
+            </div>
           </div>
           
           {isGenerating ? (
