@@ -46,9 +46,9 @@ The backend serves as the deterministic orchestration engine for private, local 
   - 60-second cooldown rate-limiting on OTP generation and resends.
 - **Dual Email Delivery Engine**:
   - *Production SMTP*: Asynchronous TLS delivery via standard library `smtplib` and `EmailMessage` with responsive HTML and plain-text templates.
-  - *Local Development Fallback*: When `SMTP_HOST` is not configured, logs a high-visibility terminal banner and returns `dev_otp` for 1-click UI auto-fill.
-- **Master Admin Account**:
-  - Pre-seeded and verified with role `admin`: `admin@` (or `admin@admin.com`) / `admin2134`.
+- **Administrative Account Provisioning**:
+  - Configured strictly via environment variables (`ADMIN_EMAIL`, `ADMIN_PASSWORD`). No default admin passwords are hardcoded or published in the repository.
+  - On initial database bootstrap, if `ADMIN_PASSWORD` is not set and no admin user exists, a cryptographically secure random one-time password is generated and logged to the server terminal, prompting immediate `.env` configuration.
 
 ### 3. Entity Knowledge Graph & Graph RAG (`app/services/rag_v2/`)
 - **AST Extraction**: Traverses Python AST syntax trees to extract classes, functions, inheritance (`inherits`), definitions (`defines`), and module imports (`imports`).
@@ -86,13 +86,51 @@ The backend serves as the deterministic orchestration engine for private, local 
 
 ---
 
-## 🛡️ Security & Enterprise Test Suite (200 Tests)
+## 🛡️ Enterprise Automated Test Suite (200 Pytest Tests)
 
-The backend features an automated **200-test comprehensive verification suite** verifying zero vulnerabilities, correct cryptographic operations, and deterministic workflow state across 20 critical architectural domains.
+The backend features an automated **200-test verification suite** exercising zero vulnerabilities, correct cryptographic operations, and deterministic workflow states across 20 critical architectural domains:
 
-### Running the Full 200-Test Audit
+```
+tests/
+├── unit/
+│   ├── test_schemas.py           # Pydantic schemas, CORS config, Keep-Alive settings
+│   └── test_tools.py             # Tool registry, dynamic dispatch & metadata validation
+├── integration/
+│   ├── test_auth_lifecycle.py    # PBKDF2 salting, password verification, unicode security
+│   ├── test_jwt.py               # HS256 JWT lifecycle, expiration & signature tampering
+│   ├── test_api_keys.py          # Cryptographic entropy, SHA-256 hashes, scope enforcement
+│   └── test_webhooks.py          # HMAC-SHA256 signatures, replay drift & timestamp validation
+├── security/
+│   ├── test_sql_injection.py     # Read-only SELECT enforcement & injection prevention
+│   ├── test_filesystem_sandbox.py# Path traversal, null-byte injection & UNC escape defenses
+│   └── test_math_sandbox.py      # AST mathematical evaluation & unsafe dunder/eval blocking
+├── rag/
+│   ├── test_knowledge_graph.py   # Topology, PageRank centrality, BFS & AST code extraction
+│   ├── test_semantic_cache.py    # Cosine vector cache, LRU eviction, TTL & cost telemetry
+│   └── test_hybrid_search.py     # BM25Okapi sparse search, chunking & Reciprocal Rank Fusion
+├── agents/
+│   ├── test_dag_engine.py        # Kahn's topological sort, cycle detection & parallel waves
+│   └── test_agent_personas.py    # 5-agent role prompts, system prompt immutability & schemas
+└── routing/
+    ├── test_evals_engine.py      # LLM-as-a-judge faithfulness, relevance & benchmark suites
+    ├── test_model_arena.py       # Blind arena battles, VRAM sequential loading & Elo voting
+    └── test_model_router.py      # Task-based dynamic model routing & safe fallbacks
+```
+
+### Running the Test Suite
+From the repository root or `backend/`:
 ```powershell
-python backend/scratch/test_complete_suite_200.py
+pytest
+```
+
+Or target specific functional test directories:
+```powershell
+pytest tests/security/       # 30 security sandbox & injection tests
+pytest tests/rag/            # 60 Knowledge Graph, BM25 & Semantic Cache tests
+pytest tests/agents/         # 20 DAG workflow & multi-agent persona tests
+pytest tests/integration/    # 40 Auth, JWT, API Key & Webhook tests
+pytest tests/unit/           # 17 Schema & Tool registry tests
+pytest tests/routing/        # 33 Router, Evals & Arena tests
 ```
 
 | Category | Domain | Tests | Status |
@@ -130,7 +168,7 @@ python backend/scratch/test_complete_suite_200.py
 - `POST /auth/register`: Initiate user registration, validate unique constraints, and dispatch 6-digit OTP code.
 - `POST /auth/verify-otp`: Cryptographically verify 6-digit OTP, create user record in database, and return JWT access + refresh tokens.
 - `POST /auth/resend-otp`: Rate-limited OTP resend with 60-second cooldown protection.
-- `POST /auth/login`: Authenticate with email/password (supports admin `admin@` and standard users) and obtain JWT tokens.
+- `POST /auth/login`: Authenticate with email/password (supports administrators and standard users) and obtain JWT tokens.
 - `POST /auth/refresh`: Refresh expired JWT access token using a valid refresh token.
 - `GET /auth/me`: Current user profile, role (`admin` / `user`), and custom instructions.
 - `GET /auth/api-keys`: List active API keys.

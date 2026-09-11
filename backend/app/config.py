@@ -76,6 +76,10 @@ class Settings:
     SMTP_FROM_NAME: str = "AI Orchestrator"
     SMTP_TLS: bool = True
 
+    # --- Initial Administrator ---
+    ADMIN_EMAIL: str = "admin@example.com"
+    ADMIN_PASSWORD: str = ""
+
 
 def _load_settings() -> Settings:
     """Build a Settings instance from the environment."""
@@ -113,6 +117,8 @@ def _load_settings() -> Settings:
         SMTP_FROM_EMAIL=os.getenv("SMTP_FROM_EMAIL", ""),
         SMTP_FROM_NAME=os.getenv("SMTP_FROM_NAME", "AI Orchestrator"),
         SMTP_TLS=os.getenv("SMTP_TLS", "true").lower() in ("true", "1", "yes"),
+        ADMIN_EMAIL=os.getenv("ADMIN_EMAIL", "admin@example.com"),
+        ADMIN_PASSWORD=os.getenv("ADMIN_PASSWORD", ""),
     )
 
 

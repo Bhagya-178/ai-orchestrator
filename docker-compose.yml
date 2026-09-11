@@ -25,6 +25,8 @@ services:
       - PROCESSOR_MODEL=qwen2.5:1.5b
       - SUMMARY_MODEL=qwen2.5:1.5b
       - RAG_MODEL=qwen3:8b
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@example.com}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy

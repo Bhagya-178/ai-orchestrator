@@ -265,23 +265,63 @@ async def init_db(max_retries: int = 15, delay: float = 2.0) -> None:
                 """)
             )
 
-            # Seed default admin user if no users exist
-            check_user = await conn.execute(text("SELECT id FROM users LIMIT 1;"))
-            row = check_user.fetchone()
-            admin_id = "admin-default-uuid"
-            if not row:
-                admin_pw_hash = hash_password("admin123")
+            # Provision or synchronize administrative user via environment configuration
+            from app.config import settings
+            import secrets
+
+            admin_email = (settings.ADMIN_EMAIL or "admin@example.com").strip().lower()
+            admin_password = settings.ADMIN_PASSWORD.strip() if settings.ADMIN_PASSWORD else ""
+
+            check_admin = await conn.execute(
+                text("SELECT id, hashed_password FROM users WHERE email = :email LIMIT 1;"),
+                {"email": admin_email}
+            )
+            admin_row = check_admin.fetchone()
+
+            if not admin_row:
+                # User with admin_email doesn't exist yet
+                import uuid
+                admin_id = str(uuid.uuid4())
+
+                if not admin_password:
+                    generated_pw = secrets.token_urlsafe(18)
+                    admin_pw_hash = hash_password(generated_pw)
+                    logger.warning(
+                        "\n" + "=" * 70 + "\n"
+                        "⚠️  SECURITY WARNING: No ADMIN_PASSWORD configured in environment.\n"
+                        "Generated one-time initial administrator credentials:\n"
+                        f"  Email:    {admin_email}\n"
+                        f"  Password: {generated_pw}\n"
+                        "Please configure ADMIN_PASSWORD in your .env file.\n"
+                        + "=" * 70 + "\n"
+                    )
+                else:
+                    admin_pw_hash = hash_password(admin_password)
+                    logger.info("Initializing administrator account '%s' configured via .env.", admin_email)
+
                 await conn.execute(
                     text("""
                     INSERT INTO users (id, email, hashed_password, full_name, role, is_active)
-                    VALUES (:id, :email, :pwd, :name, 'admin', TRUE)
-                    ON CONFLICT (email) DO NOTHING;
+                    VALUES (:id, :email, :pwd, 'System Administrator', 'admin', TRUE)
+                    ON CONFLICT (email) DO UPDATE
+                    SET role = 'admin', hashed_password = :pwd, is_active = TRUE;
                     """),
-                    {"id": admin_id, "email": "admin@local.host", "pwd": admin_pw_hash, "name": "Local Admin"}
+                    {"id": admin_id, "email": admin_email, "pwd": admin_pw_hash}
                 )
-                logger.info("Created default administrator user: admin@local.host (password: admin123)")
             else:
-                admin_id = row[0]
+                admin_id = admin_row[0]
+                # If ADMIN_PASSWORD is set in environment, synchronize/update password for admin
+                if admin_password:
+                    admin_pw_hash = hash_password(admin_password)
+                    await conn.execute(
+                        text("""
+                        UPDATE users 
+                        SET hashed_password = :pwd, role = 'admin', is_active = TRUE 
+                        WHERE email = :email;
+                        """),
+                        {"email": admin_email, "pwd": admin_pw_hash}
+                    )
+                    logger.info("Synchronized administrator credentials for '%s' from environment.", admin_email)
 
             # Backfill existing session IDs from conversation_messages into conversations with real titles
             await conn.execute(

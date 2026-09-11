@@ -540,46 +540,54 @@ def verify_orchestrator_webhook(payload_bytes: bytes, header: str, secret: str) 
 
 ## 12. The 200-Test Enterprise Verification Suite
 
-Every subsystem, cryptographic primitive, security boundary, and agent workflow is validated by an automated **200-test verification suite** (`backend/scratch/test_complete_suite_200.py`).
+Every subsystem, cryptographic primitive, security boundary, and agent workflow is validated by an automated **200-test verification suite** organized under the standard `tests/` directory:
 
-### Running the Complete Suite
+```
+tests/
+├── unit/
+│   ├── test_schemas.py           # Pydantic schemas, CORS config, Keep-Alive settings
+│   └── test_tools.py             # Tool registry, dynamic dispatch & metadata validation
+├── integration/
+│   ├── test_auth_lifecycle.py    # PBKDF2 salting, password verification, unicode security
+│   ├── test_jwt.py               # HS256 JWT lifecycle, expiration & signature tampering
+│   ├── test_api_keys.py          # Cryptographic entropy, SHA-256 hashes, scope enforcement
+│   └── test_webhooks.py          # HMAC-SHA256 signatures, replay drift & timestamp validation
+├── security/
+│   ├── test_sql_injection.py     # Read-only SELECT enforcement & injection prevention
+│   ├── test_filesystem_sandbox.py# Path traversal, null-byte injection & UNC escape defenses
+│   └── test_math_sandbox.py      # AST mathematical evaluation & unsafe dunder/eval blocking
+├── rag/
+│   ├── test_knowledge_graph.py   # Topology, PageRank centrality, BFS & AST code extraction
+│   ├── test_semantic_cache.py    # Cosine vector cache, LRU eviction, TTL & cost telemetry
+│   └── test_hybrid_search.py     # BM25Okapi sparse search, chunking & Reciprocal Rank Fusion
+├── agents/
+│   ├── test_dag_engine.py        # Kahn's topological sort, cycle detection & parallel waves
+│   └── test_agent_personas.py    # 5-agent role prompts, system prompt immutability & schemas
+└── routing/
+    ├── test_evals_engine.py      # LLM-as-a-judge faithfulness, relevance & benchmark suites
+    ├── test_model_arena.py       # Blind arena battles, VRAM sequential loading & Elo voting
+    └── test_model_router.py      # Task-based dynamic model routing & safe fallbacks
+```
+
+### Running the Suite with Pytest
+Run all 200 tests via `pytest`:
 ```powershell
-python backend/scratch/test_complete_suite_200.py
+pytest
 ```
 
-### Category Breakdown (20 Categories $\times$ 10 Tests Each = 200 Tests)
-
+Or execute by domain:
+```powershell
+pytest tests/security/       # 30 security tests
+pytest tests/rag/            # 60 RAG tests
+pytest tests/agents/         # 20 Swarm tests
+pytest tests/integration/    # 40 Integration tests
+pytest tests/unit/           # 17 Unit tests
+pytest tests/routing/        # 33 Routing & Evals tests
 ```
-================================================================================
-200-TEST SUITE EXECUTION SCORECARD
-================================================================================
-Category Domain                                    | Passed   | Failed  
-------------------------------------------------------------------------
-Cat 1: Authentication & Password Security          | 10       | 0       
-Cat 2: JWT Lifecycle & Claims                      | 10       | 0       
-Cat 3: API Key Cryptography & Scopes               | 10       | 0       
-Cat 4: Enterprise Webhooks & HMAC                  | 10       | 0       
-Cat 5: SQL Tool & Injection Defense                | 10       | 0       
-Cat 6: File System Sandbox & Path Traversal        | 10       | 0       
-Cat 7: Advanced Math AST Sandbox & Security        | 10       | 0       
-Cat 8: Multi-Agent DAG Workflow Engine             | 10       | 0       
-Cat 9: Specialized Agent Personas & Templates      | 10       | 0       
-Cat 10: Knowledge Graph & Network Topology         | 10       | 0       
-Cat 11: Graph Centrality & AST Code Analysis       | 10       | 0       
-Cat 12: Semantic Vector Cache & Similarity Math    | 10       | 0       
-Cat 13: Cache Policies, TTL & Telemetry            | 10       | 0       
-Cat 14: Hybrid RAG 2.0 & BM25 Sparse Search        | 10       | 0       
-Cat 15: Reciprocal Rank Fusion & Chunking          | 10       | 0       
-Cat 16: LLM-as-a-Judge Evaluation & Heuristics     | 10       | 0       
-Cat 17: Model Arena, Blind Battles & Telemetry     | 10       | 0       
-Cat 18: Arena Leaderboard, Voting & Win Rates      | 10       | 0       
-Cat 19: Tool Execution, Dispatcher & Validation    | 10       | 0       
-Cat 20: Pydantic Schemas, Model Router & Config    | 10       | 0       
-------------------------------------------------------------------------
-TOTAL SUMMARY                                      | 200      | 0       
-Total Execution Time: ~2.8 seconds
-================================================================================
-[SUCCESS] ALL 200 / 200 TESTS PASSED (100% SUCCESS RATE)!
+
+### Execution Output
+```
+============================= 200 passed in 4.81s =============================
 ```
 
 ---

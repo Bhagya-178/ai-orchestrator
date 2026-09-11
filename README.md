@@ -77,7 +77,7 @@ graph TB
 | Subsystem | Description |
 | :--- | :--- |
 | **Dynamic Effort Scaling & Reflection** | User-selectable reasoning depth (`⚡ Low`, `⚖️ Medium`, `🧠 High`) directly scaling the ReAct tool loop (2, 5, or 10 iterations) and multi-agent swarms (fast node pruning vs. 5-agent DAG vs. autonomous security patch reflection loop). |
-| **Email OTP Verification & RBAC** | Enterprise 6-digit email OTP verification flow with SHA-256 peppered hashing, 10-minute expiry, 5-attempt brute-force protection, 60s cooldown rate-limiting, and dual delivery (async SMTP TLS / local dev fallback). Pre-seeded with master admin (`admin@`). |
+| **Email OTP Verification & RBAC** | Enterprise 6-digit email OTP verification flow with SHA-256 peppered hashing, 10-minute expiry, 5-attempt brute-force protection, 60s cooldown rate-limiting, dual delivery (async SMTP TLS / local dev fallback), and environment-driven administrative provisioning (`ADMIN_EMAIL`, `ADMIN_PASSWORD`). |
 | **Multi-Agent Swarms & Studio** | Dual-layer orchestration: (1) Zero-friction in-chat execution with **`⚡ Swarm`** toggle, interactive progression stepper (`AgentSwarmCard`), and automatic PostgreSQL chat persistence; (2) Dedicated **Agent Operations Studio** featuring persistent run history (`WorkflowRun`), interactive DAG topology, and 1-click **"💬 Continue in Chat"**. Powered by Kahn's topological sort with 5 specialized personas (`Planner`, `Researcher`, `Coder`, `Reviewer`, `Critic`). |
 | **Interactive Canvas Studio 2.0** | Full Claude Artifacts parity with multi-tab view (`Preview`, `Code Editor`, `Console`, `Diff`). Includes live `postMessage` console logging bridge, SVG pan/zoom, and revision diff comparisons. |
 | **Entity Knowledge Graph & Graph RAG** | AST code parsing for Python/TypeScript extracting classes, functions, and inheritance. Computes PageRank centrality, shortest path Dijkstra/BFS, and query expansion. |
@@ -145,51 +145,69 @@ The platform enforces secure, verified user onboarding through an enterprise 6-d
 3. **Dual Email Delivery Engine**:
    - **Production SMTP**: Asynchronous TLS delivery via standard library `smtplib` and `EmailMessage` with responsive HTML and plain-text templates.
    - **Local Development Fallback**: When `SMTP_HOST` is not configured, logs a high-visibility terminal banner and returns `dev_otp` for convenient 1-click testing in the UI.
-4. **Master Administrative Account**:
-   - **Email:** `admin@` (or `admin@admin.com`)
-   - **Password:** `admin2134`
-   - **Role:** `admin` (pre-seeded and verified across local and Docker databases).
+4. **Administrative Account Provisioning**:
+   - Initial administrative credentials are systematically controlled via environment variables:
+     ```bash
+     ADMIN_EMAIL=admin@example.com
+     ADMIN_PASSWORD=<set_during_initialization>
+     ```
+   - **Zero Default Passwords**: To preserve production security integrity, no usable default admin password is hardcoded or published. If a fresh deployment initializes without `ADMIN_PASSWORD` configured and no admin user exists, the application generates a cryptographically random one-time password and logs a secure startup notice, prompting immediate `.env` configuration.
 
 ---
 
-## 🛡️ Security & Vulnerability Audit (200 Tests)
+## 🛡️ Enterprise Automated Test Suite (200 Pytest Tests)
 
-The system is fortified against security vulnerabilities, race conditions, and regressions via an automated **200-test verification suite** covering 20 architectural domains (10 tests each):
+The system is fortified against security vulnerabilities, race conditions, and regressions via an industry-standard, fully modular **200-test automated suite** organized under `tests/`:
 
 ```
-================================================================================
-200-TEST SUITE EXECUTION SCORECARD
-================================================================================
-Category Domain                                    | Passed   | Failed  
-------------------------------------------------------------------------
-Cat 1: Authentication & Password Security          | 10       | 0       
-Cat 2: JWT Lifecycle & Claims                      | 10       | 0       
-Cat 3: API Key Cryptography & Scopes               | 10       | 0       
-Cat 4: Enterprise Webhooks & HMAC                  | 10       | 0       
-Cat 5: SQL Tool & Injection Defense                | 10       | 0       
-Cat 6: File System Sandbox & Path Traversal        | 10       | 0       
-Cat 7: Advanced Math AST Sandbox & Security        | 10       | 0       
-Cat 8: Multi-Agent DAG Workflow Engine             | 10       | 0       
-Cat 9: Specialized Agent Personas & Templates      | 10       | 0       
-Cat 10: Knowledge Graph & Network Topology         | 10       | 0       
-Cat 11: Graph Centrality & AST Code Analysis       | 10       | 0       
-Cat 12: Semantic Vector Cache & Similarity Math    | 10       | 0       
-Cat 13: Cache Policies, TTL & Telemetry            | 10       | 0       
-Cat 14: Hybrid RAG 2.0 & BM25 Sparse Search        | 10       | 0       
-Cat 15: Reciprocal Rank Fusion & Chunking          | 10       | 0       
-Cat 16: LLM-as-a-Judge Evaluation & Heuristics     | 10       | 0       
-Cat 17: Model Arena, Blind Battles & Telemetry     | 10       | 0       
-Cat 18: Arena Leaderboard, Voting & Win Rates      | 10       | 0       
-Cat 19: Tool Execution, Dispatcher & Validation    | 10       | 0       
-Cat 20: Pydantic Schemas, Model Router & Config    | 10       | 0       
-------------------------------------------------------------------------
-TOTAL SUMMARY                                      | 200      | 0       
-Total Execution Time: ~2.8 seconds
-================================================================================
-[SUCCESS] ALL 200 / 200 TESTS PASSED (100% SUCCESS RATE)!
+tests/
+├── unit/
+│   ├── test_schemas.py           # Pydantic schemas, CORS config, Keep-Alive settings
+│   └── test_tools.py             # Tool registry, dynamic dispatch & metadata validation
+├── integration/
+│   ├── test_auth_lifecycle.py    # PBKDF2 salting, password verification, unicode security
+│   ├── test_jwt.py               # HS256 JWT lifecycle, expiration & signature tampering
+│   ├── test_api_keys.py          # Cryptographic entropy, SHA-256 hashes, scope enforcement
+│   └── test_webhooks.py          # HMAC-SHA256 signatures, replay drift & timestamp validation
+├── security/
+│   ├── test_sql_injection.py     # Read-only SELECT enforcement & injection prevention
+│   ├── test_filesystem_sandbox.py# Path traversal, null-byte injection & UNC escape defenses
+│   └── test_math_sandbox.py      # AST mathematical evaluation & unsafe dunder/eval blocking
+├── rag/
+│   ├── test_knowledge_graph.py   # Topology, PageRank centrality, BFS & AST code extraction
+│   ├── test_semantic_cache.py    # Cosine vector cache, LRU eviction, TTL & cost telemetry
+│   └── test_hybrid_search.py     # BM25Okapi sparse search, chunking & Reciprocal Rank Fusion
+├── agents/
+│   ├── test_dag_engine.py        # Kahn's topological sort, cycle detection & parallel waves
+│   └── test_agent_personas.py    # 5-agent role prompts, system prompt immutability & schemas
+└── routing/
+    ├── test_evals_engine.py      # LLM-as-a-judge faithfulness, relevance & benchmark suites
+    ├── test_model_arena.py       # Blind arena battles, VRAM sequential loading & Elo voting
+    └── test_model_router.py      # Task-based dynamic model routing & safe fallbacks
 ```
 
-Run the complete 200-test suite natively from PowerShell:
+### Running the Test Suite
+
+Execute the entire test suite with standard `pytest` from the project root:
+```powershell
+pytest
+```
+
+Or target specific functional domains:
+```powershell
+pytest tests/security/       # Run 30 security sandbox & injection tests
+pytest tests/rag/            # Run 60 Knowledge Graph, BM25 & Semantic Cache tests
+pytest tests/agents/         # Run 20 DAG workflow & multi-agent persona tests
+pytest tests/integration/    # Run 40 Auth, JWT, API Key & Webhook tests
+pytest tests/unit/           # Run 17 Schema & Tool registry tests
+pytest tests/routing/        # Run 33 Router, Evals & Arena tests
+```
+
+```
+============================= 200 passed in 4.81s =============================
+```
+
+Alternatively, run the zero-dependency standalone runner:
 ```powershell
 python backend/scratch/test_complete_suite_200.py
 ```

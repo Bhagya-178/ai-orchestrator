@@ -33,7 +33,7 @@ Designed with **Claude and ChatGPT parity**, the frontend provides a distraction
 - **Interactive Input Mechanics**: Auto-focus advancing across 6 individual digit fields, backspace navigation, and smart clipboard paste parsing.
 - **Resend Cooldown Timer**: 60-second animated countdown protecting against spam and rate-limit exhaustion.
 - **Dev-Mode Quick-Fill Pill**: When running without production SMTP, displays an automatic 1-click badge with the local `dev_otp` for rapid local testing.
-- **Admin Support**: Direct login compatibility with pre-seeded master admin credentials (`admin@` / `admin2134`).
+- **Admin Support**: Direct authentication support for administrative accounts provisioned securely via environment variables (`ADMIN_EMAIL` / `ADMIN_PASSWORD`).
 
 ### 3. Canvas Studio 2.0 (`app/components/artifacts/`)
 Full Claude Artifacts parity for code, interactive web applications, SVGs, and Mermaid diagrams:
