@@ -92,7 +92,7 @@ ollama pull bge-m3
 
 ### Step 1: Backend Setup
 ```powershell
-cd e:\Project\ai-orchestrator\backend
+cd backend
 
 # Create and activate Python virtual environment
 python -m venv venv
@@ -127,7 +127,7 @@ The API interactive documentation will be available at `http://localhost:8000/do
 ### Step 2: Frontend Setup
 In a second PowerShell window:
 ```powershell
-cd e:\Project\ai-orchestrator\frontend
+cd frontend
 
 # Install node dependencies
 npm install

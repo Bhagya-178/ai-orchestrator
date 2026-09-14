@@ -1,26 +1,51 @@
 <div align="center">
   <h1>🤖 AI Orchestrator Enterprise</h1>
-  <p><i>A production-grade, local AI orchestration platform featuring multi-agent DAG workflows, hybrid RAG 2.0, entity knowledge graphs, semantic vector caching, Model Context Protocol (MCP) hub, Canvas Studio 2.0, and a developer platform with scoped API keys and HMAC-signed webhooks.</i></p>
+  <p><b>A private, production-grade local AI operating platform with Claude and ChatGPT parity.</b></p>
+  <p><i>Featuring Multi-Agent DAG Workflows, Interactive Canvas Studio 2.0, Hybrid RAG 2.0, Code Knowledge Graphs, Semantic Vector Caching, Model Arena with Single-GPU VRAM Scheduling, and an Enterprise Developer Platform.</i></p>
 
-  [![Next.js](https://img.shields.io/badge/Next.js-16_Turbopack-black?logo=next.js)](https://nextjs.org/)
-  [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
-  [![Ollama](https://img.shields.io/badge/Ollama-Local_LLMs-white?logo=ollama)](https://ollama.com/)
-  [![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-red?logo=qdrant)](https://qdrant.tech/)
-  [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16_Database-blue?logo=postgresql)](https://www.postgresql.org/)
-  [![Tests](https://img.shields.io/badge/Tests-200%2F200_Passed-success?logo=checkmarx)](#-security--vulnerability-audit-200-tests)
+  <p>
+    <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-16_Turbopack-black?style=flat-square&logo=next.js" alt="Next.js"></a>
+    <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat-square&logo=fastapi" alt="FastAPI"></a>
+    <a href="https://python.org/"><img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python" alt="Python"></a>
+    <a href="https://ollama.com/"><img src="https://img.shields.io/badge/Ollama-Local_LLMs-white?style=flat-square&logo=ollama" alt="Ollama"></a>
+    <a href="https://qdrant.tech/"><img src="https://img.shields.io/badge/Qdrant-Vector_DB-red?style=flat-square&logo=qdrant" alt="Qdrant"></a>
+    <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-16_Database-blue?style=flat-square&logo=postgresql" alt="PostgreSQL"></a>
+    <a href="#-automated-testing--security-audit-200-tests"><img src="https://img.shields.io/badge/Tests-200%2F200_Passed-success?style=flat-square&logo=pytest" alt="Tests"></a>
+    <a href="#-security-authentication--rbac"><img src="https://img.shields.io/badge/Security-Air--Gapped_Ready-green?style=flat-square&logo=shield" alt="Security"></a>
+    <a href="https://www.docker.com/"><img src="https://img.shields.io/badge/Docker-Compose_Ready-2496ED?style=flat-square&logo=docker" alt="Docker"></a>
+  </p>
+
+  <p>
+    <a href="#-system-architecture">Architecture</a> •
+    <a href="#-core-capabilities">Capabilities</a> •
+    <a href="#-dynamic-effort-scaling--autonomous-reflection">Dynamic Effort</a> •
+    <a href="#-quickstart-guide">Quickstart</a> •
+    <a href="#-docker-compose-deployment">Docker</a> •
+    <a href="#-environment-configuration">Configuration</a> •
+    <a href="#-api-endpoint-reference">API Reference</a> •
+    <a href="#-automated-testing--security-audit-200-tests">Testing</a>
+  </p>
 </div>
 
 ---
 
-## ⚡ Overview
+## ⚡ Executive Summary
 
-**AI Orchestrator** is an enterprise-grade AI operating platform designed with **Claude and ChatGPT parity** for running open-source local LLMs privately, reliably, and deterministically. 
+**AI Orchestrator Enterprise** is an open-source, local-first artificial intelligence operating system engineered for organizations and developers who demand strict data sovereignty, deterministic execution, and frontier-level user experience without external cloud dependencies.
 
-Instead of treating LLMs as isolated chat completions, AI Orchestrator combines **intent classification**, **multi-agent collaboration**, **hybrid dense + sparse RAG**, **knowledge graph exploration**, **semantic vector caching**, **interactive canvas artifacts**, and a **developer platform** with programmatic API keys and webhooks.
+Rather than treating Large Language Models as simple text completion endpoints, AI Orchestrator wraps open weights in an enterprise orchestration layer combining:
+
+- **Multi-Agent DAG Workflows**: Kahn's topological sort with 5 specialized personas, sequential single-GPU execution (zero VRAM thrashing), dynamic token budgeting, and autonomous security reflection loops.
+- **Interactive Canvas Studio 2.0**: Full Claude Artifacts parity with live HTML/React/SVG preview, code editor, bi-directional `postMessage` console bridge, revision history, and side-by-side diffing.
+- **Hybrid RAG 2.0 & Code Knowledge Graph**: Dense vector semantic retrieval (Qdrant) combined with BM25Okapi sparse lexical scoring via Reciprocal Rank Fusion, enriched with AST-extracted code knowledge graphs and PageRank centrality ranking.
+- **Sub-2ms Semantic Vector Cache**: O(1) query hash caching coupled with Cosine vector similarity matching ($\ge 0.92$) to eliminate redundant LLM inference overhead and track token savings.
+- **Model Arena & Evals Studio**: Blind side-by-side A/B testing with sequential GPU memory unloading, automated Elo leaderboards, and programmatic LLM-as-a-judge evaluation benchmark suites.
+- **Enterprise Developer Platform**: Programmatic API keys (`ak_live_...`) with SHA-256 storage, granular permission scopes, and HMAC-SHA256 signed webhooks with timestamp replay resistance.
+- **Zero-Trust Security & Onboarding**: 6-digit email OTP verification with SHA-256 peppered hashing, brute-force protection, rate-limiting, and strictly environment-driven administrative provisioning.
 
 > [!TIP]
-> **New to AI Orchestrator? Read the complete user manual!**
-> Check out [**`GUIDE.md`**](GUIDE.md) for an in-depth walkthrough of all platform capabilities, including the ReAct agentic coding loop, Canvas Studio 2.0, Multi-Agent DAG workflows, Model Arena blind battles, and native Windows setup.
+> **Looking for the complete user walkthrough?**
+> Refer to [**`GUIDE.md`**](GUIDE.md) for step-by-step tutorials on using the ReAct coding loop, Canvas Studio 2.0, Multi-Agent Swarms, Model Arena battles, and native Windows/Linux development.
 
 ---
 
@@ -28,71 +53,88 @@ Instead of treating LLMs as isolated chat completions, AI Orchestrator combines 
 
 ```mermaid
 graph TB
-    subgraph Client [Frontend UI: Next.js 16 + Turbopack]
-        Chat[Claude/ChatGPT-Style Chat Feed & Live Tool Steps]
-        Canvas[Canvas Studio 2.0: Multi-Tab, Console, Diff, Pan/Zoom]
-        AgentStudio[Multi-Agent DAG Workflow Studio]
-        GraphExplorer[Interactive 2D Knowledge Graph Visualizer]
-        DevPortal[Developer Platform: API Keys & Webhooks]
-        ArenaUI[Model Arena Split-Battle & Evals Dashboard]
+    subgraph ClientLayer [Client Interface: Next.js 16 + Turbopack + TailwindCSS]
+        ChatUI[Claude/ChatGPT-Style Chat Feed & Live Tool Stepper]
+        CanvasStudio[Canvas Studio 2.0: Multi-Tab, Console, Diff & Pan/Zoom]
+        AgentStudio[Multi-Agent DAG Studio & In-Chat Swarm Card]
+        GraphVisualizer[Interactive 2D Knowledge Graph Visualizer]
+        DevPortal[Developer Platform: Scoped API Keys & Webhooks]
+        ArenaUI[Model Arena Split-Battle & LLM Evals Dashboard]
     end
 
-    subgraph BackendCore [FastAPI Orchestration Core]
-        Router[Main API & SSE Router]
+    subgraph GatewayLayer [API Gateway & Security Core: FastAPI]
+        Router[Main API & SSE Token Streaming Router]
+        AuthEngine[JWT Engine, Email OTP Verifier & RBAC]
+        DevAuth[API Key Scopes & HMAC-SHA256 Webhook Dispatcher]
         Classifier[Intent Classifier & Effort Controller]
-        AgentDAG[Multi-Agent DAG Workflow Engine]
-        GraphRAG[Entity Knowledge Graph & PageRank Network]
-        SemanticCache[Semantic Vector Caching Layer]
-        ToolRegistry[ReAct Tool Ecosystem: SQL, FS, Math, Web, Chart]
-        MCPClient[Model Context Protocol MCP Hub]
-        DevAuth[API Key Scopes & HMAC-SHA256 Webhooks]
-        EvalsEngine[LLM-as-a-Judge Benchmark Engine]
     end
 
-    subgraph StorageLayer [Persistent & Vector Storage]
-        PostgreSQL[(PostgreSQL: Users, RBAC, Sessions, Keys, Auditing)]
-        Qdrant[(Qdrant: Dense Vector Embeddings)]
-        SparseBM25[(BM25Okapi: Sparse Lexical Inverted Index)]
-        KGStore[(In-Memory Topological Knowledge Graph)]
+    subgraph ExecutionLayer [Reasoning & Agent Engine]
+        AgentDAG[Multi-Agent DAG Engine: Kahn's Toposort & Reflection Loop]
+        ReActLoop[ReAct Tool Loop: Multi-Step Plan-Action-Observe]
+        ToolEcosystem[Sandboxed Tools: SQL, FS, AST Math, Web Scraper, Chart.js]
+        MCPHub[Model Context Protocol Hub: Stdio & SSE JSON-RPC 2.0]
+        ArenaEngine[Model Arena & LLM-as-a-Judge Evaluation Engine]
     end
 
-    Client <--> Router
-    Router --> Classifier
-    Classifier --> AgentDAG
+    subgraph IntelligenceLayer [Retrieval & Knowledge Infrastructure]
+        SemanticCache[Semantic Vector Cache: Exact Hash + Cosine Sim >= 0.92]
+        HybridRAG[Hybrid RAG 2.0: Dense Vector + BM25Okapi Sparse Lexical]
+        RRF[Reciprocal Rank Fusion Ranking Engine]
+        CodeGraph[AST Code Parser, Entity Graph & PageRank Centrality]
+    end
+
+    subgraph StorageLayer [Persistence & Local Model Runtime]
+        OllamaLocal[(Local Ollama Runtime: Qwen, DeepSeek, BGE-M3)]
+        PostgreSQL[(PostgreSQL 16: Users, Sessions, Workspaces, Keys, Runs, Evals)]
+        QdrantDB[(Qdrant Vector DB: Persistent HNSW Dense Embeddings)]
+        SparseIndex[(BM25Okapi Inverted Lexical Index)]
+        InMemoryGraph[(In-Memory Topological Entity Graph)]
+    end
+
+    ClientLayer <--> GatewayLayer
+    GatewayLayer --> Classifier
     Classifier --> SemanticCache
     SemanticCache -.->|Cache Hit < 2ms| Router
-    SemanticCache -.->|Cache Miss| ToolRegistry
-    ToolRegistry --> MCPClient
-    AgentDAG --> GraphRAG
-    GraphRAG --> KGStore
-    GraphRAG --> SparseBM25
-    GraphRAG --> Qdrant
-    DevAuth --> PostgreSQL
+    SemanticCache -.->|Cache Miss| ReActLoop
+    Classifier --> AgentDAG
+    ReActLoop --> ToolEcosystem
+    ToolEcosystem --> MCPHub
+    ReActLoop <--> OllamaLocal
+    AgentDAG <--> OllamaLocal
+    AgentDAG --> HybridRAG
+    HybridRAG --> QdrantDB
+    HybridRAG --> SparseIndex
+    HybridRAG --> RRF
+    RRF --> CodeGraph
+    CodeGraph --> InMemoryGraph
+    GatewayLayer --> PostgreSQL
+    ArenaEngine <--> OllamaLocal
 ```
 
 ---
 
-## ✨ Enterprise Capabilities
+## ✨ Core Capabilities
 
-| Subsystem | Description |
-| :--- | :--- |
-| **Dynamic Effort Scaling & Reflection** | User-selectable reasoning depth (`⚡ Low`, `⚖️ Medium`, `🧠 High`) directly scaling the ReAct tool loop (2, 5, or 10 iterations) and multi-agent swarms (fast node pruning vs. 5-agent DAG vs. autonomous security patch reflection loop). |
-| **Email OTP Verification & RBAC** | Enterprise 6-digit email OTP verification flow with SHA-256 peppered hashing, 10-minute expiry, 5-attempt brute-force protection, 60s cooldown rate-limiting, dual delivery (async SMTP TLS / local dev fallback), and environment-driven administrative provisioning (`ADMIN_EMAIL`, `ADMIN_PASSWORD`). |
-| **Multi-Agent Swarms & Studio** | Dual-layer orchestration: (1) Zero-friction in-chat execution with **`⚡ Swarm`** toggle, interactive progression stepper (`AgentSwarmCard`), and automatic PostgreSQL chat persistence; (2) Dedicated **Agent Operations Studio** featuring persistent run history (`WorkflowRun`), interactive DAG topology, and 1-click **"💬 Continue in Chat"**. Powered by Kahn's topological sort with 5 specialized personas (`Planner`, `Researcher`, `Coder`, `Reviewer`, `Critic`). |
-| **Interactive Canvas Studio 2.0** | Full Claude Artifacts parity with multi-tab view (`Preview`, `Code Editor`, `Console`, `Diff`). Includes live `postMessage` console logging bridge, SVG pan/zoom, and revision diff comparisons. |
-| **Entity Knowledge Graph & Graph RAG** | AST code parsing for Python/TypeScript extracting classes, functions, and inheritance. Computes PageRank centrality, shortest path Dijkstra/BFS, and query expansion. |
-| **Semantic Vector Cache** | Combines exact O(1) query hash caching with cosine similarity vector matching ($\ge 0.92$). Reduces turn latency to $< 2$ms and tracks tokens/costs saved. |
-| **Developer Platform** | Programmatic API keys (`ak_live_...`, `ak_test_...`) with SHA-256 storage, scoped permissions (`chat:read`, `rag:admin`, `agents:run`), and HMAC-SHA256 webhooks with replay resistance. |
-| **Model Context Protocol (MCP)** | Bridge supporting both `stdio` and `sse` transports conforming to JSON-RPC 2.0 specifications. Dynamically exposes external tools to the ReAct agent loop. |
-| **Hybrid RAG 2.0** | Dense vector search (Qdrant) fused with BM25Okapi sparse lexical scoring via Reciprocal Rank Fusion ($RRF(d) = \sum \frac{1}{60 + \text{rank}}$). Includes collection tagging. |
-| **Model Arena & Evals Studio** | Side-by-side asynchronous streaming battles measuring TTFT, tokens/second, and win-rates, combined with automated LLM-as-a-judge benchmark suites with auto-populated candidate and judge model selection dropdowns. |
-| **Multi-Tenant Workspaces & RBAC** | Team workspaces with granular permissions (`owner`, `admin`, `member`, `viewer`), invite workflows, and security audit trails. |
+| Subsystem | Architectural Implementation | Key Highlights |
+| :--- | :--- | :--- |
+| **Multi-Agent DAG Swarms** | Kahn's topological sort, wave scheduling, reflection loops | 5 specialized personas (`Planner`, `Researcher`, `Coder`, `Reviewer`, `Critic`), sequential single-GPU execution, token budgeting, in-chat streaming cards, and dedicated operations studio. |
+| **Interactive Canvas Studio 2.0** | Next.js iframe sandbox with postMessage bridge | Full Claude Artifacts parity with multi-tab viewing (`Preview`, `Code Editor`, `Console`, `Diff`), real-time JavaScript console capture, revision tracking, and SVG pan/zoom. |
+| **Dynamic Effort Scaling** | Runtime parameter control across ReAct and DAG loops | User-selectable reasoning depth (`⚡ Low`, `⚖️ Medium`, `🧠 High`) scaling iteration limits (2, 5, 10), token budgets (600, 1200, 2500), and triggering self-healing code reflection loops. |
+| **Hybrid RAG 2.0** | Dense vector search fused with BM25Okapi sparse lexical | Reciprocal Rank Fusion ($RRF(d) = \sum \frac{1}{60 + \text{rank}}$), document collection tagging, dynamic chunking, and graceful fallbacks when vector DB is unavailable. |
+| **Entity Knowledge Graph** | AST code parsing with PageRank network analysis | Extracts Python and TypeScript classes, functions, calls, and inheritance hierarchies; computes PageRank centrality, BFS/Dijkstra shortest paths, and contextual query expansion. |
+| **Semantic Vector Cache** | Exact SHA-256 hash + Cosine vector similarity | Returns cached responses in $< 2$ms for semantically equivalent queries ($\ge 0.92$ threshold); tracks saved GPU time, token volume, and dollar-equivalent costs. |
+| **Model Arena & Evals** | Single-GPU sequential memory scheduler & Elo ranking | Side-by-side blind model battles without VRAM thrashing; automated benchmark evaluation suites scoring accuracy, faithfulness, and hallucination rates. |
+| **Developer Platform** | Scoped API tokens & HMAC-SHA256 signed webhooks | Programmatic API access (`ak_live_...`, `ak_test_...`), granular scopes (`chat:read`, `rag:admin`, `agents:run`), and resilient webhooks with replay attack prevention. |
+| **Sandboxed ReAct Tools** | AST-validated execution environments | Read-only SQL queries, sandboxed filesystem access (path traversal & UNC safe), AST math evaluation (blocks arbitrary code execution), and declarative Chart.js generation. |
+| **Model Context Protocol (MCP)** | JSON-RPC 2.0 client supporting `stdio` & `sse` | Bridges external MCP servers and tools directly into the ReAct agent tool loop dynamically at runtime. |
+| **Zero-Trust Auth & RBAC** | 6-digit email OTP onboarding + SHA-256 peppered hashing | 10-minute code expiry, 5-attempt lockout, 60s cooldown rate-limiting, async SMTP TLS delivery with dev fallback, and strict environment-controlled admin credentials. |
 
 ---
 
 ## 🧠 Dynamic Effort Scaling & Autonomous Reflection
 
-AI Orchestrator features dynamic, user-controllable reasoning depth across both single-agent ReAct reasoning loops and multi-agent DAG swarms:
+AI Orchestrator provides user-controllable reasoning depth that dynamically re-configures the reasoning trajectory across both single-agent ReAct tool loops and multi-agent DAG swarms:
 
 ```
                        ┌─────────────────────────────────────────────────────────┐
@@ -116,57 +158,72 @@ AI Orchestrator features dynamic, user-controllable reasoning depth across both 
 ```
 
 ### 1. ReAct Tool Loop Depth (`agent_loop.py`)
-- **⚡ Low Effort**: `max_iterations = 2`, `temperature = 0.1`. The model executes at most 1 tool action and immediately summarizes the answer.
-- **⚖️ Medium Effort**: `max_iterations = 5`, `temperature = 0.2`. Standard 3–5 step plan-action-observe cycle with balanced latency.
-- **🧠 High Effort**: `max_iterations = 10`, `temperature = 0.3`. Enables deep multi-tool chaining (search web $\rightarrow$ inspect files $\rightarrow$ execute code $\rightarrow$ analyze failure $\rightarrow$ fix and re-execute).
+- **⚡ Low Effort**: `max_iterations = 2`, `temperature = 0.1`. The agent performs at most one tool action before finalizing its answer, optimizing for raw speed.
+- **⚖️ Medium Effort**: `max_iterations = 5`, `temperature = 0.2`. Balanced 3–5 step plan-action-observe cycle suited for general development and research.
+- **🧠 High Effort**: `max_iterations = 10`, `temperature = 0.3`. Enables multi-step tool chaining (e.g., search web $\rightarrow$ read filesystem $\rightarrow$ run code $\rightarrow$ catch error $\rightarrow$ patch file $\rightarrow$ verify output).
 
-### 2. Multi-Agent Swarm Critique, Token Budgeting & Live Streaming (`engine.py`, `chat_pipeline.py`)
-- **Sequential Single-GPU Execution**: Waves execute sequentially on local Ollama, granting 100% GPU compute and memory bandwidth to one model at a time. Eliminates VRAM context thrashing and inference bottlenecks caused by parallel execution on consumer GPUs.
-- **Prompt De-Duplication**: Prevents duplicate upstream injections when dependencies are already substituted in task templates, reducing prompt ingestion latency by up to 50%.
-- **Effort-Driven Token Budgeting (`num_predict`)**:
-  - **⚡ Low Effort**: Prunes QA and Critic nodes down to core deliverables (`planner`, `coder`, `researcher`), enforcing a 600-token budget per node with concise prompt directives to produce fullstack code in ~20 seconds.
-  - **⚖️ Medium Effort**: Executes the full 5-agent DAG wave topology (`planner` $\rightarrow$ `backend coder` $\rightarrow$ `frontend coder` $\rightarrow$ `reviewer` $\rightarrow$ `critic`) with a 1200-token budget per node, completing fullstack systems in ~60 seconds.
-  - **🧠 High Effort (Autonomous Reflection Loop)**: Allocates a 2500-token budget. Monitors Reviewer output for security vulnerabilities, race conditions, or unhandled errors, and automatically launches a `security_patch_loop` with the Coder Agent to patch and harden the code before final delivery.
-- **Live Per-Node Token Streaming**: Emits the workflow header immediately at $t = 0$. As each agent finishes, its deliverable streams token-by-token into the chat feed, providing continuous visual progress every 6–12 seconds.
+### 2. Multi-Agent DAG Swarms & Reflection Loop (`engine.py`)
+- **Sequential Single-GPU Execution**: Agent waves execute sequentially against local Ollama, allocating 100% of GPU compute and memory bandwidth to one model at a time. This completely eliminates the VRAM thrashing and inference stalls that occur when running concurrent models on consumer GPUs.
+- **Prompt De-Duplication**: Prevents duplicate upstream artifact injections when dependencies are already substituted in task templates, reducing prompt ingestion latency by up to 50%.
+- **Token Budget Allocation (`num_predict`)**:
+  - **⚡ Low Effort**: Prunes QA and Critic nodes down to core deliverables (`Planner`, `Coder`, `Researcher`), enforcing a 600-token budget per node with concise prompt directives to produce fullstack code in ~20 seconds.
+  - **⚖️ Medium Effort**: Executes the complete 5-agent DAG topology (`Planner` $\rightarrow$ `Backend Coder` $\rightarrow$ `Frontend Coder` $\rightarrow$ `Reviewer` $\rightarrow$ `Critic`) with a 1200-token budget per node.
+  - **🧠 High Effort (Autonomous Reflection Loop)**: Allocates a 2500-token budget per node. Monitors the Reviewer output for security vulnerabilities, race conditions, or unhandled errors. If deficiencies are flagged, the engine automatically launches an autonomous `security_patch_loop` with the Coder Agent to patch and harden the implementation before final delivery.
+- **Live Per-Node Token Streaming**: Emits the workflow header immediately at $t = 0$. As each agent finishes, its deliverable streams token-by-token into the chat feed, providing continuous visual feedback.
 
 ---
 
-## 📧 Email OTP Sign-Up & Cryptographic Authentication
+## 🎨 Interactive Canvas Studio 2.0
 
-The platform enforces secure, verified user onboarding through an enterprise 6-digit OTP email verification pipeline:
+Canvas Studio 2.0 brings complete **Claude Artifacts parity** to your local AI workflow, automatically activating whenever the model generates structured code, HTML web apps, SVG diagrams, or markdown documentation:
+
+<div align="center">
+  <kbd>Preview</kbd> • <kbd>Code Editor</kbd> • <kbd>Live Console</kbd> • <kbd>Revision Diff</kbd>
+</div>
+
+- **Multi-Tab Workspace**: Switch seamlessly between rendered visual outputs, the underlying syntax-highlighted source code, runtime browser console logs, and previous version diffs.
+- **Iframe Sandboxing with `postMessage` Console Bridge**: Embedded applications run inside an isolated iframe sandbox. `console.log`, `console.warn`, and `console.error` calls are captured via a secure `postMessage` protocol and displayed in a dedicated live **Console tab** for interactive debugging.
+- **Unified Diff Engine**: Inspect line-by-line insertions and deletions across artifact revisions.
+- **Pan & Zoom Graphics**: Built-in viewport controls with mouse-drag panning and scroll-wheel zoom for complex SVG flowcharts and architectural diagrams.
+
+---
+
+## 🔒 Security, Authentication & RBAC
+
+AI Orchestrator adheres to strict zero-trust security principles:
 
 1. **Pending Registration Isolation**: Unverified user data is quarantined in a dedicated `email_verifications` table so unverified accounts never pollute primary `users` or foreign key constraints.
 2. **Cryptographic Integrity**:
-   - 6-digit OTP codes generated via Python `secrets`.
+   - 6-digit OTP codes generated via Python `secrets` module.
    - Stored in PostgreSQL using SHA-256 with pepper hashing (`hmac.compare_digest`).
-   - 10-minute expiration with a 5-attempt brute force lockout limit.
+   - 10-minute expiration with a 5-attempt brute-force lockout limit.
    - 60-second cooldown rate-limiting on OTP generation and resends.
 3. **Dual Email Delivery Engine**:
    - **Production SMTP**: Asynchronous TLS delivery via standard library `smtplib` and `EmailMessage` with responsive HTML and plain-text templates.
    - **Local Development Fallback**: When `SMTP_HOST` is not configured, logs a high-visibility terminal banner and returns `dev_otp` for convenient 1-click testing in the UI.
 4. **Administrative Account Provisioning**:
    - Initial administrative credentials are systematically controlled via environment variables:
-     ```bash
+     ```env
      ADMIN_EMAIL=admin@example.com
-     ADMIN_PASSWORD=<set_during_initialization>
+     ADMIN_PASSWORD=<your-secure-admin-password>
      ```
    - **Zero Default Passwords**: To preserve production security integrity, no usable default admin password is hardcoded or published. If a fresh deployment initializes without `ADMIN_PASSWORD` configured and no admin user exists, the application generates a cryptographically random one-time password and logs a secure startup notice, prompting immediate `.env` configuration.
 
 ---
 
-## 🛡️ Enterprise Automated Test Suite (200 Pytest Tests)
+## 🛡️ Automated Testing & Security Audit (200 Tests)
 
 The system is fortified against security vulnerabilities, race conditions, and regressions via an industry-standard, fully modular **200-test automated suite** organized under `tests/`:
 
-```
+```text
 tests/
 ├── unit/
-│   ├── test_schemas.py           # Pydantic schemas, CORS config, Keep-Alive settings
+│   ├── test_schemas.py           # Pydantic schemas, CORS configuration & Keep-Alive settings
 │   └── test_tools.py             # Tool registry, dynamic dispatch & metadata validation
 ├── integration/
-│   ├── test_auth_lifecycle.py    # PBKDF2 salting, password verification, unicode security
+│   ├── test_auth_lifecycle.py    # PBKDF2 salting, password verification & unicode security
 │   ├── test_jwt.py               # HS256 JWT lifecycle, expiration & signature tampering
-│   ├── test_api_keys.py          # Cryptographic entropy, SHA-256 hashes, scope enforcement
+│   ├── test_api_keys.py          # Cryptographic entropy, SHA-256 hashes & scope enforcement
 │   └── test_webhooks.py          # HMAC-SHA256 signatures, replay drift & timestamp validation
 ├── security/
 │   ├── test_sql_injection.py     # Read-only SELECT enforcement & injection prevention
@@ -188,12 +245,12 @@ tests/
 ### Running the Test Suite
 
 Execute the entire test suite with standard `pytest` from the project root:
-```powershell
+```bash
 pytest
 ```
 
 Or target specific functional domains:
-```powershell
+```bash
 pytest tests/security/       # Run 30 security sandbox & injection tests
 pytest tests/rag/            # Run 60 Knowledge Graph, BM25 & Semantic Cache tests
 pytest tests/agents/         # Run 20 DAG workflow & multi-agent persona tests
@@ -202,13 +259,9 @@ pytest tests/unit/           # Run 17 Schema & Tool registry tests
 pytest tests/routing/        # Run 33 Router, Evals & Arena tests
 ```
 
-```
+Expected output:
+```text
 ============================= 200 passed in 4.81s =============================
-```
-
-Alternatively, run the zero-dependency standalone runner:
-```powershell
-python backend/scratch/test_complete_suite_200.py
 ```
 
 ---
@@ -216,155 +269,292 @@ python backend/scratch/test_complete_suite_200.py
 ## 🚀 Quickstart Guide
 
 ### Prerequisites
-- **Node.js**: v18+ (v20+ recommended)
-- **Python**: 3.11+
-- **PostgreSQL**: 15+
-- **Qdrant**: v1.12+
-- **Ollama**: Local instance running at `http://localhost:11434`
 
-Pull the primary models:
+| Component | Minimum Version | Recommended | Notes |
+| :--- | :--- | :--- | :--- |
+| **Node.js** | v18.0+ | v20 LTS | Required for frontend build |
+| **Python** | 3.11+ | 3.11 or 3.12 | Required for FastAPI backend |
+| **PostgreSQL** | 15+ | 16+ | Primary transactional database |
+| **Qdrant** | v1.12+ | Latest | Persistent vector database |
+| **Ollama** | Latest | Latest | Local LLM inference engine |
+
+### Recommended Models
+
+Download the default models via Ollama:
 ```bash
+# Primary Chat & RAG Model
 ollama pull qwen3:8b
+
+# Code Generation & Multi-Agent Swarms
 ollama pull qwen2.5-coder:7b
+
+# Fast Request Processor & Intent Classification
 ollama pull qwen2.5:1.5b
+
+# Deep Reasoning & High-Effort Reflection
 ollama pull deepseek-r1:8b
-ollama pull bge-m3
+
+# High-Performance Multilingual Dense Embeddings
+ollama pull bge-m3:latest
 ```
 
 ---
 
-### Running & Updating with Docker (Recommended)
+## 🐳 Docker Compose Deployment
 
-#### Quick Launch
-To start the entire containerized stack:
+The recommended and easiest way to run AI Orchestrator is with Docker Compose.
+
+### 1. First-Time Setup & Build Command
+
+When running the project for the **first time**, execute the following command from the project root directory:
+
 ```bash
 docker compose up -d --build
 ```
 
-- **Web UI**: [http://localhost:3000](http://localhost:3000)
+> [!TIP]
+> **What this command does on the first run:**
+> - Downloads the official PostgreSQL 15 and Qdrant vector database images.
+> - Builds the Next.js 16 frontend container with Turbopack.
+> - Builds the FastAPI Python 3.11 backend container with all pinned dependencies.
+> - Creates isolated persistent Docker volumes (`postgres_data`, `qdrant_data`).
+> - Automatically runs database schema migrations (`init_db`) on first boot.
+> - Starts all 4 services in the background (`-d`).
+>
+> *Note: First-time build takes 2–4 minutes to compile assets and download layers. Subsequent starts will be almost instant.*
+
+#### Alternative: Build First, Then Launch
+If you prefer to compile images before starting services:
+```bash
+# Step 1: Build images
+docker compose build
+
+# Step 2: Start all containers in the background
+docker compose up -d
+```
+
+#### First-Time Verification & Access
+Verify that all 4 containers are running and healthy:
+```bash
+docker compose ps
+```
+
+Once running, access the services:
+- **Web Interface**: [http://localhost:3000](http://localhost:3000)
 - **FastAPI Core**: [http://localhost:8000](http://localhost:8000)
-- **Interactive Swagger Docs**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **Qdrant Dashboard**: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
+- **Interactive OpenAPI Documentation**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- **Qdrant Web Console**: [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
 
-#### 🔄 How to Update Your Docker Deployment
-Whenever new features, security patches, or dependencies are added to the codebase, follow these steps to cleanly update and restart your containers:
+To monitor initial startup logs:
+```bash
+docker compose logs -f
+```
 
-1. **Rebuild and restart all containers without stale cache**:
-   ```bash
-   docker compose down
-   docker compose build --no-cache
-   docker compose up -d
-   ```
+### 2. Maintenance & Container Operations
 
-2. **One-Liner Fast Update**:
-   ```bash
-   docker compose up -d --build --force-recreate
-   ```
+#### Clean Rebuild (Without Stale Build Cache)
+```bash
+docker compose down
+docker compose build --no-cache
+docker compose up -d
+```
 
-3. **Updating a Single Service** (e.g., frontend or backend only):
-   ```bash
-   # Rebuild and reload only the backend
-   docker compose up -d --no-deps --build backend
+#### Fast One-Liner Re-creation
+```bash
+docker compose up -d --build --force-recreate
+```
 
-   # Rebuild and reload only the frontend
-   docker compose up -d --no-deps --build frontend
-   ```
+#### Single-Service Rebuild
+```bash
+# Rebuild only the backend
+docker compose up -d --no-deps --build backend
 
-4. **Run Database Migrations Inside Container**:
-   New tables (API keys, webhooks, evaluation runs) are automatically migrated at backend startup, or can be triggered manually:
-   ```bash
-   docker compose exec backend python -m app.database.init_db
-   ```
+# Rebuild only the frontend
+docker compose up -d --no-deps --build frontend
+```
 
-5. **Verify Running Services & Logs**:
-   ```bash
-   # Check container status
-   docker compose ps
+#### Database Schema Initialization
+Schema migrations are run automatically on container startup. To execute manually:
+```bash
+docker compose exec backend python -m app.database.init_db
+```
 
-   # Follow live backend logs
-   docker compose logs -f backend
+#### View Live Service Logs
+```bash
+# Follow backend logs
+docker compose logs -f backend
 
-   # Follow live frontend logs
-   docker compose logs -f frontend
-   ```
+# Follow frontend logs
+docker compose logs -f frontend
+```
 
-6. **Connecting to Host Ollama**:
-   The Docker network connects to Ollama on your host machine via `host.docker.internal:11434`. Ensure Ollama is running and listening on all interfaces if using Linux (`OLLAMA_HOST=0.0.0.0:11434`).
+#### Host Ollama Connectivity
+The Docker network connects to Ollama on your host machine via `host.docker.internal:11434`. On Linux hosts, ensure Ollama is configured to listen on all interfaces:
+```bash
+OLLAMA_HOST=0.0.0.0:11434 ollama serve
+```
 
 ---
 
-### Running Manually
+## 💻 Manual Local Setup
 
-#### 1. Backend Setup
+For active local development without Docker:
+
+### 1. Backend Setup
 ```bash
 cd backend
 python -m venv .venv
-# On Windows:
-.venv\Scripts\activate
+
 # On Linux/macOS:
-# source .venv/bin/activate
+source .venv/bin/activate
+
+# On Windows (PowerShell):
+# .venv\Scripts\Activate.ps1
 
 pip install -r requirements.txt
+cp .env.example .env
+# Edit .env with your local PostgreSQL credentials
+
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-#### 2. Frontend Setup
+### 2. Frontend Setup
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Visit [http://localhost:3000](http://localhost:3000) in your browser.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## ⚙️ Environment Configuration
+
+Copy `backend/.env.example` to `backend/.env` and update with your local environment values.
+
+> [!CAUTION]
+> **Production Security**: Never commit real database passwords, SMTP credentials, or administrative secrets to source control. Use the generic placeholders below as a reference.
+
+```env
+# ==============================================================================
+# Ollama Runtime Configuration
+# ==============================================================================
+OLLAMA_URL=http://localhost:11434
+OLLAMA_KEEP_ALIVE=0
+
+# ==============================================================================
+# PostgreSQL Connection (Asyncpg)
+# Format: postgresql+asyncpg://<username>:<password>@<host>:<port>/<dbname>
+# ==============================================================================
+DATABASE_URL=postgresql+asyncpg://postgres:<your-secure-password>@localhost:5432/ai_orchestrator
+
+# ==============================================================================
+# Initial Administrative Provisioning
+# ==============================================================================
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=<your-secure-admin-password>
+
+# ==============================================================================
+# Qdrant Vector Database
+# ==============================================================================
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION=documents
+EMBEDDING_MODEL=bge-m3:latest
+
+# ==============================================================================
+# Model Tier Assignments
+# ==============================================================================
+PROCESSOR_MODEL=qwen2.5:1.5b
+SUMMARY_MODEL=qwen2.5:1.5b
+RAG_MODEL=qwen3:8b
+
+# ==============================================================================
+# Optional: SMTP Email Delivery (Leave blank for UI/terminal dev OTP fallback)
+# ==============================================================================
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USER=no-reply@example.com
+SMTP_PASSWORD=<your-smtp-app-password>
+SMTP_FROM_EMAIL=no-reply@example.com
+SMTP_FROM_NAME="AI Orchestrator"
+SMTP_TLS=true
+
+# ==============================================================================
+# OTP Verification Policies
+# ==============================================================================
+OTP_EXPIRE_MINUTES=10
+OTP_RESEND_COOLDOWN_SECONDS=60
+OTP_MAX_ATTEMPTS=5
+```
 
 ---
 
 ## 📡 API Endpoint Reference
 
 ### Authentication & Access Control
-- `POST /auth/register`: Initiate user registration, validate constraints, and dispatch 6-digit OTP.
-- `POST /auth/verify-otp`: Cryptographically verify OTP, provision user record, and return JWT tokens.
-- `POST /auth/resend-otp`: Rate-limited OTP resend with 60-second cooldown protection.
-- `POST /auth/login`: Authenticate with email/password (supports admin `admin@` and standard users).
-- `POST /auth/refresh`: Rotate refresh token for a fresh 60-minute access token.
-- `GET /auth/me`: Current user profile, role (`admin` / `user`), and custom instructions.
+| Method | Path | Description | Scopes / Auth |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/auth/register` | Initiate registration and dispatch 6-digit OTP | Public |
+| `POST` | `/auth/verify-otp` | Verify OTP code and provision verified user record | Public |
+| `POST` | `/auth/resend-otp` | Rate-limited OTP resend with 60-second cooldown | Public |
+| `POST` | `/auth/login` | Authenticate with email/password and obtain JWT | Public |
+| `POST` | `/auth/refresh` | Rotate refresh token for a fresh access token | Refresh Token |
+| `GET` | `/auth/me` | Retrieve current user profile, role, and instructions | Bearer Token |
 
-### Core & Chat
-- `POST /chat`: Synchronous LLM execution with intent detection, memory, and `effort_level` (`low`, `medium`, `high`).
-- `POST /chat/stream`: Real-time SSE token stream with live latency accounting, inline tool/agent events, and dynamic effort iteration budgeting.
-- `POST /chat/{session_id}/messages`: Append messages (e.g., completed workflow deliverable) to chat history.
-- `POST /chat/regenerate`: Retry last assistant response.
-- `GET /conversations`: Paginated conversation histories and user preferences.
+### Core Chat & Streaming
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| `POST` | `/chat` | Synchronous chat turn with intent detection, memory, and effort level |
+| `POST` | `/chat/stream` | Server-Sent Events (SSE) token stream with live tool/agent steps |
+| `POST` | `/chat/{session_id}/messages` | Append messages (e.g. workflow deliverables) to session history |
+| `POST` | `/chat/regenerate` | Retry and regenerate the last assistant response |
+| `GET` | `/conversations` | List user conversation sessions with auto-generated titles |
+| `DELETE` | `/conversations/{id}` | Permanently delete a conversation session and associated memories |
 
-### Agents, Swarms & Workflow Operations
-- `GET /agents/roles`: List autonomous agent roles and tools.
-- `GET /agents/templates`: Curated DAG workflow templates (`fullstack`, `deep_research`, `security_hardening`).
-- `POST /agents/workflows/run`: Execute a DAG workflow with SSE event streaming and effort scaling (`effort_level`).
-- `POST /agents/roles/chat`: Direct single-turn interaction with an agent persona.
-- `GET /agents/runs`: List historical workflow runs with node outputs and timings.
-- `GET /agents/runs/{run_id}`: Retrieve detailed execution trace of a specific run.
-- `POST /agents/runs`: Persist a completed workflow run.
-- `DELETE /agents/runs/{run_id}`: Delete a saved workflow run.
+### Autonomous Agents & DAG Workflows
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| `GET` | `/agents/roles` | List available agent personas, system directives, and tools |
+| `GET` | `/agents/templates` | Retrieve curated DAG templates (`fullstack`, `deep_research`, `security_hardening`) |
+| `POST` | `/agents/workflows/run` | Execute a DAG workflow with SSE real-time event streaming and effort scaling |
+| `POST` | `/agents/roles/chat` | Direct single-turn conversation with an isolated agent persona |
+| `GET` | `/agents/runs` | List historical workflow runs with node execution traces and timing |
+| `GET` | `/agents/runs/{run_id}` | Retrieve comprehensive trace details for a specific run |
+| `POST` | `/agents/runs` | Persist a completed workflow run |
+| `DELETE` | `/agents/runs/{run_id}` | Delete a saved workflow run record |
 
-### Knowledge Graph & Graph RAG
-- `GET /rag/v2/graph/explore`: Retrieve full node/edge network for 2D visualization.
-- `GET /rag/v2/graph/path`: Shortest path between two entities.
-- `POST /rag/v2/graph/index-code`: Parse Python code via AST into the graph.
-- `GET /rag/v2/graph/query-augment`: Contextual graph snippet for prompt injection.
+### Hybrid RAG 2.0 & Knowledge Graph
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| `POST` | `/documents/upload` | Ingest and chunk documents into Qdrant vector index |
+| `GET` | `/documents` | List indexed documents and metadata for active session |
+| `DELETE` | `/documents/{id}` | Remove document and purge associated vector embeddings |
+| `GET` | `/rag/v2/graph/explore` | Retrieve graph topology (nodes and edges) for 2D visualization |
+| `GET` | `/rag/v2/graph/path` | Calculate shortest path between two code entities |
+| `POST` | `/rag/v2/graph/index-code` | Parse Python/TypeScript source code via AST into the entity graph |
+| `GET` | `/rag/v2/graph/query-augment` | Contextual graph subgraph snippet for prompt augmentation |
 
-### Developer Platform
-- `GET /auth/api-keys`: List active API keys for user.
-- `POST /auth/api-keys`: Create scoped API key (returns raw key once).
-- `DELETE /auth/api-keys/{id}`: Revoke an API key.
-- `GET /webhooks`: List registered webhook endpoints.
-- `POST /webhooks`: Register endpoint URL and subscribe to events.
-- `POST /webhooks/{id}/test`: Dispatch test ping with HMAC signature.
-- `GET /webhooks/{id}/deliveries`: View past delivery statuses and durations.
+### Developer Platform (API Keys & Webhooks)
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| `GET` | `/auth/api-keys` | List active programmatic API keys |
+| `POST` | `/auth/api-keys` | Generate scoped API key (`ak_live_...` or `ak_test_...`) |
+| `DELETE` | `/auth/api-keys/{id}` | Permanently revoke an API key |
+| `GET` | `/webhooks` | List registered webhook subscriptions |
+| `POST` | `/webhooks` | Register a webhook endpoint with event subscriptions |
+| `POST` | `/webhooks/{id}/test` | Dispatch a test ping payload signed with HMAC-SHA256 |
+| `GET` | `/webhooks/{id}/deliveries` | Audit webhook delivery history, HTTP status codes, and latencies |
 
-### LLM Evals & Benchmarking
-- `GET /evals/benchmarks`: List benchmark datasets.
-- `POST /evals/run`: Run evaluation against candidate model with LLM-as-a-judge.
-- `GET /evals/history`: List historical evaluation runs and pass-rate scorecards.
+### Model Arena & Evals Studio
+| Method | Path | Description |
+| :--- | :--- | :--- |
+| `POST` | `/arena/battle` | Initiate blind split-screen battle with sequential GPU memory unloading |
+| `POST` | `/arena/vote` | Record user preference vote, update Elo ratings, and reveal model identities |
+| `GET` | `/arena/leaderboard` | Retrieve persistent model Elo leaderboard and win-rate statistics |
+| `GET` | `/evals/benchmarks` | List available automated benchmark datasets |
+| `POST` | `/evals/run` | Execute LLM-as-a-judge automated evaluation suite |
+| `GET` | `/evals/history` | List historical evaluation scorecard runs |
 
 ---
 
@@ -375,74 +565,83 @@ ai-orchestrator/
 ├── backend/
 │   ├── app/
 │   │   ├── agents/            # Multi-Agent DAG Workflow Engine
-│   │   │   ├── engine.py      # Kahn's topological sort, dynamic effort pruning & reflection loop
-│   │   │   ├── roles.py       # Planner, Researcher, Coder, Reviewer, Critic
-│   │   │   ├── templates.py   # Full-Stack, Deep Research, Security Hardening + alias map
+│   │   │   ├── engine.py      # Kahn's topological sort, dynamic effort budgeting & reflection loop
+│   │   │   ├── roles.py       # Planner, Researcher, Coder, Reviewer, Critic personas
+│   │   │   ├── templates.py   # Full-Stack, Deep Research & Security Hardening DAG templates
 │   │   │   └── router.py      # SSE streaming workflow execution endpoints
-│   │   ├── auth/              # Security, JWT, RBAC & API Keys
-│   │   │   ├── api_keys.py    # Cryptographic generation, SHA-256 hash & scopes
+│   │   ├── auth/              # Authentication, RBAC & Developer Platform
+│   │   │   ├── api_keys.py    # Cryptographic generation, SHA-256 storage & scope checks
 │   │   │   ├── api_keys_router.py
-│   │   │   ├── security.py    # PBKDF2-HMAC-SHA256 & RFC-7519 JWT
-│   │   │   └── router.py      # OTP registration, verification, login, refresh
-│   │   ├── database/          # PostgreSQL SQLAlchemy ORM
-│   │   │   ├── models.py      # Users, EmailVerification, Workspaces, Keys, Webhooks, Evals
-│   │   │   ├── init_db.py     # Idempotent table migrations
-│   │   │   └── session.py     # Async session pooling
+│   │   │   ├── security.py    # PBKDF2-HMAC-SHA256 & RFC-7519 JWT verification
+│   │   │   └── router.py      # 6-digit OTP registration, verification, login & token rotation
+│   │   ├── database/          # PostgreSQL SQLAlchemy Async ORM
+│   │   │   ├── models.py      # Users, EmailVerification, Workspaces, Keys, Webhooks, Runs, Evals
+│   │   │   ├── init_db.py     # Idempotent database migrations
+│   │   │   └── session.py     # Asyncpg connection pooling
 │   │   ├── mcp/               # Model Context Protocol Hub
-│   │   │   ├── client.py      # Stdio & SSE JSON-RPC 2.0 transports
-│   │   │   └── manager.py     # Dynamic external tool bridging
-│   │   ├── services/          # Core Business & Infrastructure Services
-│   │   │   ├── email_service.py # Async SMTP TLS & dev fallback OTP delivery
+│   │   │   ├── client.py      # Stdio & SSE JSON-RPC 2.0 protocol client
+│   │   │   └── manager.py     # Dynamic external tool bridge
+│   │   ├── services/          # Core Business Services
+│   │   │   ├── email_service.py # Async SMTP TLS & terminal development fallback
 │   │   │   ├── evals/         # LLM-as-a-Judge Benchmark Engine
-│   │   │   ├── rag_v2/        # Hybrid RAG 2.0, BM25 & Knowledge Graph
-│   │   │   ├── semantic_cache.py # Cosine similarity query cache
-│   │   │   ├── webhooks.py    # HMAC-SHA256 event dispatcher
-│   │   │   ├── arena_service.py # Split-battle arbitration
+│   │   │   ├── rag_v2/        # Hybrid RAG 2.0, BM25Okapi & Code Knowledge Graph
+│   │   │   ├── semantic_cache.py # Cosine similarity vector cache (< 2ms response)
+│   │   │   ├── webhooks.py    # HMAC-SHA256 event dispatcher with retry logic
+│   │   │   ├── arena_service.py # Split-battle arbitration & Elo rating math
 │   │   │   └── chat_pipeline.py # Central conversation orchestration & effort routing
 │   │   ├── tools/             # Sandboxed ReAct Tool Ecosystem
-│   │   │   ├── agent_loop.py  # ReAct loop with dynamic effort scaling (2, 5, 10 iters)
+│   │   │   ├── agent_loop.py  # ReAct loop with dynamic effort scaling (2, 5, 10 iterations)
 │   │   │   ├── sql_tool.py    # Read-only SELECT enforcement
-│   │   │   ├── file_system.py # Sandboxed directory and file reader
+│   │   │   ├── file_system.py # Sandboxed directory and file reader (path traversal safe)
 │   │   │   ├── math_tool.py   # Safe AST mathematical calculator
 │   │   │   ├── chart_tool.py  # Declarative Chart.js generation
 │   │   │   └── web_scraper.py # Sandboxed HTTP document parser
-│   │   └── main.py            # FastAPI Application Entrypoint
-│   ├── Dockerfile
-│   └── requirements.txt
+│   │   └── main.py            # FastAPI Application Entrypoint & Lifespan Hooks
+│   ├── Dockerfile             # Multi-stage production container definition
+│   └── requirements.txt       # Pinned Python dependencies
 │
 ├── frontend/
 │   ├── app/
 │   │   ├── components/
 │   │   │   ├── agents/        # Agent Swarm Card (In-Chat Stepper) & Operations Studio
-│   │   │   │   ├── AgentSwarmCard.tsx     # In-chat dynamic swarm stepper & thought inspector
-│   │   │   │   └── AgentWorkflowModal.tsx # Agent Operations Studio (DAG visualizer & runs)
+│   │   │   │   ├── AgentSwarmCard.tsx     # Dynamic in-chat swarm stepper & thought inspector
+│   │   │   │   └── AgentWorkflowModal.tsx # Agent Operations Studio (DAG visualizer & history)
 │   │   │   ├── artifacts/     # Canvas Studio 2.0 (Preview, Code, Console, Diff)
-│   │   │   ├── auth/          # Authentication & OTP Modals
-│   │   │   │   └── AuthModal.tsx          # 6-digit OTP verification view & login
-│   │   │   ├── developer/     # Developer Platform (API Keys & Webhooks)
+│   │   │   ├── auth/          # Authentication & OTP Verification Modals
+│   │   │   │   └── AuthModal.tsx          # 6-digit OTP verification & credentials form
+│   │   │   ├── developer/     # Developer Platform (API Keys & Webhook Management)
 │   │   │   ├── evals/         # LLM Evals Scorecard & Benchmark Modal
 │   │   │   ├── knowledge/     # 2D Knowledge Graph Visualizer & RAG Manager
-│   │   │   ├── arena/         # Model Arena Split-Battle UI
-│   │   │   ├── chat/          # Clean, Minimal ChatGPT/Claude Chat Feed
-│   │   │   │   ├── ChatComposer.tsx       # Dynamic effort selector, prompt history, attachments
-│   │   │   │   ├── ChatView.tsx           # Message feed, scroll anchors, empty states
-│   │   │   │   └── MessageBubble.tsx      # Markdown, syntax highlighter, inline ReAct cards
-│   │   │   └── layout/        # Responsive AppShell & TopBar
+│   │   │   ├── arena/         # Model Arena Split-Battle & Elo Leaderboard
+│   │   │   ├── chat/          # ChatGPT/Claude-Style Chat Interface
+│   │   │   │   ├── ChatComposer.tsx       # Dynamic effort selector, prompt history & attachments
+│   │   │   │   ├── ChatView.tsx           # Message feed, virtual scroll anchors & empty states
+│   │   │   │   └── MessageBubble.tsx      # Markdown, syntax highlighter & inline tool execution cards
+│   │   │   └── layout/        # Responsive AppShell & Navigation TopBar
 │   │   ├── lib/
-│   │   │   ├── api/           # Strongly-typed API client wrappers (chat, auth, agents, etc.)
-│   │   │   ├── context/       # Chat, Artifact, Auth, and Theme Contexts
+│   │   │   ├── api/           # Strongly-typed API clients (chat, auth, agents, evals, keys)
+│   │   │   ├── context/       # Chat, Artifact, Auth, and Theme React Contexts
 │   │   │   └── types.ts       # Unified TypeScript definitions
 │   │   └── globals.css
 │   ├── Dockerfile
 │   ├── next.config.ts
 │   └── package.json
 │
-├── docker-compose.yml
-└── README.md
+├── tests/                     # Automated Test Suite (200/200 Tests)
+│   ├── unit/                  # Schemas, tools, configurations
+│   ├── integration/           # Auth lifecycle, JWT, API keys, webhooks
+│   ├── security/              # SQL injection, filesystem sandbox, AST math security
+│   ├── rag/                   # Knowledge Graph, BM25Okapi, Semantic Cache
+│   ├── agents/                # DAG topological engine, cycle detection, personas
+│   └── routing/               # Evals engine, Model Arena Elo, dynamic model router
+│
+├── docker-compose.yml         # Containerized production stack configuration
+├── GUIDE.md                   # Comprehensive platform user manual
+└── README.md                  # Project documentation
 ```
 
 ---
 
 <div align="center">
-  <p>Engineered with zero third-party cloud dependencies for private, high-performance AI orchestration.</p>
+  <sub>Built for high-performance, air-gapped, sovereign AI orchestration.</sub>
 </div>
