@@ -54,9 +54,21 @@ export async function streamChat(
           try {
             const parsed = JSON.parse(dataStr);
             if (parsed.type === "token") {
-              onChunk(parsed.token);
-            } else if (parsed.type === "tool_result" || parsed.type === "tool_start" || parsed.type === "thought") {
+              onChunk(parsed.token ?? parsed.content ?? "");
+            } else if (parsed.type === "tool_result" || parsed.type === "tool_start" || parsed.type === "thought" || parsed.type === "tool_error" || parsed.type === "error") {
               onToolStep?.(parsed as ToolStepEvent);
+            } else if (parsed.type === "tool") {
+              const toolName = parsed.model || parsed.tool || "tool";
+              const resultVal = parsed.response ?? parsed.result ?? "";
+              onToolStep?.({
+                type: "tool_result",
+                tool: toolName,
+                result: resultVal,
+                elapsed_ms: parsed.latency_ms,
+              });
+              if (resultVal) {
+                onChunk(typeof resultVal === "string" ? resultVal : JSON.stringify(resultVal));
+              }
             } else if (parsed.type === "done") {
               onMetadata(parsed);
             }

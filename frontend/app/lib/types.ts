@@ -99,7 +99,7 @@ export interface ToolSummary {
 }
 
 export interface ToolStepEvent {
-  type: "thought" | "tool_start" | "tool_result" | "token" | "done" | "error";
+  type: "thought" | "tool_start" | "tool_result" | "token" | "done" | "error" | "tool_error";
   content?: string;
   tool?: string;
   input?: Record<string, any>;

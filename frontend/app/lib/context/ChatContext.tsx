@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useCallback, useRef, useMemo } from "react";
-import { ChatMessage, UploadedDocument } from "../types";
+import { ChatMessage, UploadedDocument, ToolStepEvent } from "../types";
 import { streamChat, getChatMessages, appendChatMessage } from "../api/chat";
 import { createConversation, getConversation, updateConversationSettings } from "../api/conversations";
 import { listDocuments, reassignDocumentSession } from "../api/documents";
@@ -311,11 +311,38 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             const lastMsg = prev[prev.length - 1];
             if (lastMsg && lastMsg.id === assistantId) {
               const currentSteps = lastMsg.toolSteps || [];
+              let mergedSteps: ToolStepEvent[];
+
+              if (toolStep.type === "tool_result" || toolStep.type === "error" || toolStep.type === "tool_error") {
+                let pendingIndex = -1;
+                for (let i = currentSteps.length - 1; i >= 0; i--) {
+                  if (currentSteps[i].tool === toolStep.tool && currentSteps[i].result === undefined) {
+                    pendingIndex = i;
+                    break;
+                  }
+                }
+                if (pendingIndex !== -1) {
+                  mergedSteps = [...currentSteps];
+                  mergedSteps[pendingIndex] = {
+                    ...mergedSteps[pendingIndex],
+                    ...toolStep,
+                    input: mergedSteps[pendingIndex].input || toolStep.input,
+                    result: toolStep.result,
+                    elapsed_ms: toolStep.elapsed_ms ?? mergedSteps[pendingIndex].elapsed_ms,
+                    message: toolStep.message,
+                  };
+                } else {
+                  mergedSteps = [...currentSteps, toolStep];
+                }
+              } else {
+                mergedSteps = [...currentSteps, toolStep];
+              }
+
               const newPrev = [...prev];
               newPrev[newPrev.length - 1] = {
                 ...lastMsg,
                 content: fullResponse,
-                toolSteps: [...currentSteps, toolStep],
+                toolSteps: mergedSteps,
               };
               return newPrev;
             }

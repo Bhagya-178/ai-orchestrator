@@ -116,6 +116,18 @@ class ToolDetector:
         if calculator_hit:
             return calculator_hit
 
+        code_hit = self._detect_code_runner(text)
+        if code_hit:
+            return code_hit
+
+        web_hit = self._detect_web_search(text)
+        if web_hit:
+            return web_hit
+
+        math_hit = self._detect_advanced_math(text)
+        if math_hit:
+            return math_hit
+
         return None
 
     def detect_rag(self, message: str) -> bool:
@@ -180,6 +192,68 @@ class ToolDetector:
             "intent": "reasoning",
             "task_type": "mathematics",
         }
+
+    def _detect_code_runner(self, text: str) -> dict[str, Any] | None:
+        m = re.match(
+            r"^\s*(?:run\s+(?:this\s+)?(?:python(?:\s+code)?|code|script)|execute\s+(?:this\s+)?(?:python(?:\s+code)?|code|script)|eval\s+python|python(?:\s+interpreter)?)\s*:\s*(.+)$",
+            text,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if m:
+            code = m.group(1).strip()
+            code = re.sub(r"^```(?:python)?\s*|\s*```$", "", code, flags=re.DOTALL).strip()
+            if code:
+                return {
+                    "needs_tool": True,
+                    "tool_name": "code_runner",
+                    "tool_args": {"code": code},
+                    "intent": "coding",
+                    "task_type": "code_generation",
+                }
+        return None
+
+    def _detect_web_search(self, text: str) -> dict[str, Any] | None:
+        m = re.match(
+            r"^\s*(?:search\s+(?:the\s+web|online|the\s+internet)\s+for|web\s+search(?:\s+for)?|google|look\s+up\s+online\s+for)\s+(.+)$",
+            text,
+            re.IGNORECASE,
+        )
+        if m:
+            query = m.group(1).strip().rstrip("?.")
+            if query:
+                return {
+                    "needs_tool": True,
+                    "tool_name": "web_search",
+                    "tool_args": {"query": query},
+                    "intent": "general",
+                    "task_type": "conversation",
+                }
+        return None
+
+    def _detect_advanced_math(self, text: str) -> dict[str, Any] | None:
+        m = re.match(r"^\s*(?:advanced\s+math|math)\s*:\s*(.+)$", text, re.IGNORECASE)
+        if m:
+            expr = m.group(1).strip().rstrip("?.")
+            if expr:
+                return {
+                    "needs_tool": True,
+                    "tool_name": "math_tool",
+                    "tool_args": {"expression": expr},
+                    "intent": "reasoning",
+                    "task_type": "mathematics",
+                }
+
+        if any(fn in text.lower() for fn in ("sqrt(", "factorial(", "sin(", "cos(", "tan(", "log(")):
+            candidate = self._MATH_PREFIX.sub("", text).strip().rstrip("?.").rstrip()
+            if any(ch.isdigit() for ch in candidate):
+                return {
+                    "needs_tool": True,
+                    "tool_name": "math_tool",
+                    "tool_args": {"expression": candidate},
+                    "intent": "reasoning",
+                    "task_type": "mathematics",
+                }
+        return None
 
 
 tool_detector = ToolDetector()

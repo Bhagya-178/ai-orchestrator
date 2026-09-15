@@ -18,6 +18,7 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
   const [copiedMessage, setCopiedMessage] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(message.content || "");
+  const [isThoughtsExpanded, setIsThoughtsExpanded] = useState(false);
 
   const { resolvedTheme } = useTheme();
   const { editMessage, regenerateLastResponse, isGenerating } = useChat();
@@ -229,20 +230,55 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
             </div>
           ) : (
             <>
-              {/* Tool steps (swarm / react) */}
+              {/* Tool steps (swarm / react / thoughts) */}
               {message.toolSteps && message.toolSteps.length > 0 &&
                 (() => {
+                  const thoughtSteps = message.toolSteps.filter(
+                    (s) => s.type === "thought" || (!s.tool && s.content)
+                  );
                   const agentSteps = message.toolSteps.filter((s) =>
                     s.tool?.startsWith("agent:")
                   );
                   const otherSteps = message.toolSteps.filter(
-                    (s) => !s.tool?.startsWith("agent:")
+                    (s) => s.tool && !s.tool.startsWith("agent:") && s.type !== "thought"
                   );
                   return (
                     <div className="flex flex-col gap-2 mb-3 w-full">
+                      {/* Thought / Reasoning section */}
+                      {thoughtSteps.length > 0 && (
+                        <div className="rounded-xl border border-[var(--border)] bg-black/[0.02] dark:bg-white/[0.02] text-xs overflow-hidden">
+                          <button
+                            onClick={() => setIsThoughtsExpanded(!isThoughtsExpanded)}
+                            className="w-full flex items-center justify-between px-3 py-1.5 text-left text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                              <span className="font-medium text-[11px]">
+                                {isGenerating ? "Reasoning in progress..." : `Reasoning process (${thoughtSteps.length})`}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-gray-400">
+                              {isThoughtsExpanded ? "Hide" : "Show"}
+                            </span>
+                          </button>
+                          {isThoughtsExpanded && (
+                            <div className="px-3 py-2 border-t border-[var(--border)] bg-black/[0.015] dark:bg-white/[0.01] space-y-1.5 text-[11px] text-[var(--muted)] font-mono">
+                              {thoughtSteps.map((t, idx) => (
+                                <p key={idx} className="leading-relaxed whitespace-pre-wrap">
+                                  {t.content || t.message || ""}
+                                </p>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Agent swarm cards */}
                       {agentSteps.length > 0 && (
                         <AgentSwarmCard steps={agentSteps} isGenerating={isGenerating} />
                       )}
+
+                      {/* External tool cards */}
                       {otherSteps.map((step, idx) => (
                         <ToolExecutionCard key={idx} step={step} />
                       ))}

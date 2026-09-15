@@ -24,14 +24,14 @@ class ToolService:
         """
         Execute a tool by name, validating it against the registered set.
         """
-        if tool_name not in self._available_tools:
+        tool = self.registry.get(tool_name)
+        if not tool:
             logger.warning("Attempted to execute unknown tool: %s", tool_name)
             # Unknown tool (e.g. the classifier hallucinated a name): not
             # a real execution, so signal "no tool" so the pipeline falls
             # back to the LLM instead of answering with this error.
             return None
 
-        tool = self._available_tools[tool_name]
         logger.info("Executing tool: %s with arguments: %s", tool_name, kwargs)
         
         try:

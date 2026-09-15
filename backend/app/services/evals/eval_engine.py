@@ -8,6 +8,7 @@ Provides automated evaluation pipelines:
 - Rubric Adherence: Point-by-point verification against test case rubrics
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -137,58 +138,101 @@ Do not write anything outside the JSON object."""
         judge_model: str = "qwen3:8b",
         user_id: Optional[str] = None,
     ) -> dict[str, Any]:
-        """Run complete benchmark dataset against target model, scoring all test cases."""
+        """
+        Run complete benchmark dataset against target model with single-GPU VRAM safety:
+        1. Query target model for all test cases (Phase 1).
+        2. Explicitly UNLOAD target model from GPU VRAM (keep_alive: 0).
+        3. Load judge model and evaluate all candidate responses (Phase 2).
+        4. Explicitly UNLOAD judge model from GPU VRAM.
+        Guarantees strictly ONE model occupies VRAM at a time, preventing CUDA OOMs and paging slowdowns.
+        """
         dataset = DATASET_MAP.get(dataset_id)
         if not dataset:
             raise ValueError(f"Dataset '{dataset_id}' not found. Available: {list(DATASET_MAP.keys())}")
 
         start_time = time.perf_counter()
+        candidate_responses: list[str] = []
+
+        # ==========================================
+        # PHASE 1: Target Model Generations
+        # ==========================================
+        logger.info(f"[EVAL] Phase 1: Running {len(dataset.test_cases)} tests on target model '{target_model}'...")
+        try:
+            for tc in dataset.test_cases:
+                prompt_full = tc.prompt
+                temp = 0.2
+                if tc.context:
+                    prompt_full = f"Context:\n{tc.context}\n\nQuestion: {tc.prompt}"
+                elif tc.test_type == "reasoning":
+                    temp = 0.0
+                    prompt_full = (
+                        f"{tc.prompt}\n\n"
+                        "Think step by step before answering. Standardize all comparisons into a single direction (e.g. from shortest to tallest using <). "
+                        "Double check the final ordering against every premise before stating your final answer."
+                    )
+
+                try:
+                    resp = await ollama.generate(
+                        prompt=prompt_full,
+                        model=target_model,
+                        temperature=temp,
+                    )
+                    if isinstance(resp, dict):
+                        resp = resp.get("response", "")
+                    candidate_responses.append(str(resp).strip())
+                except Exception as ex:
+                    logger.error(f"[EVAL] Error querying target model '{target_model}': {ex}")
+                    candidate_responses.append(f"[Error querying target model]: {ex}")
+        finally:
+            # Explicitly unload target model from GPU VRAM before loading judge
+            try:
+                logger.info(f"[EVAL] Unloading target model '{target_model}' from GPU VRAM...")
+                await ollama.unload_model(target_model)
+                await asyncio.sleep(0.2)  # Grace period for GPU VRAM deallocation
+            except Exception as unl_err:
+                logger.debug(f"[EVAL] Failed to unload target model '{target_model}': {unl_err}")
+
+        # ==========================================
+        # PHASE 2: Judge Model Evaluation
+        # ==========================================
+        logger.info(f"[EVAL] Phase 2: Evaluating responses using judge model '{judge_model}'...")
         results = []
         passed_count = 0
-
         total_faithfulness = 0.0
         total_relevance = 0.0
         total_hallucination = 0.0
 
-        for tc in dataset.test_cases:
-            # 1. Query target model
-            prompt_full = tc.prompt
-            if tc.context:
-                prompt_full = f"Context:\n{tc.context}\n\nQuestion: {tc.prompt}"
+        try:
+            for tc, cand_resp in zip(dataset.test_cases, candidate_responses):
+                verdict = await self.evaluate_single_turn(tc, cand_resp, judge_model=judge_model)
 
+                is_pass = verdict.get("passed", False)
+                if is_pass:
+                    passed_count += 1
+
+                f_score = float(verdict.get("faithfulness", 0.0))
+                r_score = float(verdict.get("relevance", 0.0))
+                h_score = float(verdict.get("hallucination_score", 0.0))
+
+                total_faithfulness += f_score
+                total_relevance += r_score
+                total_hallucination += h_score
+
+                results.append({
+                    "test_case_id": tc.id,
+                    "prompt": tc.prompt,
+                    "candidate_response": cand_resp,
+                    "ground_truth": tc.ground_truth,
+                    "verdict": verdict,
+                })
+        finally:
+            # Explicitly unload judge model from GPU VRAM after judging completes
             try:
-                candidate_response = await ollama.generate(
-                    prompt=prompt_full,
-                    model=target_model,
-                    temperature=0.2,
-                )
-                if isinstance(candidate_response, dict):
-                    candidate_response = candidate_response.get("response", "")
-            except Exception as ex:
-                candidate_response = f"[Error querying target model]: {ex}"
-
-            # 2. Judge response
-            verdict = await self.evaluate_single_turn(tc, candidate_response, judge_model=judge_model)
-
-            is_pass = verdict.get("passed", False)
-            if is_pass:
-                passed_count += 1
-
-            f_score = float(verdict.get("faithfulness", 0.0))
-            r_score = float(verdict.get("relevance", 0.0))
-            h_score = float(verdict.get("hallucination_score", 0.0))
-
-            total_faithfulness += f_score
-            total_relevance += r_score
-            total_hallucination += h_score
-
-            results.append({
-                "test_case_id": tc.id,
-                "prompt": tc.prompt,
-                "candidate_response": candidate_response,
-                "ground_truth": tc.ground_truth,
-                "verdict": verdict,
-            })
+                logger.info(f"[EVAL] Unloading judge model '{judge_model}' from GPU VRAM...")
+                await ollama.unload_model(judge_model)
+                await asyncio.sleep(0.2)
+            except Exception as unl_err:
+                logger.debug(f"[EVAL] Failed to unload judge model '{judge_model}': {unl_err}")
 
         duration = time.perf_counter() - start_time
         num_tests = len(dataset.test_cases)

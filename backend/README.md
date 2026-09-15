@@ -20,9 +20,9 @@ The backend serves as the deterministic orchestration engine for private, local 
   - `ReviewerAgent`: Security auditing, edge-case analysis, input sanitization, and bug detection.
   - `CriticAgent`: Multi-source synthesis, constraint validation, and quality scorecard deliverable.
 - **Dynamic Effort Scaling & Token Budgeting (`effort_level: 'low' | 'medium' | 'high'`)**:
-  - *⚡ Low Effort*: Dynamically prunes non-essential QA/Critic nodes from the DAG, executing only core roles (`planner`, `coder`, `researcher`) with a 600-token budget and concise implementation directives to return verified code deliverables in ~20 seconds.
-  - *⚖️ Medium Effort*: Runs the standard full 5-agent DAG wave topology (`planner` $\rightarrow$ `backend coder` $\rightarrow$ `frontend coder` $\rightarrow$ `reviewer` $\rightarrow$ `critic`) with a 1200-token budget per agent in ~60 seconds.
-  - *🧠 High Effort & Autonomous Reflection Loop*: Allocates a 2500-token budget, executes the full 5-agent DAG, inspects the Reviewer's security audit for vulnerabilities or bugs, and if findings are detected, automatically launches an autonomous `security_patch_loop` node with the Coder Agent to patch and harden the code before final delivery.
+  - *⚡ Low Effort*: Dynamically prunes non-essential QA/Critic nodes from the DAG, executing only core roles (`planner`, `coder`) with minimal iterations and full context window (16K context & 8K generation) to return verified code deliverables without token cutoffs.
+  - *⚖️ Medium Effort*: Runs the standard full 5-agent sequential DAG topology (`planner` $\rightarrow$ `backend coder` $\rightarrow$ `frontend coder` $\rightarrow$ `reviewer` $\rightarrow$ `critic`) with full context window and comprehensive code generation.
+  - *🧠 High Effort & Autonomous Reflection Loops*: Executes the full 5-agent sequence PLUS 2 autonomous reflection loops (Remediation Patch loop with Coder $\rightarrow$ Quality Gate Verification loop with Reviewer) with full context window.
 - **Single-GPU Sequential Execution & Optimization**:
   - Waves execute sequentially against local Ollama, ensuring 100% of GPU resources and memory bandwidth are allocated to one model at a time.
   - Prompt de-duplication prevents re-injecting upstream deliverables into context if already substituted in the node prompt template, cutting prompt ingestion latency in half.

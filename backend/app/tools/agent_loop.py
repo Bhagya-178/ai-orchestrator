@@ -11,6 +11,7 @@ import time
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from app.agents.roles import _agent_gpu_lock
 from app.ollama_client import ollama
 from app.tools.registry import tool_registry
 
@@ -105,7 +106,10 @@ class ReActAgent:
         iteration = 0
 
         clean_effort = effort_level.lower() if effort_level else "medium"
-        max_iters = EFFORT_ITERATIONS.get(clean_effort, self.max_iterations)
+        if self.max_iterations != 5:
+            max_iters = self.max_iterations
+        else:
+            max_iters = EFFORT_ITERATIONS.get(clean_effort, self.max_iterations)
         temperature = EFFORT_TEMPERATURE.get(clean_effort, 0.2)
 
         logger.info(f"Starting ReAct loop ({clean_effort} effort, {max_iters} iters) for model '{model}' with tools [{tool_names}]")
@@ -124,13 +128,20 @@ class ReActAgent:
             )
 
             response_text = ""
-            async for chunk in ollama.generate_stream(
-                model=model,
-                prompt=prompt,
-                options={"temperature": temperature, "stop": ["\nObservation:"]},
-            ):
-                token = chunk.get("response", "")
-                response_text += token
+            gen_opts = {
+                "temperature": temperature,
+                "num_ctx": 16384,
+                "num_predict": 8192,
+                "stop": ["\nObservation:"],
+            }
+            async with _agent_gpu_lock:
+                async for chunk in ollama.generate_stream(
+                    model=model,
+                    prompt=prompt,
+                    options=gen_opts,
+                ):
+                    token = chunk.get("response", "")
+                    response_text += token
 
             step_text = f"Thought:{response_text}"
             scratchpad += f"\n{step_text.strip()}"
@@ -156,9 +167,8 @@ class ReActAgent:
                 return
 
             tool_name = action_match.group(1).strip()
-            # If the LLM output a generic placeholder like "tool" or an unknown tool name,
-            # don't emit a bogus tool call or waste time looping. Treat the answer directly.
-            if tool_name.lower() in ("tool", "none", "null", "undefined") or not tool_registry.get(tool_name):
+            # If the LLM output a generic placeholder like "tool", treat answer directly
+            if tool_name.lower() in ("tool", "none", "null", "undefined"):
                 clean_text = step_text.replace("Thought:", "").split("Action:")[0].strip()
                 if not clean_text:
                     clean_text = response_text.replace("Thought:", "").strip()
@@ -166,6 +176,18 @@ class ReActAgent:
                     yield {"type": "token", "content": clean_text}
                 yield {"type": "done", "total_steps": iteration, "tools_used": tools_used}
                 return
+
+            if not tool_registry.get(tool_name):
+                # Unknown tool: return observation so loop can recover
+                obs_err = f"Tool '{tool_name}' is not registered."
+                yield {
+                    "type": "tool_result",
+                    "tool": tool_name,
+                    "result": obs_err,
+                    "elapsed_ms": 0.0,
+                }
+                scratchpad += f"\nObservation: {obs_err}"
+                continue
 
             raw_input = action_input_match.group(1).strip() if action_input_match else "{}"
 

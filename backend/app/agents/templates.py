@@ -10,49 +10,95 @@ TEMPLATES: list[WorkflowDefinition] = [
     WorkflowDefinition(
         id="fullstack_feature",
         name="Full-Stack Production Feature",
-        description="Deconstructs a user story, develops backend and frontend concurrently, performs security audit, and synthesizes final artifact.",
+        description="Sequential single-agent pipeline using qwen2.5-coder:7b: architecture plan -> backend -> frontend -> QA audit -> final synthesis package.",
         nodes=[
             WorkflowNode(
                 id="architect_plan",
-                name="Architecture & API Specification",
+                name="Architecture & Implementation Plan",
                 role="planner",
-                task="Analyze the user requirement: '{{input}}'. Produce an architectural breakdown, data schemas, API contracts, and edge cases.",
+                task=(
+                    "Analyze the user requirement: '{{input}}'. Produce an end-to-end enterprise architecture specification:\n"
+                    "1) System topology & data flow diagram (ASCII component map).\n"
+                    "2) Relational / document database models with primary keys, indexes, foreign keys, and relations.\n"
+                    "3) REST API endpoints with HTTP verbs, request/response schemas, and auth requirements.\n"
+                    "4) Frontend state flow and component hierarchy.\n"
+                    "5) Concurrency, transaction rollback, and edge-case mitigations.\n"
+                    "Directly design the complete system from first principles. Do NOT call file tools or search for local files."
+                ),
                 depends_on=[],
+                model="qwen2.5-coder:7b",
             ),
             WorkflowNode(
                 id="backend_implementation",
                 name="Backend Engine & DB Models",
                 role="coder",
-                task="Based on the specification:\n{{architect_plan.output}}\nWrite the FastAPI routes, SQLAlchemy models, and service logic.",
+                task=(
+                    "Implement the complete, production-grade backend engine for the architecture specification:\n"
+                    "{{architect_plan.output}}\n\n"
+                    "Mandatory Standards (Claude 3.5 Sonnet Standard):\n"
+                    "- Modern Async FastAPI + SQLAlchemy 2.0 (AsyncSession, select, await execute). NO synchronous blocking db.query() in async routes.\n"
+                    "- Real Security: Use passlib.context.CryptContext(schemes=['bcrypt']) for password hashing. Real JWT auth dependency (get_current_user). NO fake hashes or hardcoded user IDs (e.g. user_id=1).\n"
+                    "- Full CRUD with relational models, Pydantic v2 schemas (from_attributes=True), and defensive error handling (HTTPException).\n"
+                    "- Complete requirements.txt with all required packages and pinned versions.\n"
+                    "Provide complete, copy-paste ready code without truncation."
+                ),
                 depends_on=["architect_plan"],
+                model="qwen2.5-coder:7b",
             ),
             WorkflowNode(
                 id="frontend_implementation",
                 name="Next.js React UI & Client",
                 role="coder",
-                task="Based on the specification:\n{{architect_plan.output}}\nWrite the React TypeScript component, state management, and API client integration.",
-                depends_on=["architect_plan"],
+                task=(
+                    "Implement the production-ready React TypeScript frontend matching the backend API and architecture:\n"
+                    "Backend API & Schemas:\n{{backend_implementation.output}}\n\n"
+                    "Mandatory Standards (Claude 3.5 Sonnet Standard):\n"
+                    "- Modern React 18+ (Vite or Next.js App Router style, clean TypeScript interfaces).\n"
+                    "- Zero Keystroke API Spam: ALL mutations (POST/PUT/DELETE) MUST be bound to explicit form onSubmit or button onClick event handlers. NEVER trigger network requests inside useEffect dependency arrays!\n"
+                    "- Complete package.json with ALL imported dependencies listed (e.g., axios/lucide-react if used).\n"
+                    "- Resilient UI: Loading spinners, error alerts, disabled button states during network requests, and input resets.\n"
+                    "Provide complete, copy-paste ready code without truncation."
+                ),
+                depends_on=["backend_implementation"],
+                model="qwen2.5-coder:7b",
             ),
             WorkflowNode(
                 id="security_qa_review",
                 name="Security & Edge Case Audit",
                 role="reviewer",
-                task="Audit both backend and frontend implementations for SQLi, XSS, race conditions, and error handling:\nBackend:\n{{backend_implementation.output}}\n\nFrontend:\n{{frontend_implementation.output}}",
-                depends_on=["backend_implementation", "frontend_implementation"],
+                task=(
+                    "Audit both backend and frontend implementations for security vulnerabilities, race conditions, and React anti-patterns:\n"
+                    "Backend Code:\n{{backend_implementation.output}}\n\n"
+                    "Frontend Code:\n{{frontend_implementation.output}}\n\n"
+                    "Review Checklist:\n"
+                    "1. Authentication, password hashing, and token extraction (flag any fake hashes or hardcoded user IDs).\n"
+                    "2. Concurrency, race conditions, and SQL injection prevention.\n"
+                    "3. React state & lifecycle: Verify no mutating API calls exist in useEffect dependency arrays.\n"
+                    "4. Dependency manifests: Verify package.json and requirements.txt include all imported libraries.\n"
+                    "Output an authoritative Security & Quality Clearance Report with exact code remediation snippets if issues exist."
+                ),
+                depends_on=["frontend_implementation"],
+                model="qwen2.5-coder:7b",
             ),
             WorkflowNode(
                 id="final_delivery_synthesis",
                 name="Synthesis & Release Package",
                 role="critic",
-                task="Synthesize the complete feature deliverable into a unified documentation and release artifact:\nReviewer Notes:\n{{security_qa_review.output}}",
+                task=(
+                    "Synthesize the complete feature deliverable into a unified release package and production deployment runbook:\n"
+                    "Architecture Plan:\n{{architect_plan.output}}\n\n"
+                    "Security Audit:\n{{security_qa_review.output}}\n\n"
+                    "Format as an Executive Release Package: Verification Matrix, Architecture Overview, Docker & Database Setup Commands, and Production Runbook."
+                ),
                 depends_on=["security_qa_review"],
+                model="qwen2.5-coder:7b",
             ),
         ],
     ),
     WorkflowDefinition(
         id="deep_research",
         name="Deep Grounded Research & Fact-Check",
-        description="Explores a technical or scientific topic from multiple angles, cross-references citations, and formats an executive brief.",
+        description="Sequential exploration of a technical or scientific topic, cross-referencing citations and formatting an executive brief.",
         nodes=[
             WorkflowNode(
                 id="research_plan",
@@ -72,15 +118,15 @@ TEMPLATES: list[WorkflowDefinition] = [
                 id="counter_argument_analysis",
                 name="Counter-Evidence & Edge Cases",
                 role="researcher",
-                task="Actively search for counter-arguments, failure modes, and dissenting data regarding:\n{{research_plan.output}}",
-                depends_on=["research_plan"],
+                task="Actively search for counter-arguments, failure modes, and dissenting data regarding:\n{{evidence_gathering.output}}",
+                depends_on=["evidence_gathering"],
             ),
             WorkflowNode(
                 id="rigor_audit",
                 name="Factual Consistency Audit",
                 role="reviewer",
                 task="Cross-reference the evidence and counter-arguments. Flag any weak claims, logical leaps, or ungrounded statistics:\nEvidence:\n{{evidence_gathering.output}}\n\nCounter-Evidence:\n{{counter_argument_analysis.output}}",
-                depends_on=["evidence_gathering", "counter_argument_analysis"],
+                depends_on=["counter_argument_analysis"],
             ),
             WorkflowNode(
                 id="executive_whitepaper",
@@ -116,6 +162,7 @@ TEMPLATES: list[WorkflowDefinition] = [
                 role="coder",
                 task="Implement bulletproof patches, input sanitizers, parameterized queries, and defensive guards for the discovered vulnerabilities:\n{{vulnerability_scan.output}}",
                 depends_on=["vulnerability_scan"],
+                model="qwen2.5-coder:7b",
             ),
             WorkflowNode(
                 id="compliance_verification",

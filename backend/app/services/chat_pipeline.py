@@ -95,14 +95,13 @@ class ChatPipeline:
         ):
             if event["type"] == "clarification":
                 yield f"data: {json.dumps({'type': 'clarification', 'questions': event['questions']})}\n\n"
-            elif event["type"] in ("thought", "tool_start"):
-                yield f"data: {json.dumps(event)}\n\n"
-            elif event["type"] == "tool_result":
+            elif event["type"] in ("thought", "tool_start", "tool_result"):
                 yield f"data: {json.dumps(event)}\n\n"
             elif event["type"] == "tool":
                 tool_name = event.get("model", "tool")
                 yield f"data: {json.dumps({'type': 'tool_result', 'tool': tool_name, 'result': event['response'], 'elapsed_ms': event.get('latency_ms')})}\n\n"
                 yield f"data: {json.dumps({'type': 'token', 'token': event['response']})}\n\n"
+                yield f"data: {json.dumps({'type': 'done', 'intent': event.get('intent', 'tool'), 'model': tool_name, 'latency_ms': event.get('latency_ms', 0), 'response': event['response']})}\n\n"
             elif event["type"] == "token":
                 yield f"data: {json.dumps({'type': 'token', 'token': event.get('token', event.get('content', ''))})}\n\n"
             elif event["type"] == "done":
@@ -175,26 +174,46 @@ class ChatPipeline:
             }
             return
 
-        tool_result = None
-        if not processed.get("needs_rag", False):
-            tool_result = await self._execute_tool(processed)
-
-        if tool_result is not None:
-            response = str(tool_result.get("result", tool_result.get("error", "")))
-            try:
-                await memory_service.add_message(db, session_id, "user", message)
-                await memory_service.add_message(db, session_id, "assistant", response)
-            except Exception as e:
-                logger.error(f"Failed to add tool messages to memory: {e}")
-
+        if processed.get("needs_tool") and not processed.get("needs_rag", False):
+            tool_name = processed.get("tool_name", "tool")
+            tool_args = processed.get("tool_args", {})
             yield {
-                "type": "tool",
-                "intent": processed["intent"],
-                "model": tool_result.get("tool", ""),
-                "latency_ms": round((time.perf_counter() - start_total) * 1000, 2),
-                "response": response,
+                "type": "tool_start",
+                "tool": tool_name,
+                "input": tool_args,
             }
-            return
+
+            t0_tool = time.perf_counter()
+            tool_result = await self._execute_tool(processed)
+            dur_tool_ms = round((time.perf_counter() - t0_tool) * 1000, 2)
+
+            if tool_result is not None:
+                res_val = tool_result.get("result", tool_result.get("error", ""))
+                yield {
+                    "type": "tool_result",
+                    "tool": tool_name,
+                    "result": res_val,
+                    "elapsed_ms": dur_tool_ms,
+                }
+                response = str(res_val)
+                total_dur_ms = round((time.perf_counter() - start_total) * 1000, 2)
+                try:
+                    await memory_service.add_message(db, session_id, "user", message)
+                    await memory_service.add_message(db, session_id, "assistant", response)
+                except Exception as e:
+                    logger.error(f"Failed to add tool messages to memory: {e}")
+
+                yield {"type": "token", "token": response}
+                yield {
+                    "type": "done",
+                    "intent": processed.get("intent", "tool"),
+                    "model": tool_name,
+                    "latency_ms": total_dur_ms,
+                    "response": response,
+                    "tools_used": [tool_name],
+                    "total_steps": 1,
+                }
+                return
 
         needs_rag = processed.get("needs_rag", False)
         should_search_rag = bool(session_docs) and use_rag
@@ -203,11 +222,7 @@ class ChatPipeline:
             routing, routing_latency_ms = await self._run_router(processed)
             model = routing["model"]
         elif should_search_rag:
-            # If user selected low effort without explicit model, pick fast processor model
-            if effort_level == "low":
-                model = settings.PROCESSOR_MODEL or "qwen2.5:1.5b"
-            else:
-                model = settings.RAG_MODEL
+            model = settings.RAG_MODEL
             routing_latency_ms = 0.0
         else:
             routing, routing_latency_ms = await self._run_router(processed)
@@ -244,7 +259,11 @@ class ChatPipeline:
             )
 
             # Ensure model passed to workflow engine is a real LLM model
-            workflow_model = model if (model and not model.startswith("workflow:")) else "qwen2.5-coder:7b"
+            # For fullstack and coding workflows, strictly use qwen2.5-coder:7b so only ONE model is loaded in VRAM
+            if template_key in ("fullstack", "fullstack_feature") or (workflow and "fullstack" in workflow.id.lower()):
+                workflow_model = "qwen2.5-coder:7b"
+            else:
+                workflow_model = model if (model and not model.startswith("workflow:")) else "qwen2.5-coder:7b"
 
             if workflow:
                 yield {
@@ -274,13 +293,15 @@ class ChatPipeline:
                         role = evt.get("role", "")
                         yield {
                             "type": "tool_start",
-                            "tool": f"agent:{role}",
+                            "tool": f"agent:{nid}",
                             "input": {"node": name, "role": role, "node_id": nid},
                             "iteration": node_count + 1,
                         }
                     elif etype == "node_complete":
                         node_count += 1
                         nid = evt.get("node_id", "")
+                        name = evt.get("name", nid)
+                        role = evt.get("role", "")
                         output = evt.get("output", "")
                         duration = evt.get("duration_ms", 0.0)
                         collected_outputs[nid] = output
@@ -288,6 +309,7 @@ class ChatPipeline:
                         yield {
                             "type": "tool_result",
                             "tool": f"agent:{nid}",
+                            "input": {"node": name, "role": role, "node_id": nid},
                             "result": output[:350] + ("..." if len(output) > 350 else ""),
                             "elapsed_ms": duration,
                         }
@@ -309,16 +331,20 @@ class ChatPipeline:
                         err_chunk = f"### ⚠️ [{nid.upper()}] Agent Issue ({duration:.0f}ms)\n\n> {err}\n\n---\n\n"
                         full_summary += err_chunk
                         yield {"type": "token", "token": err_chunk}
+                    elif etype in ("tool_start", "tool_result", "thought"):
+                        yield evt
                     elif etype == "workflow_error":
                         err = evt.get("error", "Workflow error")
                         err_chunk = f"\n\n> ❌ **Workflow Execution Error**: {err}\n"
                         full_summary += err_chunk
                         yield {"type": "token", "token": err_chunk}
-                    elif etype == "thought":
-                        yield evt
                     elif etype == "workflow_complete":
                         final_out = evt.get("final_output", "")
-                        if final_out:
+                        # Prevent duplicate code printing: Only stream synthesis if final_out is not
+                        # an exact duplicate of the last streamed agent node output.
+                        last_nid = list(collected_outputs.keys())[-1] if collected_outputs else ""
+                        last_out = collected_outputs.get(last_nid, "").strip()
+                        if final_out and final_out.strip() != last_out:
                             synthesis_chunk = f"### 🎯 Final Evaluation & Synthesis\n\n{final_out}\n"
                             full_summary += synthesis_chunk
                             yield {"type": "token", "token": synthesis_chunk}
@@ -472,36 +498,30 @@ class ChatPipeline:
             for w in ("summary", "summarize", "overview", "report", "detail", "outline", "breakdown", "explain all", "summery")
         )
 
-        generation_options: dict[str, Any] = {}
+        generation_options: dict[str, Any] = {
+            "num_ctx": 16384,
+            "num_predict": 8192,
+        }
 
         if should_search_rag:
             if effort_level == "low":
                 system_content += " Answer the question directly, concisely, and accurately based strictly on the provided document context."
-                generation_options["num_ctx"] = 8192
-                generation_options["num_predict"] = 1024
                 generation_options["temperature"] = 0.1
             elif effort_level in ("high", "max"):
                 system_content += " Answer thoroughly, comprehensively, and in detail based on the provided document context. Complete all sections, bullet points, and learning outcomes fully without truncating."
-                generation_options["num_ctx"] = 16384
-                generation_options["num_predict"] = 8192
                 generation_options["temperature"] = 0.2
             else:  # medium or default
                 system_content += " Answer clearly, accurately, and balanced based on the provided document context. Ensure all sections and points are completed fully without cutting off mid-sentence."
-                generation_options["num_ctx"] = 16384
-                generation_options["num_predict"] = 4096 if is_summary_request else 3072
                 generation_options["temperature"] = 0.2
         elif effort_level == "low":
-            system_content += " KEEP YOUR RESPONSE CONCISE AND BRIEF."
-            generation_options["num_ctx"] = 8192
-            generation_options["num_predict"] = 1024
+            system_content += " KEEP YOUR RESPONSE CONCISE AND FOCUSED ON THE ESSENTIAL SOLUTION."
+            generation_options["temperature"] = 0.1
         elif effort_level in ("high", "max"):
             system_content += " PROVIDE A VERY DETAILED, STEP-BY-STEP, COMPREHENSIVE ANSWER. SHOW ALL YOUR REASONING AND EXPLAIN THOROUGHLY. COMPLETE ALL SECTIONS FULLY."
-            generation_options["num_ctx"] = 16384
-            generation_options["num_predict"] = 8192
+            generation_options["temperature"] = 0.3
         else:  # medium or default
             system_content += " PROVIDE A BALANCED, THOROUGH ANSWER. EXPLAIN THE KEY POINTS CLEARLY AND SUCCINCTLY. COMPLETE ALL EXPLANATIONS FULLY."
-            generation_options["num_ctx"] = 16384
-            generation_options["num_predict"] = 4096 if is_summary_request else 3072
+            generation_options["temperature"] = 0.2
 
         messages.insert(0, {
             "role": "system",

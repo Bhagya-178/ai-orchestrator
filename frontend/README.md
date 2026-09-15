@@ -14,9 +14,9 @@ Designed with **Claude and ChatGPT parity**, the frontend provides a distraction
 ### 1. Minimalist Claude/ChatGPT Chat Feed & ReAct Telemetry
 - **Distraction-Free Chat**: Clean, uncluttered layout with responsive typography, smooth auto-scrolling with floating "scroll-to-bottom" pill, and empty-state starter prompts.
 - **Dynamic Effort Selector (`ChatComposer.tsx`)**:
-  - `⚡ Low (Fast · 2 iters)`: Quick single-action turn or pruned 3-agent swarm (600-token budget per agent) returning fullstack deliverables in ~20s.
-  - `⚖️ Medium (5 iters)`: Standard 3–5 step plan-action-observe loop or full 5-agent DAG (1200-token budget per agent) completing in ~60s.
-  - `🧠 High (10 iters + Reflection)`: Deep multi-tool execution chains (2500-token budget) with autonomous security reflection/patch loops.
+  - `⚡ Low (Fast · 2 iters)`: Quick single-action turn or pruned 2-agent swarm with full context window returning complete deliverables without truncation.
+  - `⚖️ Medium (5 iters)`: Standard 3–5 step plan-action-observe loop or full 5-agent sequential DAG with full context window.
+  - `🧠 High (10 iters + Reflection)`: Deep multi-tool execution chains or 7-iteration DAG with 2 self-healing reflection loops and full context window.
   - Passes dynamic effort state through `ChatContext` to `/chat/stream` with live reasoning budget telemetry.
 - **Immediate Live Swarm Token Streaming**:
   - Emits the workflow header immediately at $t = 0$.

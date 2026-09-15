@@ -1,8 +1,12 @@
 import asyncio
+import sys
 import httpx
 import uuid
 from app.main import app
 from app.ollama_client import ollama
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 
 async def run_tests():
     print("Running Backend Tests via ASGI...")

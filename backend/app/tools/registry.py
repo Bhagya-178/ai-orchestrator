@@ -23,10 +23,14 @@ class ToolRegistry:
         self.register(CalculatorTool())
         self.register(DateTimeTool())
         self.register(WebSearchTool())
-        self.register(PythonRunnerTool())
+        py_tool = PythonRunnerTool()
+        self.register(py_tool)
+        self._tools["code_runner"] = py_tool
         self.register(FileSystemTool())
         self.register(SQLQueryTool())
-        self.register(AdvancedMathTool())
+        math_tool = AdvancedMathTool()
+        self.register(math_tool)
+        self._tools["math_tool"] = math_tool
         self.register(ChartGeneratorTool())
         self.register(WebScraperTool())
 
@@ -39,8 +43,19 @@ class ToolRegistry:
         self._tools.pop(tool_name, None)
 
     def get(self, tool_name: str) -> BaseTool | None:
-        """Get a tool by name."""
-        return self._tools.get(tool_name)
+        """Get a tool by name with alias support."""
+        if tool_name in self._tools:
+            return self._tools[tool_name]
+        aliases = {
+            "code_runner": "python_interpreter",
+            "python_interpreter": "code_runner",
+            "math_tool": "advanced_math",
+            "advanced_math": "math_tool",
+        }
+        mapped = aliases.get(tool_name)
+        if mapped and mapped in self._tools:
+            return self._tools[mapped]
+        return None
 
     def list_tools(self) -> list[str]:
         """Return all registered tool names."""

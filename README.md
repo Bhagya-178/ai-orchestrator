@@ -51,52 +51,111 @@ Rather than treating Large Language Models as simple text completion endpoints, 
 
 ## 🏗️ System Architecture
 
+The entire architecture is designed with strict separation of concerns, single-GPU execution safety, sub-2ms cache acceleration, and zero external cloud dependencies.
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│               CLIENT LAYER (Next.js 16 + Turbopack + Tailwind)         │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌───────────────┐  │
+│  │ Chat Feed &  │ │ Canvas 2.0   │ │ Multi-Agent  │ │ Model Arena & │  │
+│  │ Tool Stepper │ │ Artifacts    │ │ DAG Studio   │ │ Evals Studio  │  │
+│  └──────────────┘ └──────────────┘ └──────────────┘ └───────────────┘  │
+│  ┌───────────────────────────────┐ ┌────────────────────────────────┐  │
+│  │ 2D Code Knowledge Graph       │ │ Developer Keys & Webhooks      │  │
+│  └───────────────────────────────┘ └────────────────────────────────┘  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ HTTP / SSE Token Streaming
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│            API GATEWAY & SECURITY CORE (FastAPI + Python 3.11)         │
+│  ┌───────────────────────────────┐ ┌────────────────────────────────┐  │
+│  │ Real-time SSE Token Router    │ │ JWT & Email OTP Auth (RBAC)    │  │
+│  ├───────────────────────────────┤ ├────────────────────────────────┤  │
+│  │ Deterministic Tool Classifier │ │ API Key Auth & HMAC-SHA256     │  │
+│  └───────────────────────────────┘ └────────────────────────────────┘  │
+└───────┬───────────────────────────┬────────────────────────────┬───────┘
+        │                           │                            │
+        ▼                           ▼                            ▼
+┌─────────────────────────┐ ┌───────────────────────────┐ ┌──────────────┐
+│  SEMANTIC VECTOR CACHE  │ │  MULTI-AGENT DAG ENGINE   │ │  REACT TOOL  │
+│  Exact SHA-256 Hash     │ │  Kahn's Topological Sort  │ │  LOOP (Plan, │
+│  Cosine Sim >= 0.92     │ │  Sequential Single-GPU    │ │  Act, Observe│
+│  Sub-2ms Cached Turn    │ │  Autonomous Reflection    │ │  Math,FS,Web)│
+└───────────┬─────────────┘ └─────────────┬─────────────┘ └──────┬───────┘
+            │ Cache Miss                  │                      │
+            └──────────────────────┐      │                      │
+                                   ▼      ▼                      ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│             HYBRID RETRIEVAL & INTELLIGENCE INFRASTRUCTURE             │
+│  ┌──────────────────────────────┐ ┌─────────────────────────────────┐  │
+│  │ Hybrid RAG 2.0 Engine        │ │ Code Knowledge Graph            │  │
+│  │ Dense Vectors + BM25Okapi    │ │ AST Tree Parser (Python / TS)   │  │
+│  │ Reciprocal Rank Fusion (RRF) │ │ PageRank Centrality Ranking     │  │
+│  └──────────────────────────────┘ └─────────────────────────────────┘  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│               PERSISTENCE & LOCAL RUNTIME LAYER                        │
+│  ┌──────────────────────────────┐ ┌─────────────────────────────────┐  │
+│  │ Local Ollama LLM Runtime     │ │ PostgreSQL 16 (Relational DB)   │  │
+│  │ qwen2.5-coder, qwen3, bge-m3 │ │ Users, Messages, Keys, Evals    │  │
+│  ├──────────────────────────────┤ ├─────────────────────────────────┤  │
+│  │ Qdrant Vector Database       │ │ BM25 Lexical & Topological Graph│  │
+│  │ Persistent HNSW Collections  │ │ Inverted Index & Memory Graph   │  │
+│  └──────────────────────────────┘ └─────────────────────────────────┘  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+<details>
+<summary><b>📊 Click to expand interactive Mermaid flowchart (Desktop / Web)</b></summary>
+
 ```mermaid
 graph TB
-    subgraph ClientLayer [Client Interface: Next.js 16 + Turbopack + TailwindCSS]
-        ChatUI[Claude/ChatGPT-Style Chat Feed & Live Tool Stepper]
-        CanvasStudio[Canvas Studio 2.0: Multi-Tab, Console, Diff & Pan/Zoom]
-        AgentStudio[Multi-Agent DAG Studio & In-Chat Swarm Card]
-        GraphVisualizer[Interactive 2D Knowledge Graph Visualizer]
-        DevPortal[Developer Platform: Scoped API Keys & Webhooks]
-        ArenaUI[Model Arena Split-Battle & LLM Evals Dashboard]
+    subgraph ClientLayer ["Client Interface: Next.js 16 + Turbopack + TailwindCSS"]
+        ChatUI["Chat Feed & Live Tool Stepper"]
+        CanvasStudio["Canvas Studio 2.0: Multi-Tab, Console & Diff"]
+        AgentStudio["Multi-Agent DAG Studio & Operations Hub"]
+        GraphVisualizer["Interactive 2D Knowledge Graph"]
+        DevPortal["Developer Platform: API Keys & Webhooks"]
+        ArenaUI["Model Arena Battles & Evals Dashboard"]
     end
 
-    subgraph GatewayLayer [API Gateway & Security Core: FastAPI]
-        Router[Main API & SSE Token Streaming Router]
-        AuthEngine[JWT Engine, Email OTP Verifier & RBAC]
-        DevAuth[API Key Scopes & HMAC-SHA256 Webhook Dispatcher]
-        Classifier[Intent Classifier & Effort Controller]
+    subgraph GatewayLayer ["API Gateway & Security Core: FastAPI"]
+        Router["Main API & SSE Token Streaming Router"]
+        AuthEngine["JWT Engine, Email OTP Verifier & RBAC"]
+        DevAuth["API Key Scopes & HMAC-SHA256 Webhooks"]
+        Classifier["Deterministic Classifier & Effort Controller"]
     end
 
-    subgraph ExecutionLayer [Reasoning & Agent Engine]
-        AgentDAG[Multi-Agent DAG Engine: Kahn's Toposort & Reflection Loop]
-        ReActLoop[ReAct Tool Loop: Multi-Step Plan-Action-Observe]
-        ToolEcosystem[Sandboxed Tools: SQL, FS, AST Math, Web Scraper, Chart.js]
-        MCPHub[Model Context Protocol Hub: Stdio & SSE JSON-RPC 2.0]
-        ArenaEngine[Model Arena & LLM-as-a-Judge Evaluation Engine]
+    subgraph ExecutionLayer ["Reasoning & Agent Engine"]
+        AgentDAG["Multi-Agent DAG Engine: Kahn's Toposort & Reflection"]
+        ReActLoop["ReAct Tool Loop: Multi-Step Plan-Action-Observe"]
+        ToolEcosystem["Sandboxed Tools: SQL, FS, AST Math, Web Search"]
+        MCPHub["Model Context Protocol Hub: Stdio & SSE"]
+        ArenaEngine["Model Arena & Benchmark Evaluation Engine"]
     end
 
-    subgraph IntelligenceLayer [Retrieval & Knowledge Infrastructure]
-        SemanticCache[Semantic Vector Cache: Exact Hash + Cosine Sim >= 0.92]
-        HybridRAG[Hybrid RAG 2.0: Dense Vector + BM25Okapi Sparse Lexical]
-        RRF[Reciprocal Rank Fusion Ranking Engine]
-        CodeGraph[AST Code Parser, Entity Graph & PageRank Centrality]
+    subgraph IntelligenceLayer ["Retrieval & Knowledge Infrastructure"]
+        SemanticCache["Semantic Vector Cache: Exact Hash + Cosine Sim"]
+        HybridRAG["Hybrid RAG 2.0: Dense Vector + BM25Okapi"]
+        RRF["Reciprocal Rank Fusion Ranking Engine"]
+        CodeGraph["AST Code Parser & PageRank Centrality"]
     end
 
-    subgraph StorageLayer [Persistence & Local Model Runtime]
-        OllamaLocal[(Local Ollama Runtime: Qwen, DeepSeek, BGE-M3)]
-        PostgreSQL[(PostgreSQL 16: Users, Sessions, Workspaces, Keys, Runs, Evals)]
-        QdrantDB[(Qdrant Vector DB: Persistent HNSW Dense Embeddings)]
-        SparseIndex[(BM25Okapi Inverted Lexical Index)]
-        InMemoryGraph[(In-Memory Topological Entity Graph)]
+    subgraph StorageLayer ["Persistence & Local Model Runtime"]
+        OllamaLocal[("Local Ollama Runtime: Qwen, DeepSeek, BGE-M3")]
+        PostgreSQL[("PostgreSQL 16: Users, Sessions, Workspaces, Keys")]
+        QdrantDB[("Qdrant Vector DB: Persistent HNSW Index")]
+        SparseIndex[("BM25Okapi Inverted Lexical Index")]
+        InMemoryGraph[("In-Memory Topological Entity Graph")]
     end
 
     ClientLayer <--> GatewayLayer
     GatewayLayer --> Classifier
     Classifier --> SemanticCache
-    SemanticCache -.->|Cache Hit < 2ms| Router
-    SemanticCache -.->|Cache Miss| ReActLoop
+    SemanticCache -.->|"Cache Hit < 2ms"| Router
+    SemanticCache -.->|"Cache Miss"| ReActLoop
     Classifier --> AgentDAG
     ReActLoop --> ToolEcosystem
     ToolEcosystem --> MCPHub
@@ -112,15 +171,17 @@ graph TB
     ArenaEngine <--> OllamaLocal
 ```
 
+</details>
+
 ---
 
 ## ✨ Core Capabilities
 
 | Subsystem | Architectural Implementation | Key Highlights |
 | :--- | :--- | :--- |
-| **Multi-Agent DAG Swarms** | Kahn's topological sort, wave scheduling, reflection loops | 5 specialized personas (`Planner`, `Researcher`, `Coder`, `Reviewer`, `Critic`), sequential single-GPU execution, token budgeting, in-chat streaming cards, and dedicated operations studio. |
+| **Multi-Agent DAG Swarms** | Kahn's topological sort, sequential single-GPU execution, reflection loops | 5 specialized personas (`Planner`, `Researcher`, `Coder`, `Reviewer`, `Critic`), sequential single-GPU execution (`_agent_gpu_lock`), unified `qwen2.5-coder:7b` execution for fullstack loops, in-chat streaming cards, and dedicated operations studio. |
 | **Interactive Canvas Studio 2.0** | Next.js iframe sandbox with postMessage bridge | Full Claude Artifacts parity with multi-tab viewing (`Preview`, `Code Editor`, `Console`, `Diff`), real-time JavaScript console capture, revision tracking, and SVG pan/zoom. |
-| **Dynamic Effort Scaling** | Runtime parameter control across ReAct and DAG loops | User-selectable reasoning depth (`⚡ Low`, `⚖️ Medium`, `🧠 High`) scaling iteration limits (2, 5, 10), token budgets (600, 1200, 2500), and triggering self-healing code reflection loops. |
+| **Dynamic Effort Scaling** | Iteration-based runtime scaling without token caps | User-selectable reasoning depth (`⚡ Low`, `⚖️ Medium`, `🧠 High`) controlling task iteration count (2, 5, 7) and reflection loops while granting all models the full context window (16K context & 8K generation) without token truncation. |
 | **Hybrid RAG 2.0** | Dense vector search fused with BM25Okapi sparse lexical | Reciprocal Rank Fusion ($RRF(d) = \sum \frac{1}{60 + \text{rank}}$), document collection tagging, dynamic chunking, and graceful fallbacks when vector DB is unavailable. |
 | **Entity Knowledge Graph** | AST code parsing with PageRank network analysis | Extracts Python and TypeScript classes, functions, calls, and inheritance hierarchies; computes PageRank centrality, BFS/Dijkstra shortest paths, and contextual query expansion. |
 | **Semantic Vector Cache** | Exact SHA-256 hash + Cosine vector similarity | Returns cached responses in $< 2$ms for semantically equivalent queries ($\ge 0.92$ threshold); tracks saved GPU time, token volume, and dollar-equivalent costs. |
@@ -136,39 +197,20 @@ graph TB
 
 AI Orchestrator provides user-controllable reasoning depth that dynamically re-configures the reasoning trajectory across both single-agent ReAct tool loops and multi-agent DAG swarms:
 
-```
-                       ┌─────────────────────────────────────────────────────────┐
-                       │               User Effort Level Selection               │
-                       │    ⚡ Low (Fast)  |  ⚖️ Medium (Normal)  |  🧠 High (Deep) │
-                       └────────────────────────────┬────────────────────────────┘
-                                                    │
-                 ┌──────────────────────────────────┴──────────────────────────────────┐
-                 ▼                                                                     ▼
-   ┌───────────────────────────┐                                         ┌───────────────────────────┐
-   │     ReAct Tool Loop       │                                         │      Multi-Agent DAG      │
-   │      (agent_loop.py)      │                                         │        (engine.py)        │
-   ├───────────────────────────┤                                         ├───────────────────────────┤
-   │ Low:    2 max iterations  │                                         │ Low:    Prunes QA/Critic  │
-   │         temp = 0.1        │                                         │         (Architect+Coder) │
-   │ Medium: 5 max iterations  │                                         │ Medium: Full 5-Agent DAG  │
-   │         temp = 0.2        │                                         │ High:   Autonomous Review │
-   │ High:   10 max iterations │                                         │         Reflection Loop   │
-   │         temp = 0.3        │                                         │         (Patches Flaws)   │
-   └───────────────────────────┘                                         └───────────────────────────┘
-```
-
 ### 1. ReAct Tool Loop Depth (`agent_loop.py`)
 - **⚡ Low Effort**: `max_iterations = 2`, `temperature = 0.1`. The agent performs at most one tool action before finalizing its answer, optimizing for raw speed.
 - **⚖️ Medium Effort**: `max_iterations = 5`, `temperature = 0.2`. Balanced 3–5 step plan-action-observe cycle suited for general development and research.
 - **🧠 High Effort**: `max_iterations = 10`, `temperature = 0.3`. Enables multi-step tool chaining (e.g., search web $\rightarrow$ read filesystem $\rightarrow$ run code $\rightarrow$ catch error $\rightarrow$ patch file $\rightarrow$ verify output).
 
 ### 2. Multi-Agent DAG Swarms & Reflection Loop (`engine.py`)
-- **Sequential Single-GPU Execution**: Agent waves execute sequentially against local Ollama, allocating 100% of GPU compute and memory bandwidth to one model at a time. This completely eliminates the VRAM thrashing and inference stalls that occur when running concurrent models on consumer GPUs.
+- **Strict Single-Agent Sequential GPU Execution (`_agent_gpu_lock`)**: Agent waves and nodes execute strictly one by one. Every agent finishes completely before the next starts, governed by a global async GPU lock. Eliminates VRAM context thrashing, inference lockups, and memory spikes on consumer GPUs.
+- **Unified Single-Model Fullstack Loop (`qwen2.5-coder:7b`)**: The fullstack workflow uses `qwen2.5-coder:7b` across all nodes (implementation plan $\rightarrow$ backend $\rightarrow$ frontend $\rightarrow$ review $\rightarrow$ synthesis). Ollama maintains the coder model loaded in VRAM throughout the entire pipeline without costly model swaps.
 - **Prompt De-Duplication**: Prevents duplicate upstream artifact injections when dependencies are already substituted in task templates, reducing prompt ingestion latency by up to 50%.
-- **Token Budget Allocation (`num_predict`)**:
-  - **⚡ Low Effort**: Prunes QA and Critic nodes down to core deliverables (`Planner`, `Coder`, `Researcher`), enforcing a 600-token budget per node with concise prompt directives to produce fullstack code in ~20 seconds.
-  - **⚖️ Medium Effort**: Executes the complete 5-agent DAG topology (`Planner` $\rightarrow$ `Backend Coder` $\rightarrow$ `Frontend Coder` $\rightarrow$ `Reviewer` $\rightarrow$ `Critic`) with a 1200-token budget per node.
-  - **🧠 High Effort (Autonomous Reflection Loop)**: Allocates a 2500-token budget per node. Monitors the Reviewer output for security vulnerabilities, race conditions, or unhandled errors. If deficiencies are flagged, the engine automatically launches an autonomous `security_patch_loop` with the Coder Agent to patch and harden the implementation before final delivery.
+- **Uncapped Context Window & Iteration-Based Effort Scaling**:
+  - Tokens are **never artificially capped** (no 600 or 1200 token limits). Every agent receives the full context window (`num_ctx: 16384`) and full output capacity (`num_predict: 8192`), ensuring complete apps and complex codebases are never truncated.
+  - **⚡ Low Effort (2 task iterations)**: Minimal task iterations (`Implementation Plan` $\rightarrow$ `Core Code`). Prunes separate reviewer/critic passes for rapid execution while providing full context window to write complete code.
+  - **⚖️ Medium Effort (5 task iterations)**: Executes the complete 5-agent sequential DAG topology (`Planner` $\rightarrow$ `Backend Coder` $\rightarrow$ `Frontend Coder` $\rightarrow$ `Reviewer` $\rightarrow$ `Critic`).
+  - **🧠 High Effort (7 task iterations & Autonomous Reflection)**: Executes the 5-agent sequence PLUS 2 autonomous self-healing reflection loops: (1) Coder remediation patch loop addressing reviewer findings; (2) Reviewer quality gate verification loop verifying the patches.
 - **Live Per-Node Token Streaming**: Emits the workflow header immediately at $t = 0$. As each agent finishes, its deliverable streams token-by-token into the chat feed, providing continuous visual feedback.
 
 ---
