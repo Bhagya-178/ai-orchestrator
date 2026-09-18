@@ -194,10 +194,6 @@ async def run_e2e_tests():
         # without requiring login or Authorization header
         # ====================================================================
 
-        # 17. Audio Synthesize (TTS - SpeechPlayer)
-        r = await client.post("/audio/synthesize", json={"text": "Hello world from ai orchestrator"})
-        record_test("test_17_guest_audio_synthesis", r.status_code == 200 and len(r.content) > 0 and "audio/wav" in r.headers.get("content-type", ""), f"status={r.status_code}, bytes={len(r.content)}")
-
         # 18. Arena Leaderboard
         r = await client.get("/arena/leaderboard")
         record_test("test_18_guest_arena_leaderboard", r.status_code == 200 and isinstance(r.json(), list), f"status={r.status_code}")

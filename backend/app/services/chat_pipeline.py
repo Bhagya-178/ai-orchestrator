@@ -520,7 +520,10 @@ class ChatPipeline:
             system_content += " PROVIDE A VERY DETAILED, STEP-BY-STEP, COMPREHENSIVE ANSWER. SHOW ALL YOUR REASONING AND EXPLAIN THOROUGHLY. COMPLETE ALL SECTIONS FULLY."
             generation_options["temperature"] = 0.3
         else:  # medium or default
-            system_content += " PROVIDE A BALANCED, THOROUGH ANSWER. EXPLAIN THE KEY POINTS CLEARLY AND SUCCINCTLY. COMPLETE ALL EXPLANATIONS FULLY."
+            system_content += (
+                " Provide a direct, balanced, and clear answer. State your primary conclusion or answer first, "
+                "supported by a clean markdown table or key bullet points. Avoid conversational filler or redundant padding."
+            )
             generation_options["temperature"] = 0.2
 
         messages.insert(0, {
@@ -532,35 +535,75 @@ class ChatPipeline:
         done_chunk: dict[str, Any] = {}
         gen_start = time.perf_counter()
 
-        try:
-            async for chunk in ollama.stream_chat(model=model, messages=messages, options=generation_options):
-                data = json.loads(chunk)
+        # Check if the requested model is a configured BYOK external provider model
+        custom_record = None
+        if str(model).startswith("custom:") or (db is not None and not str(model).startswith("workflow:")):
+            target_id = str(model).split(":")[1] if str(model).startswith("custom:") else str(model)
+            try:
+                from app.database.models import ExternalProviderModel
+                from sqlalchemy.future import select
+                stmt = select(ExternalProviderModel).where(
+                    (ExternalProviderModel.id == target_id)
+                    | (ExternalProviderModel.name == target_id)
+                    | (ExternalProviderModel.name == str(model))
+                )
+                res = await db.execute(stmt)
+                custom_record = res.scalar_one_or_none()
+            except Exception as e:
+                logger.debug(f"Failed to check custom model: {e}")
 
-                if "message" in data:
-                    token = data["message"]["content"]
+        display_model_name = model
+        if custom_record:
+            from app.services.llm_provider import llm_provider
+            display_model_name = f"{custom_record.name} ({custom_record.provider.title()})"
+            try:
+                async for token in llm_provider.stream_chat(
+                    provider=custom_record.provider,
+                    model_id=custom_record.model_id,
+                    api_key=custom_record.api_key,
+                    api_base=custom_record.api_base,
+                    messages=messages,
+                    temperature=generation_options.get("temperature", 0.2),
+                    max_tokens=generation_options.get("num_predict", 4096),
+                ):
                     full_response += token
                     yield {"type": "token", "token": token}
+            except Exception as e:
+                logger.error(f"Custom model {custom_record.name} streaming chat failed: {e}")
+                err_text = f"\n[Error generating response from {custom_record.name}: {e}]"
+                full_response += err_text
+                yield {"type": "token", "token": err_text}
+        else:
+            try:
+                async for chunk in ollama.stream_chat(model=model, messages=messages, options=generation_options):
+                    data = json.loads(chunk)
 
-                if data.get("done"):
-                    done_chunk = data
-                    logger.info(
-                        "Ollama stream done. reason=%s, eval_count=%s",
-                        data.get("done_reason"),
-                        data.get("eval_count"),
-                    )
-                    break
-        except Exception as e:
-            logger.error(f"Ollama streaming chat failed: {e}")
-            err_text = f"\n[Error generating response: {e}]"
-            full_response += err_text
-            yield {"type": "token", "token": err_text}
+                    if "message" in data:
+                        token = data["message"]["content"]
+                        full_response += token
+                        yield {"type": "token", "token": token}
+
+                    if data.get("done"):
+                        done_chunk = data
+                        logger.info(
+                            "Ollama stream done. reason=%s, eval_count=%s",
+                            data.get("done_reason"),
+                            data.get("eval_count"),
+                        )
+                        break
+            except Exception as e:
+                logger.error(f"Ollama streaming chat failed: {e}")
+                err_text = f"\n[Error generating response: {e}]"
+                full_response += err_text
+                yield {"type": "token", "token": err_text}
 
         generation_latency_ms = round((time.perf_counter() - gen_start) * 1000, 2)
 
-        try:
-            await ollama.unload_model(model)
-        except Exception as e:
-            logger.debug(f"Failed to unload model {model}: {e}")
+        if not custom_record:
+            try:
+                await ollama.unload_model(model)
+            except Exception as e:
+                logger.debug(f"Failed to unload model {model}: {e}")
 
         try:
             await memory_service.add_message(db, session_id, "user", message)
@@ -575,7 +618,7 @@ class ChatPipeline:
                 request_data = await build_request_data(
                     message=message,
                     processed=processed,
-                    model=model,
+                    model=display_model_name,
                     processor_latency_ms=processor_latency_ms,
                     routing_latency_ms=routing_latency_ms,
                     generation_latency_ms=generation_latency_ms,
@@ -592,7 +635,7 @@ class ChatPipeline:
         yield {
             "type": "done",
             "intent": processed["intent"],
-            "model": model,
+            "model": display_model_name,
             "latency_ms": total_latency_ms,
             "response": full_response,
         }

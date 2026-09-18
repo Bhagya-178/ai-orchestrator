@@ -5,6 +5,8 @@ import { Paperclip, ArrowUp, FileText, X, Sparkles, AlertCircle, Square, Layers 
 import { useChat } from "@/app/lib/context/ChatContext";
 import { useAuth } from "@/app/lib/context/AuthContext";
 import { uploadDocument } from "@/app/lib/api/documents";
+import { CustomModel, listCustomModels } from "@/app/lib/api/customModels";
+import { getAvailableModels } from "@/app/lib/api/health";
 import DocumentAttachment from "../documents/DocumentAttachment";
 import GuestLimitModal from "../auth/GuestLimitModal";
 
@@ -42,6 +44,30 @@ export default function ChatComposer() {
   const [message, setMessage] = useState("");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isGuestLimitModalOpen, setIsGuestLimitModalOpen] = useState(false);
+
+  // Dynamic models state
+  const [localModels, setLocalModels] = useState<string[]>([]);
+  const [customModels, setCustomModels] = useState<CustomModel[]>([]);
+
+  const fetchModels = async () => {
+    try {
+      const [locals, customs] = await Promise.all([
+        getAvailableModels(),
+        listCustomModels(),
+      ]);
+      setLocalModels(locals.filter((m) => !m.startsWith("custom:")));
+      setCustomModels(customs.filter((c) => c.is_active));
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    fetchModels();
+    const handler = () => fetchModels();
+    window.addEventListener("models-updated", handler);
+    return () => window.removeEventListener("models-updated", handler);
+  }, []);
 
   // Message history navigation (like ChatGPT / Claude / Shell)
   const historyIndexRef = useRef<number>(-1);
@@ -269,7 +295,7 @@ export default function ChatComposer() {
         </div>
       )}
       
-      <div className="relative flex flex-col bg-[var(--user-bubble)] border border-[var(--border)] rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500/15 focus-within:border-blue-300/50 dark:focus-within:border-blue-500/30 transition-all shadow-sm">
+      <div className="relative flex flex-col bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-neutral-200/90 dark:border-zinc-800/90 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500/15 focus-within:border-blue-500/40 dark:focus-within:border-zinc-700 transition-all shadow-sm hover:border-neutral-300 dark:hover:border-zinc-700/80">
         
         {/* Document upload preview (only during initial upload) */}
         {activeDocument && activeDocument.status === "uploading" && (
@@ -292,7 +318,7 @@ export default function ChatComposer() {
               ? `Ask about ${activeDocument.filename}...` 
               : "Ask anything..."
           }
-          className="w-full max-h-[200px] bg-transparent resize-none outline-none py-3 px-4 text-[0.95rem] text-gray-900 dark:text-white placeholder:text-gray-400"
+          className="w-full max-h-[200px] bg-transparent resize-none outline-none py-3.5 px-4 text-[0.95rem] text-[var(--foreground)] placeholder:text-neutral-400 dark:placeholder:text-zinc-500 leading-relaxed"
           disabled={isGenerating}
         />
         
@@ -310,7 +336,7 @@ export default function ChatComposer() {
               />
               <label 
                 htmlFor="file-upload"
-                className="p-1.5 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors cursor-pointer flex items-center justify-center"
+                className="p-1.5 text-neutral-400 hover:text-neutral-800 dark:hover:text-zinc-200 hover:bg-neutral-100 dark:hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer flex items-center justify-center"
                 title="Attach document"
               >
                 <Paperclip className="w-4 h-4" />
@@ -333,8 +359,8 @@ export default function ChatComposer() {
                   }}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all shrink-0 cursor-pointer ${
                     intentOverride?.startsWith("workflow:")
-                      ? "bg-purple-600 text-white shadow-xs"
-                      : "bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:hover:bg-purple-900/40 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40"
+                      ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-xs border border-purple-500/30"
+                      : "bg-purple-50 hover:bg-purple-100 text-purple-700 dark:bg-purple-950/40 dark:hover:bg-purple-900/40 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800/40"
                   }`}
                   title={intentOverride?.startsWith("workflow:") ? "Multi-Agent Swarm active (click to disable)" : "Activate Multi-Agent Swarm mode"}
                 >
@@ -348,7 +374,7 @@ export default function ChatComposer() {
                   onClick={() => {
                     window.dispatchEvent(new CustomEvent("open-agent-workflow", { detail: { prompt: message } }));
                   }}
-                  className="p-1.5 text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-black/5 dark:hover:bg-white/10 rounded-md transition-colors cursor-pointer shrink-0"
+                  className="p-1.5 text-neutral-400 hover:text-purple-600 dark:hover:text-purple-400 hover:bg-neutral-100 dark:hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer shrink-0"
                   title="Open Agent Operations Studio"
                 >
                   <Layers className="w-4 h-4" />
@@ -364,13 +390,13 @@ export default function ChatComposer() {
                   group/pill flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-full text-xs font-medium
                   transition-all duration-200 border shrink-0
                   ${useDocumentContext 
-                    ? "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-300" 
-                    : "bg-gray-100 dark:bg-white/5 border-gray-200 dark:border-white/10 text-gray-400 dark:text-gray-500 line-through"
+                    ? "bg-blue-50 dark:bg-blue-500/10 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-300 shadow-2xs" 
+                    : "bg-neutral-100 dark:bg-zinc-800 border-neutral-200 dark:border-zinc-700 text-neutral-400 dark:text-zinc-500 line-through"
                   }
                 `}
                 title={useDocumentContext ? "Click to disable document context" : "Click to enable document context"}
               >
-                <FileText className={`w-3 h-3 ${useDocumentContext ? "text-blue-500 dark:text-blue-400" : "text-gray-400"}`} />
+                <FileText className={`w-3 h-3 ${useDocumentContext ? "text-blue-500 dark:text-blue-400" : "text-neutral-400"}`} />
                 <span className="max-w-[120px] truncate">{activeDocument.filename}</span>
                 {useDocumentContext && (
                   <Sparkles className="w-3 h-3 text-blue-400 dark:text-blue-300" />
@@ -384,65 +410,83 @@ export default function ChatComposer() {
               </span>
             )}
 
-            {/* Model & Effort Controls — fully enabled in standard, Swarm, and RAG document mode */}
+            {/* Model & Effort Controls — fully dynamic with local & cloud models */}
             <div className="flex items-center gap-1.5 flex-wrap">
               <select
                 value={intentOverride}
                 onChange={(e) => {
                   const val = e.target.value;
+                  if (val === "__add_provider__") {
+                    window.dispatchEvent(new CustomEvent("open-settings", { detail: { tab: "providers" } }));
+                    return;
+                  }
                   setIntentOverride(val);
                   updateSettings(val, undefined);
                 }}
-                className={`bg-black/5 dark:bg-white/5 border text-[11px] font-medium outline-none cursor-pointer py-1 px-2 rounded-lg transition-all max-w-[170px] truncate ${
+                className={`bg-neutral-100/80 dark:bg-zinc-800/70 border text-[11px] font-medium outline-none cursor-pointer py-1.5 px-2.5 rounded-lg transition-all max-w-[190px] truncate shadow-2xs ${
                   isRagActive
-                    ? "border-blue-300 dark:border-blue-500/40 text-blue-700 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-950/30"
+                    ? "border-blue-300 dark:border-blue-500/40 text-blue-700 dark:text-blue-300 bg-blue-50/60 dark:bg-blue-950/40"
                     : isSwarmActive
-                    ? "border-purple-300 dark:border-purple-700/60 text-purple-700 dark:text-purple-300 bg-purple-50/60 dark:bg-purple-950/30"
-                    : "border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-gray-600 dark:text-gray-300"
+                    ? "border-purple-300 dark:border-purple-700/60 text-purple-700 dark:text-purple-300 bg-purple-50/60 dark:bg-purple-950/40"
+                    : "border-neutral-200/90 dark:border-zinc-700/80 hover:border-neutral-300 dark:hover:border-zinc-600 text-neutral-800 dark:text-zinc-200"
                 }`}
                 title={isRagActive ? "Select Model for Document Q&A" : "Select AI Model or Mode"}
               >
                 <option value="auto" className="bg-white dark:bg-[#18181b] text-gray-900 dark:text-gray-100 font-semibold">
                   {isRagActive ? "✨ Auto RAG Model" : "✨ Auto Model (Smart)"}
                 </option>
-                {isRagActive && (
-                  <optgroup label="Fast RAG Models" className="bg-white dark:bg-[#18181b] text-blue-600 dark:text-blue-400 font-semibold">
-                    <option value="qwen2.5:1.5b" className="text-gray-900 dark:text-gray-100 font-medium">
-                      ⚡ qwen2.5:1.5b (Ultra Fast)
-                    </option>
-                    <option value="gemma4:e4b" className="text-gray-900 dark:text-gray-100 font-medium">
-                      🎯 gemma4:e4b (Accurate)
-                    </option>
-                    <option value="qwen2.5-coder:7b" className="text-gray-900 dark:text-gray-100 font-medium">
-                      💻 qwen2.5-coder:7b (Code & Docs)
-                    </option>
-                    <option value="qwen3:8b" className="text-gray-900 dark:text-gray-100 font-medium">
-                      📖 qwen3:8b (Deep Analysis)
-                    </option>
+
+                {/* Configured Cloud BYOK Models */}
+                {customModels.length > 0 && (
+                  <optgroup label="☁️ Cloud Models (BYOK)" className="bg-white dark:bg-[#18181b] text-blue-600 dark:text-blue-400 font-semibold">
+                    {customModels.map((cm) => (
+                      <option key={cm.id} value={`custom:${cm.id}`} className="text-gray-900 dark:text-gray-100 font-medium">
+                        {cm.provider.toLowerCase() === "anthropic" ? "⚡" : cm.provider.toLowerCase() === "openai" ? "🚀" : "☁️"} {cm.name} [{cm.provider.toUpperCase()}]
+                      </option>
+                    ))}
                   </optgroup>
                 )}
+
+                {/* Local Models */}
+                {localModels.length > 0 ? (
+                  <optgroup label="💻 Local Ollama Models" className="bg-white dark:bg-[#18181b] text-emerald-600 dark:text-emerald-400 font-semibold">
+                    {localModels.map((lm) => (
+                      <option key={lm} value={lm} className="text-gray-900 dark:text-gray-100 font-medium">
+                        💻 {lm}
+                      </option>
+                    ))}
+                  </optgroup>
+                ) : (
+                  <optgroup label="Local Models" className="bg-white dark:bg-[#18181b] text-emerald-600 dark:text-emerald-400 font-semibold">
+                    <option value="qwen2.5-coder:7b" className="text-gray-900 dark:text-gray-100 font-medium">💻 qwen2.5-coder:7b</option>
+                    <option value="qwen3:8b" className="text-gray-900 dark:text-gray-100 font-medium">📖 qwen3:8b</option>
+                    <option value="gemma4:e4b" className="text-gray-900 dark:text-gray-100 font-medium">🎯 gemma4:e4b</option>
+                  </optgroup>
+                )}
+
+                {/* Multi-Agent Workflows */}
                 {!isRagActive && (
                   <optgroup label="Multi-Agent DAG Workflows" className="bg-white dark:bg-[#18181b] text-purple-600 dark:text-purple-400 font-semibold">
                     <option value="workflow:fullstack" className="text-gray-900 dark:text-gray-100">⚡ Full-Stack Feature Flow (5 Agents)</option>
-                    <option value="workflow:factcheck" className="text-gray-900 dark:text-gray-100">🔍 Deep Fact-Check & Verification (3 Agents)</option>
-                    <option value="workflow:vulnerability" className="text-gray-900 dark:text-gray-100">🛡️ Vulnerability & Security Audit (4 Agents)</option>
+                    <option value="workflow:factcheck" className="text-gray-900 dark:text-gray-100">🔍 Deep Fact-Check (3 Agents)</option>
+                    <option value="workflow:vulnerability" className="text-gray-900 dark:text-gray-100">🛡️ Security & Vulnerability (4 Agents)</option>
                   </optgroup>
                 )}
-                <optgroup label={isRagActive ? "All Models & Modes" : "Intent Routing"} className="bg-white dark:bg-[#18181b] text-gray-500 font-medium">
+
+                {/* Intent Modes */}
+                <optgroup label="Intent Routing Modes" className="bg-white dark:bg-[#18181b] text-gray-500 font-medium">
                   <option value="general" className="text-gray-900 dark:text-gray-100">General Chat</option>
                   <option value="coding" className="text-gray-900 dark:text-gray-100">Coding Specialist</option>
                   <option value="reasoning" className="text-gray-900 dark:text-gray-100">Deep Reasoning</option>
                   <option value="study" className="text-gray-900 dark:text-gray-100">Study / Research</option>
                 </optgroup>
-                {intentOverride &&
-                  !["auto", "general", "coding", "reasoning", "study", "qwen2.5:1.5b", "gemma4:e4b", "qwen2.5-coder:7b", "qwen3:8b"].includes(intentOverride) &&
-                  !intentOverride.startsWith("workflow:") && (
-                    <optgroup label="Selected from Settings" className="bg-white dark:bg-[#18181b] text-blue-600 dark:text-blue-400 font-semibold">
-                      <option value={intentOverride} className="text-gray-900 dark:text-gray-100 font-medium">
-                        ⚙️ {intentOverride}
-                      </option>
-                    </optgroup>
-                  )}
+
+                {/* Configuration shortcut */}
+                <optgroup label="Settings & Keys" className="bg-white dark:bg-[#18181b] text-blue-600 dark:text-blue-400 font-medium">
+                  <option value="__add_provider__" className="text-blue-600 dark:text-blue-400 font-semibold">
+                    + Add API Key / Provider...
+                  </option>
+                </optgroup>
               </select>
               <select
                 value={effortLevel}
@@ -451,12 +495,12 @@ export default function ChatComposer() {
                   setEffortLevel(val);
                   updateSettings(undefined, val);
                 }}
-                className={`bg-black/5 dark:bg-white/5 border text-[11px] font-medium outline-none cursor-pointer py-1 px-2 rounded-lg transition-all ${
+                className={`bg-neutral-100/80 dark:bg-zinc-800/70 border text-[11px] font-medium outline-none cursor-pointer py-1.5 px-2 rounded-lg transition-all shadow-2xs ${
                   isRagActive
-                    ? "border-blue-300 dark:border-blue-500/40 text-blue-700 dark:text-blue-300 bg-blue-50/50 dark:bg-blue-950/30"
+                    ? "border-blue-300 dark:border-blue-500/40 text-blue-700 dark:text-blue-300 bg-blue-50/60 dark:bg-blue-950/40"
                     : isSwarmActive
-                    ? "border-purple-300 dark:border-purple-700/60 text-purple-700 dark:text-purple-300 bg-purple-50/60 dark:bg-purple-950/30"
-                    : "border-black/5 dark:border-white/10 hover:border-black/15 dark:hover:border-white/20 text-gray-600 dark:text-gray-300"
+                    ? "border-purple-300 dark:border-purple-700/60 text-purple-700 dark:text-purple-300 bg-purple-50/60 dark:bg-purple-950/40"
+                    : "border-neutral-200/90 dark:border-zinc-700/80 hover:border-neutral-300 dark:hover:border-zinc-600 text-neutral-700 dark:text-zinc-300"
                 }`}
                 title={
                   isRagActive
@@ -511,20 +555,20 @@ export default function ChatComposer() {
             <button
               type="button"
               onClick={stopGeneration}
-              className="p-1.5 shrink-0 rounded-lg bg-gray-900 text-white dark:bg-white dark:text-gray-900 hover:opacity-90 active:scale-95 transition-all flex items-center justify-center shadow-xs cursor-pointer"
+              className="w-8 h-8 shrink-0 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 shadow-xs active:scale-95 transition-all flex items-center justify-center cursor-pointer"
               title="Stop generating"
             >
-              <Square className="w-4 h-4 fill-current" />
+              <Square className="w-3.5 h-3.5 fill-current" />
             </button>
           ) : (
             <button
               type="button"
               onClick={handleSend}
               disabled={!message.trim()}
-              className="send-btn p-1.5 shrink-0 rounded-lg transition-colors cursor-pointer"
+              className="w-8 h-8 shrink-0 rounded-xl bg-neutral-900 hover:bg-black text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-950 flex items-center justify-center shadow-xs transition-all disabled:opacity-25 disabled:cursor-not-allowed hover:scale-105 active:scale-95 cursor-pointer"
               title="Send message"
             >
-              <ArrowUp className="w-4 h-4" />
+              <ArrowUp className="w-4 h-4 stroke-[2.5]" />
             </button>
           )}
         </div>
@@ -532,9 +576,9 @@ export default function ChatComposer() {
 
       {/* Guest Preview Quota Indicator */}
       {!isAuthenticated && (
-        <div className="flex items-center justify-between text-[11px] px-2 mt-2 text-gray-500 dark:text-gray-400">
+        <div className="flex items-center justify-between text-[11px] px-2.5 mt-2.5 text-neutral-500 dark:text-zinc-400 font-medium">
           <div className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${isGuestLimitReached ? "bg-red-500" : "bg-amber-500"}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${isGuestLimitReached ? "bg-red-500 animate-pulse" : "bg-amber-500"}`} />
             <span>
               {isGuestLimitReached ? (
                 <span className="text-red-600 dark:text-red-400 font-medium">
@@ -561,7 +605,7 @@ export default function ChatComposer() {
       )}
 
       <div className="text-center mt-2">
-        <span className="text-[10px] text-gray-400 font-medium">
+        <span className="text-[11px] text-neutral-400 dark:text-zinc-500 font-normal">
           Responses are generated locally and may contain mistakes. Verify important information.
         </span>
       </div>

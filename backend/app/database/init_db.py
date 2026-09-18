@@ -391,6 +391,25 @@ async def init_db(max_retries: int = 15, delay: float = 2.0) -> None:
                   AND (c.title IS NULL OR c.title = 'New Conversation' OR c.title = 'New Chat' OR c.title = '');
                 """)
             )
+
+            # External provider models table for BYOK dynamic API keys
+            await conn.execute(
+                text("""
+                CREATE TABLE IF NOT EXISTS external_provider_models (
+                    id VARCHAR PRIMARY KEY,
+                    user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+                    name VARCHAR NOT NULL,
+                    provider VARCHAR NOT NULL,
+                    model_id VARCHAR NOT NULL,
+                    api_key VARCHAR NOT NULL,
+                    api_base VARCHAR,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                );
+                """)
+            )
+
         logger.info("Checked column and table migrations successfully.")
     except Exception as e:
         logger.warning("Auto-migration check skipped or failed: %s", e)

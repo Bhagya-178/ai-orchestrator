@@ -380,3 +380,26 @@ class ArenaVote(Base):
     model_b = Column(String, nullable=False, index=True)
     winner = Column(String, nullable=False)  # "A" | "B" | "tie" | "both_bad"
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class ExternalProviderModel(Base):
+    """Configured external AI model with custom provider, API key, and endpoint."""
+
+    __tablename__ = "external_provider_models"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True)
+    name = Column(String, nullable=False)  # User-defined display label, e.g. "Claude 3.5 Sonnet", "DeepSeek-V3"
+    provider = Column(String, nullable=False)  # "openai" | "anthropic" | "gemini" | "groq" | "openrouter" | "deepseek" | "custom"
+    model_id = Column(String, nullable=False)  # Upstream model string, e.g. "claude-3-5-sonnet-20241022", "gpt-4o"
+    api_key = Column(String, nullable=False)  # Stored API key (masked in API responses)
+    api_base = Column(String, nullable=True)  # Optional base URL override
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    user = relationship("User")

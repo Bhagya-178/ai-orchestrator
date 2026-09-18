@@ -96,18 +96,18 @@ export default function ConversationList({ onSelect }: { onSelect: () => void })
       {/* Search Input */}
       {conversations.length > 0 && (
         <div className="relative px-1 mb-1">
-          <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-neutral-400 dark:text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search chats..."
-            className="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-lg py-1.5 pl-8 pr-6 text-xs text-gray-900 dark:text-white placeholder:text-gray-400 outline-none focus:ring-1 focus:ring-blue-500/30 transition-all"
+            className="w-full bg-neutral-100/80 dark:bg-zinc-900/80 border border-neutral-200/80 dark:border-zinc-800/80 rounded-lg py-1.5 pl-8 pr-7 text-xs text-neutral-900 dark:text-zinc-100 placeholder:text-neutral-400 dark:placeholder:text-zinc-500 outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/15 transition-all shadow-2xs"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-zinc-200 p-0.5 rounded transition-colors"
             >
               <X className="w-3 h-3" />
             </button>
@@ -117,12 +117,12 @@ export default function ConversationList({ onSelect }: { onSelect: () => void })
 
       {/* Empty States */}
       {conversations.length === 0 ? (
-        <div className="px-2 py-6 text-center text-xs text-gray-400 dark:text-gray-500">
+        <div className="px-2 py-6 text-center text-xs text-neutral-400 dark:text-zinc-500">
           No conversations yet.
           <br />Start chatting to save history.
         </div>
       ) : filteredConversations.length === 0 ? (
-        <div className="px-2 py-4 text-center text-xs text-gray-400">
+        <div className="px-2 py-4 text-center text-xs text-neutral-400 dark:text-zinc-500">
           No chats matching &quot;{searchQuery}&quot;
         </div>
       ) : (
@@ -135,7 +135,7 @@ export default function ConversationList({ onSelect }: { onSelect: () => void })
             return (
               <li key={conv.id} className="relative group">
                 {isEditing ? (
-                  <div className="flex items-center gap-1 px-2 py-1 bg-white dark:bg-[#222] rounded-lg border border-blue-400 shadow-xs">
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-white dark:bg-zinc-900 rounded-lg border border-blue-500/60 shadow-xs ring-2 ring-blue-500/10">
                     <input
                       type="text"
                       autoFocus
@@ -145,18 +145,18 @@ export default function ConversationList({ onSelect }: { onSelect: () => void })
                         if (e.key === "Enter") saveRename(e, conv.id);
                         if (e.key === "Escape") setEditingId(null);
                       }}
-                      className="w-full bg-transparent text-xs text-gray-900 dark:text-white outline-none py-1"
+                      className="w-full bg-transparent text-xs text-neutral-900 dark:text-zinc-100 outline-none py-1"
                     />
                     <button
                       onClick={(e) => saveRename(e, conv.id)}
-                      className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded"
+                      className="p-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded transition-colors"
                       title="Save"
                     >
                       <Check className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={cancelRename}
-                      className="p-1 text-gray-400 hover:bg-black/5 dark:hover:bg-white/10 rounded"
+                      className="p-1 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-zinc-800 rounded transition-colors"
                       title="Cancel"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -169,10 +169,10 @@ export default function ConversationList({ onSelect }: { onSelect: () => void })
                         loadConversation(conv.id);
                         onSelect();
                       }}
-                      className={`w-full text-left px-2.5 py-2 rounded-lg text-[13px] transition-all leading-snug flex items-start gap-1.5 group-hover:pr-20
+                      className={`relative w-full text-left pl-3 pr-2.5 py-2 rounded-lg text-[13px] transition-all leading-snug flex items-start gap-1.5 group-hover:pr-22
                         ${isActive
-                          ? "bg-black/8 dark:bg-white/10 font-medium text-gray-900 dark:text-gray-100"
-                          : "text-gray-600 dark:text-gray-400 hover:bg-black/5 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-gray-100"
+                          ? "bg-neutral-200/60 dark:bg-zinc-800/70 font-medium text-neutral-900 dark:text-zinc-100 before:content-[''] before:absolute before:left-0 before:top-2 before:bottom-2 before:w-[3px] before:bg-blue-600 dark:before:bg-blue-500 before:rounded-r-full"
+                          : "text-neutral-600 dark:text-zinc-400 hover:bg-neutral-100/80 dark:hover:bg-zinc-800/40 hover:text-neutral-900 dark:hover:text-zinc-200"
                         }
                       `}
                       title={cleanTitle}
@@ -186,14 +186,14 @@ export default function ConversationList({ onSelect }: { onSelect: () => void })
                     </button>
 
                     {/* Action Bar (Hover Buttons) */}
-                    <div className="absolute right-1 top-1.5 flex items-center opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 dark:bg-[#18181b]/95 backdrop-blur-xs rounded-md shadow-xs py-0.5 px-0.5 border border-black/5 dark:border-white/10 z-10">
+                    <div className="absolute right-1 top-1.5 flex items-center opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md rounded-md shadow-xs py-0.5 px-1 border border-neutral-200/80 dark:border-zinc-700/80 z-10 gap-0.5">
                       {/* Pin Button */}
                       <button
                         onClick={(e) => handleTogglePin(e, conv)}
                         className={`p-1 rounded transition-colors ${
                           conv.is_pinned
-                            ? "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30"
-                            : "text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/10"
+                            ? "text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                            : "text-neutral-400 hover:text-neutral-700 dark:hover:text-zinc-200 hover:bg-neutral-100 dark:hover:bg-zinc-800"
                         }`}
                         title={conv.is_pinned ? "Unpin chat" : "Pin chat"}
                       >
@@ -203,7 +203,7 @@ export default function ConversationList({ onSelect }: { onSelect: () => void })
                       {/* Rename Button */}
                       <button
                         onClick={(e) => startRename(e, conv)}
-                        className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/10 rounded transition-colors"
+                        className="p-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-zinc-200 hover:bg-neutral-100 dark:hover:bg-zinc-800 rounded transition-colors"
                         title="Rename title"
                       >
                         <Edit2 className="w-3 h-3" />
@@ -212,7 +212,7 @@ export default function ConversationList({ onSelect }: { onSelect: () => void })
                       {/* Export Button */}
                       <button
                         onClick={(e) => handleExport(e, conv.id)}
-                        className="p-1 text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded transition-colors"
+                        className="p-1 text-neutral-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded transition-colors"
                         title="Export chat"
                       >
                         <Download className="w-3 h-3" />
@@ -221,7 +221,7 @@ export default function ConversationList({ onSelect }: { onSelect: () => void })
                       {/* Delete Button */}
                       <button
                         onClick={(e) => handleDelete(e, conv.id)}
-                        className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded transition-colors"
+                        className="p-1 text-neutral-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded transition-colors"
                         title="Delete chat"
                       >
                         <Trash2 className="w-3 h-3" />

@@ -27,12 +27,13 @@ from app.prompts.router import router as prompts_router
 from app.services.arena_router import router as arena_router
 from app.workspaces.router import router as workspaces_router
 from app.analytics.router import router as analytics_router
-from app.services.audio_router import router as audio_router
 from app.auth.api_keys_router import router as api_keys_router
 from app.services.webhooks_router import router as webhooks_router
 from app.agents.router import router as agents_router
 from app.services.rag_v2.graph_router import router as graph_router
 from app.services.evals_router import router as evals_router
+from app.services.custom_models_router import router as custom_models_router
+from app.database.models import ExternalProviderModel
 from app.auth.dependencies import get_current_user, get_optional_user
 from app.services.export_service import export_service
 from app.schemas import (
@@ -81,12 +82,13 @@ app.include_router(prompts_router)
 app.include_router(arena_router)
 app.include_router(workspaces_router)
 app.include_router(analytics_router)
-app.include_router(audio_router)
 app.include_router(api_keys_router)
 app.include_router(webhooks_router)
 app.include_router(agents_router)
 app.include_router(graph_router)
 app.include_router(evals_router)
+app.include_router(custom_models_router, prefix="/api")
+app.include_router(custom_models_router)
 
 @app.get("/")
 async def root():
@@ -269,7 +271,7 @@ async def regenerate_chat(
     )
 
 @app.get("/models", response_model=ModelsResponse)
-async def get_models():
+async def get_models(db: AsyncSession = Depends(get_db)):
     try:
         models = await ollama.list_models()
     except Exception as e:
@@ -280,13 +282,23 @@ async def get_models():
         from app.registry import MODEL_REGISTRY
         models = list(dict.fromkeys([v for v in MODEL_REGISTRY.values()] + [settings.RAG_MODEL, settings.PROCESSOR_MODEL]))
 
+    # Merge configured active external provider models
+    try:
+        stmt = select(ExternalProviderModel).where(ExternalProviderModel.is_active == True)
+        res = await db.execute(stmt)
+        custom_records = res.scalars().all()
+        for cm in custom_records:
+            models.append(f"custom:{cm.id}:{cm.name}")
+    except Exception as e:
+        logger.error(f"Failed to fetch custom models for /models: {e}")
+
     return ModelsResponse(
         models=models
     )
 
 @app.get("/models/details")
-async def get_models_detailed():
-    """Return detailed metadata (size, parameter_size, capabilities) for installed models."""
+async def get_models_detailed(db: AsyncSession = Depends(get_db)):
+    """Return detailed metadata (size, parameter_size, capabilities) for installed and custom models."""
     try:
         models_data = await ollama.list_models_detailed()
     except Exception as e:
@@ -297,6 +309,7 @@ async def get_models_detailed():
     for item in models_data:
         details = item.get("details", {})
         results.append({
+            "id": item.get("name", "unknown"),
             "name": item.get("name", "unknown"),
             "size": item.get("size", 0),
             "family": details.get("family", ""),
@@ -304,7 +317,31 @@ async def get_models_detailed():
             "quantization_level": details.get("quantization_level", ""),
             "capabilities": item.get("capabilities", ["completion"]),
             "modified_at": item.get("modified_at", ""),
+            "is_custom": False,
         })
+
+    # Merge external BYOK provider models
+    try:
+        stmt = select(ExternalProviderModel).where(ExternalProviderModel.is_active == True)
+        res = await db.execute(stmt)
+        custom_records = res.scalars().all()
+        for cm in custom_records:
+            results.append({
+                "id": cm.id,
+                "name": f"custom:{cm.id}",
+                "display_name": cm.name,
+                "provider": cm.provider,
+                "model_id": cm.model_id,
+                "size": 0,
+                "family": cm.provider.title(),
+                "parameter_size": "Cloud",
+                "quantization_level": cm.provider.upper(),
+                "capabilities": ["chat", "streaming", "tools", "rag"],
+                "modified_at": cm.created_at.isoformat() if cm.created_at else "",
+                "is_custom": True,
+            })
+    except Exception as e:
+        logger.error(f"Failed to fetch custom models for /models/details: {e}")
 
     return {"models": results}
 

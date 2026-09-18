@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus, vs } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Copy, Check, FileText, Edit3, RotateCw, Sparkles, X, ArrowUp } from "lucide-react";
@@ -11,6 +12,21 @@ import { useChat } from "@/app/lib/context/ChatContext";
 import { useArtifact } from "@/app/lib/context/ArtifactContext";
 import ToolExecutionCard from "../tools/ToolExecutionCard";
 import AgentSwarmCard from "../agents/AgentSwarmCard";
+
+/**
+ * Preprocesses markdown to automatically repair collapsed table rows
+ * where an LLM outputs "| |" instead of "|\n|" or merges rows into a single line.
+ */
+function formatMarkdownTables(raw: string): string {
+  if (!raw) return "";
+  // 1. Repair collapsed table rows where "| |" appears instead of "|\n|"
+  let text = raw.replace(/\|\s*\|\s*(?=[^|\n]+(?:\||$))/g, "|\n|");
+  // 2. Ensure table header separator rows (| :--- |) have newlines around them
+  text = text.replace(/(\|(?:\s*:?-+:?\s*\|)+)/g, (match) => `\n${match}\n`);
+  // 3. Clean up any 3+ consecutive newlines created by spacing
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text;
+}
 
 const MessageBubble = React.memo(function MessageBubble({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
@@ -157,6 +173,50 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
           </code>
         );
       },
+      table({ children, ...props }: any) {
+        return (
+          <div className="my-3 w-full overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--card)]/40 shadow-xs">
+            <table className="w-full text-left text-xs border-collapse divide-y divide-[var(--border)]" {...props}>
+              {children}
+            </table>
+          </div>
+        );
+      },
+      thead({ children, ...props }: any) {
+        return (
+          <thead className="bg-black/[0.03] dark:bg-white/[0.05] text-[var(--foreground)] font-semibold text-xs border-b border-[var(--border)]" {...props}>
+            {children}
+          </thead>
+        );
+      },
+      tbody({ children, ...props }: any) {
+        return (
+          <tbody className="divide-y divide-[var(--border)]" {...props}>
+            {children}
+          </tbody>
+        );
+      },
+      tr({ children, ...props }: any) {
+        return (
+          <tr className="hover:bg-black/[0.015] dark:hover:bg-white/[0.02] transition-colors" {...props}>
+            {children}
+          </tr>
+        );
+      },
+      th({ children, ...props }: any) {
+        return (
+          <th className="px-3.5 py-2.5 font-semibold text-[11px] uppercase tracking-wider text-[var(--muted)] border-r border-[var(--border)] last:border-r-0" {...props}>
+            {children}
+          </th>
+        );
+      },
+      td({ children, ...props }: any) {
+        return (
+          <td className="px-3.5 py-2 text-xs leading-relaxed text-[var(--foreground)] border-r border-[var(--border)] last:border-r-0" {...props}>
+            {children}
+          </td>
+        );
+      },
     }),
     [resolvedTheme, copiedCode, handleCopyCode, openArtifact]
   );
@@ -181,7 +241,7 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
             rounded-2xl text-sm leading-relaxed
             ${
               isUser
-                ? "bg-[var(--user-bubble)] text-[var(--foreground)] px-4 py-3 rounded-br-sm"
+                ? "bg-neutral-100 dark:bg-zinc-800/90 text-[var(--foreground)] px-4 py-2.5 rounded-br-xs border border-neutral-200/80 dark:border-zinc-700/80 shadow-xs font-normal"
                 : "bg-transparent text-[var(--foreground)] w-full px-0 py-0"
             }
           `}
@@ -246,23 +306,23 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
                     <div className="flex flex-col gap-2 mb-3 w-full">
                       {/* Thought / Reasoning section */}
                       {thoughtSteps.length > 0 && (
-                        <div className="rounded-xl border border-[var(--border)] bg-black/[0.02] dark:bg-white/[0.02] text-xs overflow-hidden">
+                        <div className="rounded-xl border border-purple-200/70 dark:border-purple-900/40 bg-purple-50/20 dark:bg-purple-950/15 text-xs overflow-hidden shadow-2xs">
                           <button
                             onClick={() => setIsThoughtsExpanded(!isThoughtsExpanded)}
-                            className="w-full flex items-center justify-between px-3 py-1.5 text-left text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+                            className="w-full flex items-center justify-between px-3 py-2 text-left text-[var(--muted)] hover:text-[var(--foreground)] transition-colors cursor-pointer"
                           >
                             <div className="flex items-center gap-2">
-                              <Sparkles className="w-3.5 h-3.5 text-purple-500" />
-                              <span className="font-medium text-[11px]">
-                                {isGenerating ? "Reasoning in progress..." : `Reasoning process (${thoughtSteps.length})`}
+                              <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                              <span className="font-semibold text-xs text-purple-700 dark:text-purple-300">
+                                {isGenerating ? "Reasoning in progress..." : `Thought Process (${thoughtSteps.length} step${thoughtSteps.length > 1 ? "s" : ""})`}
                               </span>
                             </div>
-                            <span className="text-[10px] text-gray-400">
+                            <span className="text-[10px] text-gray-400 font-medium">
                               {isThoughtsExpanded ? "Hide" : "Show"}
                             </span>
                           </button>
                           {isThoughtsExpanded && (
-                            <div className="px-3 py-2 border-t border-[var(--border)] bg-black/[0.015] dark:bg-white/[0.01] space-y-1.5 text-[11px] text-[var(--muted)] font-mono">
+                            <div className="px-3.5 py-2.5 border-t border-purple-100 dark:border-purple-900/30 bg-purple-50/10 dark:bg-purple-950/10 space-y-1.5 text-[11px] text-[var(--muted)] font-mono max-h-60 overflow-y-auto">
                               {thoughtSteps.map((t, idx) => (
                                 <p key={idx} className="leading-relaxed whitespace-pre-wrap">
                                   {t.content || t.message || ""}
@@ -295,8 +355,11 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
                       : "prose-slate dark:prose-p:text-gray-300"
                   }`}
                 >
-                  <ReactMarkdown components={components}>
-                    {message.content}
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={components}
+                  >
+                    {formatMarkdownTables(message.content)}
                   </ReactMarkdown>
                 </div>
               ) : (
@@ -370,13 +433,13 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
 
             {/* Model + latency badge (assistant only) */}
             {!isUser && message.model && (
-              <div className="text-[11px] text-[var(--muted)] flex items-center gap-1.5">
-                <span className="font-mono bg-black/5 dark:bg-white/8 px-1.5 py-0.5 rounded text-[10px] border border-[var(--border)]">
+              <div className="text-[11px] text-[var(--muted)] flex items-center gap-1.5 ml-1">
+                <span className="font-mono bg-neutral-100 dark:bg-zinc-800 text-neutral-600 dark:text-zinc-300 px-2 py-0.5 rounded-md text-[10px] font-medium border border-neutral-200 dark:border-zinc-700/80 shadow-2xs">
                   {message.model}
                 </span>
-                {message.latencyMs && (
-                  <span>· {(message.latencyMs / 1000).toFixed(1)}s</span>
-                )}
+                {message.latencyMs ? (
+                  <span className="text-[10px] text-zinc-400">· {(message.latencyMs / 1000).toFixed(1)}s</span>
+                ) : null}
               </div>
             )}
           </div>

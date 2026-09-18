@@ -120,44 +120,46 @@ export default function ChatView() {
   // ── Empty State ──
   if (messages.length === 0) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-4 h-full relative overflow-hidden">
-        {/* Hero */}
-        <div className="flex flex-col items-center text-center mb-8 mt-[-8vh]">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center mb-4 shadow-md">
-            <span className="text-white font-bold text-sm tracking-tight">AI</span>
+      <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 h-full relative overflow-y-auto">
+        <div className="w-full max-w-[720px] flex flex-col items-center my-auto">
+          {/* Hero */}
+          <div className="flex flex-col items-center text-center mb-7">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center mb-4 shadow-md shadow-blue-500/20">
+              <span className="text-white font-bold text-base tracking-tight">AI</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[var(--foreground)] mb-2">
+              AI Orchestrator
+            </h1>
+            <p className="text-[var(--muted)] text-sm max-w-sm">
+              Your unified AI workspace. Run local models or connect any cloud provider with your own API key.
+            </p>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[var(--foreground)] mb-2">
-            AI Orchestrator
-          </h1>
-          <p className="text-[var(--muted)] text-base max-w-xs">
-            Your local AI workspace. Ask anything.
-          </p>
-        </div>
 
-        {/* Starter cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-[680px] mb-6">
-          {STARTER_PROMPTS.map((starter, i) => (
-            <button
-              key={i}
-              onClick={() => sendMessage(starter.prompt)}
-              className="flex items-start gap-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--sidebar)] hover:bg-black/5 dark:hover:bg-white/5 hover:border-[var(--foreground)]/10 transition-all text-left group cursor-pointer"
-            >
-              <div className="mt-0.5 shrink-0">{starter.icon}</div>
-              <div>
-                <div className="text-sm font-semibold text-[var(--foreground)] mb-0.5">
-                  {starter.title}
+          {/* Starter cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full mb-6">
+            {STARTER_PROMPTS.map((starter, i) => (
+              <button
+                key={i}
+                onClick={() => sendMessage(starter.prompt)}
+                className="flex items-start gap-3 p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-black/[0.03] dark:hover:bg-white/[0.04] hover:border-black/15 dark:hover:border-white/15 transition-all text-left group cursor-pointer shadow-xs"
+              >
+                <div className="mt-0.5 shrink-0">{starter.icon}</div>
+                <div>
+                  <div className="text-xs font-semibold text-[var(--foreground)] mb-0.5">
+                    {starter.title}
+                  </div>
+                  <p className="text-[11px] text-[var(--muted)] line-clamp-2 leading-relaxed">
+                    {starter.prompt}
+                  </p>
                 </div>
-                <p className="text-xs text-[var(--muted)] line-clamp-2 leading-relaxed">
-                  {starter.prompt}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
+              </button>
+            ))}
+          </div>
 
-        {/* Composer */}
-        <div className="w-full max-w-[760px] mt-auto lg:mt-0 lg:absolute lg:bottom-0">
-          <ChatComposer />
+          {/* Composer */}
+          <div className="w-full">
+            <ChatComposer />
+          </div>
         </div>
       </div>
     );

@@ -41,4 +41,24 @@ dist/
 .ipynb_checkpoints/
 
 
+# Database & Local Stores
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.sql
+
+# Secrets & Certificates
+*.key
+*.pem
+*.cert
+*.crt
+*.p12
+*.pfx
+
+# Frontend & Dependencies
+node_modules/
+.next/
+out/
+
 CLAUDE.md

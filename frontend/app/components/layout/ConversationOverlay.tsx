@@ -71,6 +71,15 @@ export default function ConversationOverlay() {
     return () => window.removeEventListener("open-agent-workflow", handler);
   }, []);
 
+  // Listen for open-settings event
+  useEffect(() => {
+    const handler = () => {
+      setIsSettingsOpen(true);
+    };
+    window.addEventListener("open-settings", handler);
+    return () => window.removeEventListener("open-settings", handler);
+  }, []);
+
   // Close on outside click (mobile)
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -136,7 +145,7 @@ export default function ConversationOverlay() {
   // Row layout: icon-centered on desktop when collapsed; icon+label otherwise.
   const rowCls = [
     "flex items-center py-2 rounded-lg w-full transition-colors cursor-pointer",
-    "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-black/5 dark:hover:bg-white/5",
+    "text-neutral-600 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-100 hover:bg-neutral-100/80 dark:hover:bg-zinc-800/60 font-medium",
     effectiveExpanded
       ? "px-3 gap-2.5 justify-start"                                   // always icon+label
       : "px-3 gap-2.5 justify-start md:px-0 md:gap-0 md:justify-center", // mobile: icon+label, desktop: icon-only
@@ -147,7 +156,7 @@ export default function ConversationOverlay() {
       {/* Mobile backdrop */}
       {isSidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/30 backdrop-blur-[1px] z-40 md:hidden"
+          className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-40 md:hidden"
           onClick={closeSidebar}
         />
       )}
@@ -158,7 +167,7 @@ export default function ConversationOverlay() {
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={collapse}
         className={[
-          "flex flex-col bg-[var(--sidebar)] border-r border-[var(--border)] select-none",
+          "flex flex-col bg-[var(--sidebar)] border-r border-neutral-200/80 dark:border-zinc-800/80 select-none",
           // Mobile: fixed overlay drawer, always w-64
           "fixed inset-y-0 left-0 z-50 w-64",
           "transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
@@ -171,24 +180,24 @@ export default function ConversationOverlay() {
         {/* ── Header ── */}
         <div
           className={[
-            "flex items-center h-11 border-b border-[var(--border)] shrink-0 overflow-hidden transition-all",
+            "flex items-center h-12 border-b border-neutral-200/80 dark:border-zinc-800/80 shrink-0 overflow-hidden transition-all bg-neutral-50/40 dark:bg-zinc-950/40",
             effectiveExpanded ? "px-3 gap-2.5" : "px-3 gap-2.5 md:px-0 md:justify-center",
           ].join(" ")}
         >
           {/* Logo icon */}
-          <div className="w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-sm">
+          <div className="w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 flex items-center justify-center shadow-xs">
             <span className="text-white font-bold text-[11px] tracking-tight">AI</span>
           </div>
 
           {/* Brand name — hidden on desktop when collapsed */}
-          <span className={`${labelCls} text-sm font-semibold tracking-tight text-[var(--foreground)]`}>
+          <span className={`${labelCls} text-sm font-semibold tracking-tight text-neutral-900 dark:text-zinc-100`}>
             AI Orchestrator
           </span>
 
           {/* Mobile close button — never shown on desktop */}
           <button
             onClick={closeSidebar}
-            className="ml-auto p-1 text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-black/5 dark:hover:bg-white/5 rounded-md transition-colors md:hidden shrink-0"
+            className="ml-auto p-1 text-neutral-400 hover:text-neutral-900 dark:hover:text-zinc-100 hover:bg-neutral-100 dark:hover:bg-zinc-800 rounded-md transition-colors md:hidden shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
@@ -225,13 +234,13 @@ export default function ConversationOverlay() {
         </div>
 
         {/* ── Studio & Tools ── */}
-        <div className="border-t border-[var(--border)] px-2 py-2 shrink-0">
+        <div className="border-t border-neutral-200/80 dark:border-zinc-800/80 px-2 py-2 shrink-0">
           {/* Collapsed desktop: single icon hint */}
           <button
             onClick={() => setIsExpanded(true)}
             className={[
-              "w-full items-center justify-center py-2 rounded-lg transition-colors",
-              "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-black/5 dark:hover:bg-white/5",
+              "w-full items-center justify-center py-2 rounded-lg transition-colors cursor-pointer",
+              "text-neutral-500 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-100 hover:bg-neutral-100 dark:hover:bg-zinc-800/60",
               effectiveExpanded ? "hidden" : "hidden md:flex", // desktop only, when collapsed
             ].join(" ")}
             title="Studio & Tools (hover to expand)"
@@ -243,7 +252,7 @@ export default function ConversationOverlay() {
           <div className={effectiveExpanded ? "block" : "block md:hidden"}>
             <button
               onClick={() => setIsStudioOpen(!isStudioOpen)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-neutral-500 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-100 hover:bg-neutral-100 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-3.5 h-3.5 shrink-0" />
@@ -255,12 +264,12 @@ export default function ConversationOverlay() {
               }
             </button>
             {isStudioOpen && (
-              <div className="grid grid-cols-2 gap-0.5 mt-1">
+              <div className="grid grid-cols-2 gap-1 mt-1">
                 {studioTools.map((tool) => (
                   <button
                     key={tool.label}
                     onClick={() => openTool(tool.onClick)}
-                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-left"
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium text-neutral-600 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-100 hover:bg-neutral-100 dark:hover:bg-zinc-800/60 transition-colors text-left cursor-pointer truncate"
                   >
                     <tool.icon className={`w-3.5 h-3.5 shrink-0 ${tool.color}`} />
                     <span className="truncate">{tool.label}</span>
@@ -272,7 +281,7 @@ export default function ConversationOverlay() {
         </div>
 
         {/* ── Footer: Settings + User ── */}
-        <div className="border-t border-[var(--border)] px-2 py-2 space-y-0.5 shrink-0">
+        <div className="border-t border-neutral-200/80 dark:border-zinc-800/80 px-2 py-2 space-y-0.5 shrink-0">
           {/* Settings */}
           <button
             onClick={() => { setIsSettingsOpen(true); closeSidebar(); collapse(); }}
@@ -303,19 +312,19 @@ export default function ConversationOverlay() {
               <div className={effectiveExpanded ? "block" : "block md:hidden"}>
                 <div className="px-3 pb-1 pt-1">
                   <div className="flex items-center justify-between text-xs mb-1.5">
-                    <span className="text-[var(--muted)]">
+                    <span className="text-neutral-500 dark:text-zinc-400 font-medium">
                       Guest · {guestMessageCount}/{guestMessageLimit}
                     </span>
                     <button
                       onClick={() => { setAuthModalMode("login"); setShowAuthModal(true); closeSidebar(); }}
-                      className="text-blue-500 hover:text-blue-600 font-semibold hover:underline cursor-pointer"
+                      className="text-blue-600 dark:text-blue-400 hover:text-blue-700 font-semibold hover:underline cursor-pointer"
                     >
                       Sign in →
                     </button>
                   </div>
-                  <div className="w-full h-1 bg-[var(--border)] rounded-full overflow-hidden">
+                  <div className="w-full h-1 bg-neutral-200 dark:bg-zinc-800 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                      className="h-full bg-blue-600 dark:bg-blue-500 rounded-full transition-all duration-500"
                       style={{ width: `${Math.min(100, (guestMessageCount / guestMessageLimit) * 100)}%` }}
                     />
                   </div>
@@ -333,7 +342,7 @@ export default function ConversationOverlay() {
               ].join(" ")}
               title={!effectiveExpanded ? (user?.full_name || user?.email) : undefined}
             >
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 to-indigo-500 text-white font-semibold text-xs flex items-center justify-center shrink-0 shadow-sm">
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 text-white font-semibold text-xs flex items-center justify-center shrink-0 shadow-2xs">
                 {userInitial}
               </div>
               <div
@@ -344,13 +353,13 @@ export default function ConversationOverlay() {
                     : "opacity-100 max-w-[9rem] md:opacity-0 md:max-w-0 md:overflow-hidden",
                 ].join(" ")}
               >
-                <div className="text-xs font-medium text-[var(--foreground)] truncate">
+                <div className="text-xs font-medium text-neutral-900 dark:text-zinc-100 truncate">
                   {user?.full_name || user?.email}
                 </div>
-                <div className="text-[11px] text-[var(--muted)] truncate">{user?.email}</div>
+                <div className="text-[11px] text-neutral-500 dark:text-zinc-400 truncate">{user?.email}</div>
               </div>
               {user?.role === "admin" && effectiveExpanded && (
-                <span className="text-[10px] font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded shrink-0 border border-purple-500/15">
+                <span className="text-[10px] font-medium bg-purple-500/10 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded shrink-0 border border-purple-500/20">
                   Admin
                 </span>
               )}
