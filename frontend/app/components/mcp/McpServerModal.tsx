@@ -75,10 +75,10 @@ export default function McpServerModal({ isOpen, onClose }: McpServerModalProps)
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-3xl max-h-[85vh] bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-150">
+      <div className="relative w-full max-w-3xl max-h-[85vh] liquid-glass-modal rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[var(--border)]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-black/10 dark:border-white/10 bg-white/30 dark:bg-black/20 backdrop-blur-md">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
               <Cpu className="w-5 h-5" />

@@ -35,7 +35,7 @@ class Settings:
 
     # --- Ollama ---
     OLLAMA_URL: str = "http://localhost:11434"
-    OLLAMA_KEEP_ALIVE: str = "0"
+    OLLAMA_KEEP_ALIVE: str = "5m"
 
     # --- Database ---
     DATABASE_URL: str = ""  # Required — validated in _load_settings
@@ -91,7 +91,7 @@ def _load_settings() -> Settings:
 
     return Settings(
         OLLAMA_URL=os.getenv("OLLAMA_URL", "http://localhost:11434"),
-        OLLAMA_KEEP_ALIVE=os.getenv("OLLAMA_KEEP_ALIVE", "0"),
+        OLLAMA_KEEP_ALIVE=os.getenv("OLLAMA_KEEP_ALIVE", "5m"),
         DATABASE_URL=database_url,
         PROCESSOR_MODEL=os.getenv("PROCESSOR_MODEL", "qwen2.5:1.5b"),
         SUMMARY_MODEL=os.getenv("SUMMARY_MODEL", "qwen2.5:1.5b"),

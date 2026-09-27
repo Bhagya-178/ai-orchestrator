@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import ConversationOverlay from "./ConversationOverlay";
+import AmbientBackground from "./AmbientBackground";
 import { PanelLeft } from "lucide-react";
 import { useNavigation } from "@/app/lib/context/NavigationContext";
 
@@ -10,6 +11,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex h-[100dvh] w-full bg-[var(--background)] overflow-hidden relative">
+      {/* Dynamic Ambient Refraction Background */}
+      <AmbientBackground />
+
       {/* Left sidebar & modals */}
       <ConversationOverlay />
 

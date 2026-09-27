@@ -18,7 +18,6 @@ from app.services.memory_service import memory_service
 from app.services.metrics import build_request_data
 from app.services.rag_service import rag_service
 from app.services.tool_service import ToolService
-from app.utils.logger import log_request
 
 logger = logging.getLogger(__name__)
 
@@ -499,32 +498,44 @@ class ChatPipeline:
         )
 
         generation_options: dict[str, Any] = {
-            "num_ctx": 16384,
-            "num_predict": 8192,
+            "num_ctx": 8192,
+            "num_predict": 2048,
         }
 
         if should_search_rag:
             if effort_level == "low":
                 system_content += " Answer the question directly, concisely, and accurately based strictly on the provided document context."
                 generation_options["temperature"] = 0.1
+                generation_options["num_ctx"] = 4096
+                generation_options["num_predict"] = 1024
             elif effort_level in ("high", "max"):
                 system_content += " Answer thoroughly, comprehensively, and in detail based on the provided document context. Complete all sections, bullet points, and learning outcomes fully without truncating."
                 generation_options["temperature"] = 0.2
+                generation_options["num_ctx"] = 12288
+                generation_options["num_predict"] = 4096
             else:  # medium or default
                 system_content += " Answer clearly, accurately, and balanced based on the provided document context. Ensure all sections and points are completed fully without cutting off mid-sentence."
                 generation_options["temperature"] = 0.2
+                generation_options["num_ctx"] = 8192
+                generation_options["num_predict"] = 2048
         elif effort_level == "low":
             system_content += " KEEP YOUR RESPONSE CONCISE AND FOCUSED ON THE ESSENTIAL SOLUTION."
             generation_options["temperature"] = 0.1
+            generation_options["num_ctx"] = 4096
+            generation_options["num_predict"] = 1024
         elif effort_level in ("high", "max"):
             system_content += " PROVIDE A VERY DETAILED, STEP-BY-STEP, COMPREHENSIVE ANSWER. SHOW ALL YOUR REASONING AND EXPLAIN THOROUGHLY. COMPLETE ALL SECTIONS FULLY."
             generation_options["temperature"] = 0.3
+            generation_options["num_ctx"] = 16384
+            generation_options["num_predict"] = 4096
         else:  # medium or default
             system_content += (
                 " Provide a direct, balanced, and clear answer. State your primary conclusion or answer first, "
                 "supported by a clean markdown table or key bullet points. Avoid conversational filler or redundant padding."
             )
             generation_options["temperature"] = 0.2
+            generation_options["num_ctx"] = 8192
+            generation_options["num_predict"] = 2048
 
         messages.insert(0, {
             "role": "system",
@@ -627,7 +638,6 @@ class ChatPipeline:
                     ollama_response=done_chunk,
                     session_id=session_id
                 )
-                log_request(request_data)
                 await database_service.save_request_log(db=db, data=request_data)
             except Exception as e:
                 logger.error(f"Failed to log request: {e}")

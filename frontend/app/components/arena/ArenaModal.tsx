@@ -190,10 +190,10 @@ export default function ArenaModal({ isOpen, onClose, availableModels }: ArenaMo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/50 backdrop-blur-sm animate-in fade-in duration-150">
-      <div className="relative w-full max-w-5xl h-[92vh] max-h-[900px] bg-[var(--card)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/40 backdrop-blur-md animate-in fade-in duration-150">
+      <div className="relative w-full max-w-5xl h-[92vh] max-h-[900px] liquid-glass-modal rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-b border-[var(--border)] shrink-0">
+        <div className="flex items-center justify-between px-6 py-3.5 border-b border-black/10 dark:border-white/10 bg-white/30 dark:bg-black/20 backdrop-blur-md shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400">
               <Swords className="w-5 h-5" />

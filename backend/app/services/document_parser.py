@@ -1,6 +1,8 @@
 import asyncio
 import logging
+import os
 import re
+import zipfile
 from pathlib import Path
 
 try:
@@ -121,18 +123,44 @@ def chunk_text(
 
 
 def _sync_parse_pdf(file_path: str) -> list[dict]:
-    """Extract text from PDF with page numbers (sync)."""
+    """Extract text from PDF with page numbers and visual image assets (sync)."""
     chunks = []
     doc = pymupdf.open(file_path)
+    total_pdf_images = 0
     try:
         for page_num, page in enumerate(doc, 1):
             text = page.get_text().strip()
+            num_imgs = 0
+            try:
+                images = page.get_images()
+                num_imgs = len(images)
+            except Exception:
+                num_imgs = 0
+            total_pdf_images += num_imgs
+
+            if num_imgs > 0:
+                img_tag = f"[Page {page_num} contains {num_imgs} embedded image(s)/figure(s)]"
+                text = f"{text}\n\n{img_tag}" if text else img_tag
+
             if text:
                 chunks.append({
                     "content": text,
                     "page_num": page_num,
-                    "metadata": {"source": "pdf", "page": page_num},
+                    "metadata": {"source": "pdf", "page": page_num, "image_count": num_imgs},
                 })
+
+        if total_pdf_images > 0 and chunks:
+            file_name = os.path.basename(file_path)
+            overview_text = (
+                f"[Document Visual Assets & Media Overview: '{file_name}']\n"
+                f"This PDF document contains {total_pdf_images} embedded image(s), figure(s), or diagram(s) across {len(doc)} pages.\n"
+                f"Page-level image occurrences are cataloged within each page's content."
+            )
+            chunks.insert(0, {
+                "content": overview_text,
+                "page_num": 1,
+                "metadata": {"source": "pdf-media-overview", "page": 1, "total_images": total_pdf_images},
+            })
     finally:
         doc.close()
     return chunks
@@ -144,29 +172,68 @@ async def parse_pdf(file_path: str) -> list[dict]:
 
 
 def _sync_parse_docx(file_path: str) -> list[dict]:
-    """Extract text from DOCX with section-level granularity (sync).
+    """Extract text from DOCX with section-level granularity and embedded image tracking (sync).
     
-    Extracts text from paragraphs, tables, and headers.
+    Extracts text from paragraphs, tables, headers, and identifies embedded images/diagrams.
     Falls back to PyMuPDF if python-docx fails or extracts nothing.
     """
     chunks: list[dict] = []
     target_chars = estimate_chars_for_tokens(DEFAULT_CHUNK_SIZE_TOKENS)
 
-    # Strategy 1: python-docx (paragraphs + tables + headers)
+    # 0. Pre-scan for embedded media files in DOCX package (reliable zip archive inspection)
+    media_files: list[str] = []
+    try:
+        if zipfile.is_zipfile(file_path):
+            with zipfile.ZipFile(file_path, "r") as zf:
+                media_files = [
+                    f for f in zf.namelist()
+                    if f.startswith("word/media/") and any(
+                        f.lower().endswith(ext) for ext in (".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tiff", ".emf", ".wmf", ".webp", ".svg")
+                    )
+                ]
+    except Exception as ze:
+        logger.debug("Could not inspect zip media for %s: %s", file_path, ze)
+
+    # Strategy 1: python-docx (paragraphs + tables + headers + inline drawings)
     try:
         doc = DocxDocument(file_path)
         section_paragraphs: list[str] = []
         section_char_count = 0
         section_num = 1
+        image_counter = 0
 
-        # Extract all paragraphs
+        # Extract all paragraphs and embedded images
         for para in doc.paragraphs:
             text = para.text.strip()
-            if not text:
-                continue
 
-            section_paragraphs.append(text)
-            section_char_count += len(text)
+            # Check for embedded drawing/image XML nodes in paragraph
+            has_drawing = False
+            try:
+                if hasattr(para, "_element") and para._element is not None:
+                    drawings = (
+                        para._element.xpath(".//w:drawing")
+                        or para._element.xpath(".//w:pict")
+                        or para._element.xpath(".//a:blip")
+                    )
+                    has_drawing = bool(drawings)
+            except Exception:
+                has_drawing = False
+
+            if has_drawing:
+                image_counter += 1
+                media_name = os.path.basename(media_files[image_counter - 1]) if image_counter <= len(media_files) else f"image_{image_counter}"
+                img_desc = f"[Figure/Image {image_counter}: Embedded Image ('{media_name}') in Section {section_num}"
+                if text:
+                    img_desc += f" | Associated Text/Caption: \"{text}\"]"
+                else:
+                    img_desc += "]"
+                section_paragraphs.append(img_desc)
+                section_char_count += len(img_desc)
+            elif text:
+                section_paragraphs.append(text)
+                section_char_count += len(text)
+            else:
+                continue
 
             if section_char_count >= target_chars:
                 chunks.append({
@@ -207,23 +274,68 @@ def _sync_parse_docx(file_path: str) -> list[dict]:
                 "page_num": section_num,
                 "metadata": {"source": "docx", "section": section_num},
             })
+
+        # Inject Document-Level Visual Media Overview Chunk if images exist
+        total_images = max(len(media_files), image_counter)
+        if total_images > 0 and chunks:
+            file_name = os.path.basename(file_path)
+            media_sample = [os.path.basename(m) for m in media_files[:10]]
+            sample_str = f" Media files: {', '.join(media_sample)}." if media_sample else ""
+            overview = (
+                f"[Document Visual Assets & Media Overview: '{file_name}']\n"
+                f"This Word (.docx) document contains {total_images} embedded image(s), screenshot(s), diagram(s), or figure(s).{sample_str}\n"
+                f"The images are located throughout the document sections with their respective captions, figures, and contextual text."
+            )
+            chunks.insert(0, {
+                "content": overview,
+                "page_num": 1,
+                "metadata": {
+                    "source": "docx-media-overview",
+                    "section": 1,
+                    "total_images": total_images,
+                },
+            })
+
     except Exception as e:
         logger.warning(f"python-docx parsing failed for {file_path}: {e}")
         chunks = []
 
-    # Strategy 2: PyMuPDF fallback (natively extracts all text from .docx pages)
+    # Strategy 2: PyMuPDF fallback (natively extracts all text and images from .docx pages)
     if not chunks:
         try:
             doc = pymupdf.open(file_path)
+            total_fallback_images = 0
             try:
                 for page_num, page in enumerate(doc, 1):
                     text = page.get_text().strip()
+                    num_imgs = 0
+                    try:
+                        num_imgs = len(page.get_images())
+                    except Exception:
+                        num_imgs = 0
+                    total_fallback_images += num_imgs
+                    if num_imgs > 0:
+                        img_tag = f"[Page {page_num} contains {num_imgs} embedded image(s)/figure(s)]"
+                        text = f"{text}\n\n{img_tag}" if text else img_tag
+
                     if text:
                         chunks.append({
                             "content": text,
                             "page_num": page_num,
-                            "metadata": {"source": "docx-pymupdf", "page": page_num},
+                            "metadata": {"source": "docx-pymupdf", "page": page_num, "image_count": num_imgs},
                         })
+
+                if total_fallback_images > 0 and chunks:
+                    file_name = os.path.basename(file_path)
+                    overview = (
+                        f"[Document Visual Assets & Media Overview: '{file_name}']\n"
+                        f"This Word document contains {total_fallback_images} embedded image(s) or figure(s) across {len(doc)} pages."
+                    )
+                    chunks.insert(0, {
+                        "content": overview,
+                        "page_num": 1,
+                        "metadata": {"source": "docx-pymupdf-media-overview", "page": 1, "total_images": total_fallback_images},
+                    })
             finally:
                 doc.close()
         except Exception as e:

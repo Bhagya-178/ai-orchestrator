@@ -357,13 +357,13 @@ docker compose up -d --build
 > [!TIP]
 > **What this command does on the first run:**
 > - Downloads the official PostgreSQL 15 and Qdrant vector database images.
-> - Builds the Next.js 16 frontend container with Turbopack.
-> - Builds the FastAPI Python 3.11 backend container with all pinned dependencies.
+> - Builds the Next.js 16 frontend container with Turbopack & npm cache.
+> - Builds the FastAPI Python 3.12 backend container with **Astral `uv`** (parallel downloads drop dependency installation from ~7 minutes to under 15 seconds).
 > - Creates isolated persistent Docker volumes (`postgres_data`, `qdrant_data`).
 > - Automatically runs database schema migrations (`init_db`) on first boot.
 > - Starts all 4 services in the background (`-d`).
 >
-> *Note: First-time build takes 2–4 minutes to compile assets and download layers. Subsequent starts will be almost instant.*
+> *Note: First-time build is now accelerated with Astral `uv` and BuildKit caching. Subsequent starts will be almost instant.*
 
 #### Alternative: Build First, Then Launch
 If you prefer to compile images before starting services:
@@ -394,25 +394,117 @@ docker compose logs -f
 
 ### 2. Maintenance & Container Operations
 
-#### Clean Rebuild (Without Stale Build Cache)
+#### 🚀 Everyday Fast Update: Recompile Code in 3–8 Seconds (Recommended)
+For all normal code updates (UI changes, new routes, backend logic). Docker reuses cached packages and only recompiles your changed files:
+
+```bash
+docker compose up -d --build --no-deps frontend backend
+```
+
+> [!TIP]
+> **Why this takes only 5 seconds:**
+> - Docker layer caching keeps `npm ci` and `pip install` cached (**0.0s**).
+> - Only your modified `.tsx` and `.py` code files are copied and compiled.
+> - PostgreSQL and Qdrant stay running with **zero downtime** (`--no-deps`).
+
+#### ⚡ Clean Rebuild (Only When Dependencies Change / No Cache)
+Use this **only** if you modified `requirements.txt` or `package.json` and need a completely clean dependency download:
+
+```bash
+docker compose build --no-cache frontend backend && docker compose up -d --no-deps frontend backend
+```
+
+*On Windows PowerShell:*
+```powershell
+docker compose build --no-cache frontend backend; docker compose up -d --no-deps frontend backend
+```
+
+#### 🎯 Single-Service Updates (No Cache)
+```bash
+# Update ONLY the Frontend (No Cache)
+docker compose build --no-cache frontend && docker compose up -d --no-deps frontend
+
+# Update ONLY the Backend (No Cache)
+docker compose build --no-cache backend && docker compose up -d --no-deps backend
+```
+
+#### 🔄 Full Clean Rebuild (All 4 Services)
+Only needed when changing PostgreSQL/Qdrant settings, volumes, or docker-compose ports:
 ```bash
 docker compose down
 docker compose build --no-cache
 docker compose up -d
 ```
 
-#### Fast One-Liner Re-creation
+#### ⚠️ Full Force Recreate (All 4 Services)
 ```bash
 docker compose up -d --build --force-recreate
 ```
 
-#### Single-Service Rebuild
-```bash
-# Rebuild only the backend
-docker compose up -d --no-deps --build backend
+#### 🔄 How to Rebuild Everything Once Again
 
-# Rebuild only the frontend
-docker compose up -d --no-deps --build frontend
+##### Scenario A: Rebuild All Images (Keep Database & Data Intact)
+When you want to recompile both frontend and backend fresh without losing your database conversations, users, or vectors:
+```bash
+docker compose up -d --build
+```
+*(Or without any cache)*:
+```bash
+docker compose build --no-cache && docker compose up -d
+```
+
+##### Scenario B: Complete Factory Reset (Wipe Everything & Start 100% Fresh)
+If you want to completely erase the database, vector storage, and recreate everything from scratch:
+```bash
+# WARNING: Deletes all database tables, users, messages, and vector embeddings!
+docker compose down -v --rmi local
+docker compose up -d --build
+```
+
+#### 🛑 Container Lifecycle: `stop` vs `down` vs `down -v`
+
+| Command | What It Does | Are Images Deleted? | Is Database Data Kept? |
+| :--- | :--- | :---: | :---: |
+| **`docker compose stop`** | **Pauses** running containers without removing them | ❌ No | ✅ Yes |
+| **`docker compose start`** | **Resumes** paused containers instantly | ❌ No | ✅ Yes |
+| **`docker compose down`** | **Removes container instances** and networks | ❌ No | ✅ Yes (Safe) |
+| **`docker compose down --rmi local`** | Removes containers AND locally compiled images | ✅ Yes | ✅ Yes (Safe) |
+| **`docker compose down -v`** | ⚠️ Removes containers **AND deletes data volumes** | ❌ No | ❌ Deleted |
+
+> [!IMPORTANT]
+> **Why doesn't deleting containers or images delete the database data?**
+> In Docker architecture, containers and images are **ephemeral** (disposable compute processes). Data is stored separately in **Named Volumes** (`postgres_data` and `qdrant_data`) on your host drive. 
+> Docker intentionally protects volumes so that restarting, stopping, or deleting containers **never** accidentally wipes your database or documents. To intentionally wipe data, you must explicitly pass the `-v` flag (`docker compose down -v`).
+
+#### 🧹 Clear Docker Build Cache & Stale Images
+
+```bash
+# 1. Clear Docker Buildx cache (frees up GBs of stored build layers)
+docker builder prune -a -f
+
+# 2. Remove locally built project images (forces complete fresh build next run)
+docker compose down --rmi local
+
+# 3. Clean all dangling images, stopped containers, and unused build caches
+docker system prune -f
+```
+
+> [!NOTE]
+> `docker builder prune -a -f` and `docker compose down --rmi local` preserve your persistent PostgreSQL and Qdrant data volumes (`postgres_data`, `qdrant_data`), so you never lose conversations or uploaded documents.
+
+#### 🧼 Clear Local Next.js & Python Development Caches
+When running locally outside Docker:
+
+*On Linux / macOS:*
+```bash
+rm -rf frontend/.next frontend/node_modules/.cache
+find backend -type d -name "__pycache__" -exec rm -rf {} +
+```
+
+*On Windows PowerShell:*
+```powershell
+Remove-Item -Recurse -Force frontend\.next, frontend\node_modules\.cache -ErrorAction SilentlyContinue
+Get-ChildItem -Path backend -Recurse -Filter "__pycache__" | Remove-Item -Recurse -Force
 ```
 
 #### Database Schema Initialization

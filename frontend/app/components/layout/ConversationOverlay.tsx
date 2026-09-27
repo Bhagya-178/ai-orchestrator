@@ -167,7 +167,7 @@ export default function ConversationOverlay() {
         onMouseEnter={() => setIsExpanded(true)}
         onMouseLeave={collapse}
         className={[
-          "flex flex-col bg-[var(--sidebar)] border-r border-neutral-200/80 dark:border-zinc-800/80 select-none",
+          "flex flex-col liquid-glass border-r border-neutral-200/60 dark:border-white/10 select-none shadow-2xl",
           // Mobile: fixed overlay drawer, always w-64
           "fixed inset-y-0 left-0 z-50 w-64",
           "transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
@@ -180,7 +180,7 @@ export default function ConversationOverlay() {
         {/* ── Header ── */}
         <div
           className={[
-            "flex items-center h-12 border-b border-neutral-200/80 dark:border-zinc-800/80 shrink-0 overflow-hidden transition-all bg-neutral-50/40 dark:bg-zinc-950/40",
+            "flex items-center h-12 border-b border-neutral-200/60 dark:border-white/10 shrink-0 overflow-hidden transition-all bg-white/20 dark:bg-black/20",
             effectiveExpanded ? "px-3 gap-2.5" : "px-3 gap-2.5 md:px-0 md:justify-center",
           ].join(" ")}
         >
@@ -234,7 +234,7 @@ export default function ConversationOverlay() {
         </div>
 
         {/* ── Studio & Tools ── */}
-        <div className="border-t border-neutral-200/80 dark:border-zinc-800/80 px-2 py-2 shrink-0">
+        <div className="border-t border-neutral-200/60 dark:border-white/10 px-2 py-2 shrink-0">
           {/* Collapsed desktop: single icon hint */}
           <button
             onClick={() => setIsExpanded(true)}
@@ -252,7 +252,7 @@ export default function ConversationOverlay() {
           <div className={effectiveExpanded ? "block" : "block md:hidden"}>
             <button
               onClick={() => setIsStudioOpen(!isStudioOpen)}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-neutral-500 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-100 hover:bg-neutral-100 dark:hover:bg-zinc-800/60 transition-colors cursor-pointer"
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold text-neutral-600 dark:text-zinc-300 hover:text-neutral-900 dark:hover:text-zinc-100 hover:bg-white/40 dark:hover:bg-white/5 transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-3.5 h-3.5 shrink-0" />
@@ -264,12 +264,12 @@ export default function ConversationOverlay() {
               }
             </button>
             {isStudioOpen && (
-              <div className="grid grid-cols-2 gap-1 mt-1">
+              <div className="grid grid-cols-2 gap-1.5 mt-1.5">
                 {studioTools.map((tool) => (
                   <button
                     key={tool.label}
                     onClick={() => openTool(tool.onClick)}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium text-neutral-600 dark:text-zinc-400 hover:text-neutral-900 dark:hover:text-zinc-100 hover:bg-neutral-100 dark:hover:bg-zinc-800/60 transition-colors text-left cursor-pointer truncate"
+                    className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-[11px] font-medium text-neutral-700 dark:text-zinc-300 hover:text-neutral-950 dark:hover:text-white bg-white/40 dark:bg-white/5 hover:bg-white/70 dark:hover:bg-white/10 border border-black/5 dark:border-white/5 hover:border-black/10 dark:hover:border-white/15 transition-all text-left cursor-pointer truncate shadow-2xs hover:scale-[1.02]"
                   >
                     <tool.icon className={`w-3.5 h-3.5 shrink-0 ${tool.color}`} />
                     <span className="truncate">{tool.label}</span>

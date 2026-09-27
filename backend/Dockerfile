@@ -2,15 +2,13 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
+# Install uv (Astral's ultra-fast Rust package manager for 10x faster parallel downloads)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 
-# Install Python dependencies
+# Install Python dependencies with parallel multi-threaded downloads & BuildKit cache
 COPY requirements.txt .
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install -r requirements.txt
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install --system -r requirements.txt
 
 # Create non-root user
 RUN addgroup --system appuser && adduser --system --ingroup appuser appuser \

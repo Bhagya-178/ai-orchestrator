@@ -60,5 +60,9 @@ dist/
 node_modules/
 .next/
 out/
-
 CLAUDE.md
+
+# AI Agent & Indexing Metadata
+.claude/
+AGENTS.md
+.gitnexus/

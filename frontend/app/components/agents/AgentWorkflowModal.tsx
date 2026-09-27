@@ -171,6 +171,9 @@ export default function AgentWorkflowModal({
           } else if (evt.type === "node_error" && evt.node_id) {
             setNodeStatuses((prev) => ({ ...prev, [evt.node_id!]: "error" }));
             runStatusesRef.current[evt.node_id!] = "error";
+          } else if (evt.type === "workflow_error") {
+            setIsRunning(false);
+            setWorkflowError(evt.error || "Workflow execution encountered an error.");
           } else if (evt.type === "workflow_complete") {
             setIsRunning(false);
             const finalOut = evt.final_output || "";
@@ -202,9 +205,6 @@ export default function AgentWorkflowModal({
               return updated;
             });
             setSelectedRunId(newRun.id);
-          } else if (evt.type === "workflow_error") {
-            setIsRunning(false);
-            setWorkflowError(evt.error || "Workflow error encountered");
           }
         },
         controller.signal
@@ -311,10 +311,10 @@ export default function AgentWorkflowModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-      <div className="w-full max-w-5xl h-[85vh] bg-[var(--background)] border border-[var(--border)] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-md">
+      <div className="w-full max-w-5xl h-[85vh] liquid-glass-modal rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-3.5 border-b border-[var(--border)] bg-[var(--card)] gap-4">
+        <div className="flex items-center justify-between px-6 py-3.5 border-b border-black/10 dark:border-white/10 bg-white/30 dark:bg-black/20 gap-4 backdrop-blur-md">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
               <Bot className="w-5 h-5" />

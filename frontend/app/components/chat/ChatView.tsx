@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { ArrowDown, Lightbulb, Code, BookOpen, Sparkles } from "lucide-react";
+import { ArrowDown, Lightbulb, Code, BookOpen, Sparkles, Gamepad2 } from "lucide-react";
 import { useChat } from "@/app/lib/context/ChatContext";
 import MessageBubble from "./MessageBubble";
 import ChatComposer from "./ChatComposer";
 import ArtifactViewer from "../artifacts/ArtifactViewer";
+import ArcadeModal from "../arcade/ArcadeModal";
 
 const STARTER_PROMPTS = [
   {
@@ -40,6 +41,13 @@ export default function ChatView() {
   const programmaticTimerRef = useRef<NodeJS.Timeout | null>(null);
   const lastMessageCountRef = useRef(0);
   const lastConversationIdRef = useRef(currentConversationId);
+  const [isArcadeOpen, setIsArcadeOpen] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setIsArcadeOpen(true);
+    window.addEventListener("open-arcade", handler);
+    return () => window.removeEventListener("open-arcade", handler);
+  }, []);
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     isProgrammaticScrollRef.current = true;
@@ -121,31 +129,34 @@ export default function ChatView() {
   if (messages.length === 0) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center px-4 py-8 h-full relative overflow-y-auto">
-        <div className="w-full max-w-[720px] flex flex-col items-center my-auto">
+        <div className="w-full max-w-[780px] mx-auto flex flex-col items-center my-auto">
           {/* Hero */}
-          <div className="flex flex-col items-center text-center mb-7">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center mb-4 shadow-md shadow-blue-500/20">
-              <span className="text-white font-bold text-base tracking-tight">AI</span>
+          <div className="flex flex-col items-center text-center mb-8">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 flex items-center justify-center mb-4 shadow-xl shadow-blue-500/25 border border-white/20 relative group">
+              <span className="text-white font-extrabold text-base tracking-tight">AI</span>
+              <div className="absolute inset-0 rounded-2xl bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
             </div>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-[var(--foreground)] mb-2">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--foreground)] mb-2">
               AI Orchestrator
             </h1>
-            <p className="text-[var(--muted)] text-sm max-w-sm">
-              Your unified AI workspace. Run local models or connect any cloud provider with your own API key.
+            <p className="text-[var(--muted)] text-sm max-w-md leading-relaxed">
+              Your unified AI workspace. Run local Ollama models, connect any cloud provider with your own API key, or orchestrate multi-agent swarms.
             </p>
           </div>
 
-          {/* Starter cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full mb-6">
+          {/* Starter cards with authentic liquid glass */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full mb-6 px-1">
             {STARTER_PROMPTS.map((starter, i) => (
               <button
                 key={i}
                 onClick={() => sendMessage(starter.prompt)}
-                className="flex items-start gap-3 p-3.5 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-black/[0.03] dark:hover:bg-white/[0.04] hover:border-black/15 dark:hover:border-white/15 transition-all text-left group cursor-pointer shadow-xs"
+                className="flex items-start gap-3 p-3.5 rounded-2xl liquid-glass-card text-left group cursor-pointer"
               >
-                <div className="mt-0.5 shrink-0">{starter.icon}</div>
-                <div>
-                  <div className="text-xs font-semibold text-[var(--foreground)] mb-0.5">
+                <div className="mt-0.5 shrink-0 p-2 rounded-xl bg-white/60 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-2xs">
+                  {starter.icon}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-[var(--foreground)] mb-0.5 group-hover:text-sky-500 dark:group-hover:text-sky-400 transition-colors">
                     {starter.title}
                   </div>
                   <p className="text-[11px] text-[var(--muted)] line-clamp-2 leading-relaxed">
@@ -161,6 +172,14 @@ export default function ChatView() {
             <ChatComposer />
           </div>
         </div>
+
+        {/* Neural Arcade mini-games modal */}
+        <ArcadeModal
+          isOpen={isArcadeOpen}
+          onClose={() => setIsArcadeOpen(false)}
+          isGenerating={isGenerating}
+          onViewAnswer={() => scrollToBottom("smooth")}
+        />
       </div>
     );
   }
@@ -176,7 +195,7 @@ export default function ChatView() {
         onTouchMove={handleUserInteraction}
         className="flex-1 overflow-y-auto px-4 py-8 scroll-smooth"
       >
-        <div className="max-w-[760px] mx-auto flex flex-col gap-8 pb-4">
+        <div className="w-full max-w-[780px] mx-auto flex flex-col gap-8 pb-4">
           {messages.map((msg) => (
             <MessageBubble key={msg.id} message={msg} />
           ))}
@@ -190,7 +209,7 @@ export default function ChatView() {
         <div className="absolute bottom-36 sm:bottom-40 right-6 z-30">
           <button
             onClick={() => scrollToBottom("smooth")}
-            className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] shadow-[var(--shadow)] hover:bg-black/5 dark:hover:bg-white/5 transition-all hover:scale-105 active:scale-95"
+            className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--card)] text-[var(--foreground)] border border-[var(--border)] shadow-[var(--shadow)] hover:bg-black/5 dark:hover:bg-white/5 transition-all hover:scale-105 active:scale-95 cursor-pointer"
             title="Scroll to bottom"
           >
             <ArrowDown className="w-4 h-4" />
@@ -199,14 +218,22 @@ export default function ChatView() {
       )}
 
       {/* Pinned composer with gradient fade above */}
-      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[var(--background)] via-[var(--background)]/95 to-transparent pt-10 pointer-events-none">
-        <div className="pointer-events-auto">
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[var(--background)] via-[var(--background)]/90 to-transparent pt-10 pointer-events-none">
+        <div className="pointer-events-auto w-full">
           <ChatComposer />
         </div>
       </div>
 
       {/* Canvas / Artifact viewer */}
       <ArtifactViewer />
+
+      {/* Neural Arcade mini-games modal */}
+      <ArcadeModal
+        isOpen={isArcadeOpen}
+        onClose={() => setIsArcadeOpen(false)}
+        isGenerating={isGenerating}
+        onViewAnswer={() => scrollToBottom("smooth")}
+      />
     </div>
   );
 }

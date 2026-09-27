@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
-import { Paperclip, ArrowUp, FileText, X, Sparkles, AlertCircle, Square, Layers } from "lucide-react";
+import { Paperclip, ArrowUp, FileText, X, Sparkles, AlertCircle, Square, Layers, Gamepad2 } from "lucide-react";
 import { useChat } from "@/app/lib/context/ChatContext";
 import { useAuth } from "@/app/lib/context/AuthContext";
 import { uploadDocument } from "@/app/lib/api/documents";
@@ -44,6 +44,13 @@ export default function ChatComposer() {
   const [message, setMessage] = useState("");
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isGuestLimitModalOpen, setIsGuestLimitModalOpen] = useState(false);
+  const [dismissWaitingPrompt, setDismissWaitingPrompt] = useState(false);
+
+  useEffect(() => {
+    if (!isGenerating) {
+      setDismissWaitingPrompt(false);
+    }
+  }, [isGenerating]);
 
   // Dynamic models state
   const [localModels, setLocalModels] = useState<string[]>([]);
@@ -282,7 +289,41 @@ export default function ChatComposer() {
   }, [isRagActive, intentOverride, setIntentOverride, updateSettings]);
 
   return (
-    <div className="w-full max-w-[800px] mx-auto p-4 pb-6 mt-auto">
+    <div className="w-full max-w-[780px] mx-auto px-4 sm:px-6 pb-4 sm:pb-6 mt-auto">
+      {/* Waiting Arcade Banner during generation */}
+      {isGenerating && (
+        <div className="mb-2.5 flex items-center justify-between px-3.5 py-2 rounded-2xl liquid-glass border border-sky-500/30 text-xs animate-fade-in shadow-lg">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-sky-500 animate-ping" />
+            <span className="text-[var(--foreground)] font-medium text-[11px]">
+              {dismissWaitingPrompt
+                ? "AI response is streaming in background..."
+                : "Response generating... Play games or wait?"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("open-arcade"))}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-sky-500 hover:bg-sky-400 text-black font-semibold text-[11px] shadow-sm shadow-sky-500/20 transition-all cursor-pointer hover:scale-105 active:scale-95"
+            >
+              <Gamepad2 className="w-3.5 h-3.5" />
+              <span>Play Games</span>
+            </button>
+            {!dismissWaitingPrompt && (
+              <button
+                type="button"
+                onClick={() => setDismissWaitingPrompt(true)}
+                className="px-2.5 py-1 rounded-xl text-[11px] font-medium text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                title="Dismiss and wait silently"
+              >
+                Just Wait
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {uploadError && (
         <div className="mb-3 p-3 flex items-center justify-between text-sm text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 rounded-xl border border-red-200 dark:border-red-900/30">
           <div className="flex items-center gap-2">
@@ -295,7 +336,7 @@ export default function ChatComposer() {
         </div>
       )}
       
-      <div className="relative flex flex-col bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-neutral-200/90 dark:border-zinc-800/90 rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-blue-500/15 focus-within:border-blue-500/40 dark:focus-within:border-zinc-700 transition-all shadow-sm hover:border-neutral-300 dark:hover:border-zinc-700/80">
+      <div className="relative flex flex-col liquid-glass rounded-2xl overflow-hidden focus-within:ring-2 focus-within:ring-sky-500/20 focus-within:border-sky-500/40 dark:focus-within:border-zinc-700 transition-all shadow-xl hover:border-neutral-300 dark:hover:border-zinc-700/80">
         
         {/* Document upload preview (only during initial upload) */}
         {activeDocument && activeDocument.status === "uploading" && (
@@ -381,6 +422,16 @@ export default function ChatComposer() {
                 </button>
               </>
             )}
+
+            {/* Neural Arcade mini-games launcher */}
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent("open-arcade"))}
+              className="p-1.5 text-neutral-400 hover:text-sky-500 dark:hover:text-sky-400 hover:bg-neutral-100 dark:hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer shrink-0"
+              title="Play Arcade Mini-Games (Snake, Breakout, Dodger)"
+            >
+              <Gamepad2 className="w-4 h-4" />
+            </button>
 
             {/* Document Context Pill — unique toggle control */}
             {showContextPill && activeDocument.status !== "uploading" && (

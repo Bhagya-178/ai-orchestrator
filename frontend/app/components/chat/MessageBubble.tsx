@@ -241,14 +241,14 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
             rounded-2xl text-sm leading-relaxed
             ${
               isUser
-                ? "bg-neutral-100 dark:bg-zinc-800/90 text-[var(--foreground)] px-4 py-2.5 rounded-br-xs border border-neutral-200/80 dark:border-zinc-700/80 shadow-xs font-normal"
+                ? "liquid-glass text-[var(--foreground)] px-4 py-2.5 rounded-br-xs font-normal shadow-sm"
                 : "bg-transparent text-[var(--foreground)] w-full px-0 py-0"
             }
           `}
         >
           {/* Document attachment badge */}
           {message.attachedDocument && (
-            <div className="flex items-center gap-2.5 p-2.5 mb-3 bg-[var(--card)] border border-[var(--border)] rounded-xl max-w-xs shadow-sm">
+            <div className="flex items-center gap-2.5 p-2.5 mb-3 liquid-glass-card rounded-xl max-w-xs shadow-sm">
               <div className="w-8 h-8 shrink-0 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-lg flex items-center justify-center">
                 <FileText className="w-4 h-4" />
               </div>
@@ -306,7 +306,7 @@ const MessageBubble = React.memo(function MessageBubble({ message }: { message: 
                     <div className="flex flex-col gap-2 mb-3 w-full">
                       {/* Thought / Reasoning section */}
                       {thoughtSteps.length > 0 && (
-                        <div className="rounded-xl border border-purple-200/70 dark:border-purple-900/40 bg-purple-50/20 dark:bg-purple-950/15 text-xs overflow-hidden shadow-2xs">
+                        <div className="rounded-xl border border-purple-200/70 dark:border-purple-900/40 bg-purple-50/20 dark:bg-purple-950/15 backdrop-blur-md text-xs overflow-hidden shadow-2xs">
                           <button
                             onClick={() => setIsThoughtsExpanded(!isThoughtsExpanded)}
                             className="w-full flex items-center justify-between px-3 py-2 text-left text-[var(--muted)] hover:text-[var(--foreground)] transition-colors cursor-pointer"

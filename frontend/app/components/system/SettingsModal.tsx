@@ -308,10 +308,10 @@ export default function SettingsModal({
   const currentPreset = PROVIDER_PRESETS.find((p) => p.provider === newProvider) || PROVIDER_PRESETS[0];
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="w-full max-w-[760px] bg-[var(--background)] border border-[var(--border)] shadow-[var(--shadow-lg)] rounded-2xl overflow-hidden flex flex-col md:flex-row h-[85vh] max-h-[620px] transition-all">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-md p-4">
+      <div className="w-full max-w-[760px] liquid-glass-modal shadow-2xl rounded-2xl overflow-hidden flex flex-col md:flex-row h-[85vh] max-h-[620px] transition-all">
         {/* Sidebar Tabs */}
-        <div className="w-full md:w-[210px] border-b md:border-b-0 md:border-r border-[var(--border)] p-3 md:p-4 flex flex-row md:flex-col overflow-x-auto gap-1 bg-black/[0.02] dark:bg-white/[0.02] shrink-0">
+        <div className="w-full md:w-[210px] border-b md:border-b-0 md:border-r border-black/10 dark:border-white/10 p-3 md:p-4 flex flex-row md:flex-col overflow-x-auto gap-1 bg-white/30 dark:bg-black/20 shrink-0 backdrop-blur-md">
           <div className="hidden md:block text-xs font-semibold text-gray-400 dark:text-zinc-500 uppercase tracking-wider mb-2.5 px-2.5">
             Settings
           </div>
