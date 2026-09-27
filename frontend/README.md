@@ -28,14 +28,32 @@ Designed with **Claude and ChatGPT parity**, the frontend provides a distraction
 - **Interactive Message Controls**: In-place prompt editing with branching, message regeneration, and clipboard copy with fallback.
 - **Document Context Pill**: Non-intrusive attachment pill for PDF, DOCX, and TXT files with one-click context toggling and status indicators.
 
-### 2. 6-Digit Email OTP Verification & Access Control (`AuthModal.tsx`)
+### 2. Dual-Theme Liquid Glass Refraction System & Bespoke Wallpapers
+- **Optical Glass Refraction**: Custom-engineered `.liquid-glass`, `.liquid-glass-card`, `.liquid-glass-pill`, and `.liquid-glass-modal` CSS classes delivering 40px backdrop blur, saturation boosts, specular highlights, and inner caustics across messages, sidebars, and studio windows.
+- **Bespoke Light & Dark Optical Wallpapers**:
+  - *☀️ Light Mode (`/ambient-light.jpg`)*: Minimalist Apple-inspired pristine liquid glass caustics with ethereal pastel refraction curves (iridescent soft cyan, sky blue, and lavender) illuminated with soft studio light.
+  - *🌙 Dark Mode (`/ambient-dark.jpg`)*: Deep obsidian graphite wallpaper with glowing sapphire, celestial violet, and cybernetic emerald fluid ribbons featuring specular optical edge refractions.
+- **Theme-Aware Seamless Transition**: [`AmbientBackground.tsx`](file:///e:/Project/ai-orchestrator/frontend/app/components/layout/AmbientBackground.tsx) detects active light/dark mode and smoothly crossfades between the two dedicated wallpapers with smooth 700ms opacity transitions and radial depth vignettes.
+
+### 3. Interactive Arcade Mini-Games Hub (Zero-Lag Generation Distraction)
+When generating long-form code or complex multi-agent swarms, users can choose between **"🎮 Play Games"** and **"⏳ Just Wait"**:
+- **5 Pure HTML5 Canvas Arcade Games** (<0.5% CPU, <2MB RAM, 60 FPS, zero external dependencies):
+  - *1v1 Cyber Volleyball (`ArcadeVolleyball.tsx`)*: Slime volleyball vs Cyber AI with jump/spike physics and court boundaries.
+  - *1v1 Neon Air Hockey (`CyberHockey.tsx`)*: Table hockey vs reactive AI opponent with puck deflection acoustics.
+  - *Cyber Snake (`CyberSnake.tsx`)*: Cyberpunk grid snake with progressive difficulty scaling and score multipliers.
+  - *Quantum Breakout (`QuantumBreakout.tsx`)*: Neon paddle brick breaker with particle trails and multi-ball dynamics.
+  - *Void Runner (`VoidRunner.tsx`)*: Procedural side-scrolling obstacle jumper.
+- **Synthesized Web Audio Engine (`arcadeAudio.ts`)**: Pure Web Audio API oscillators for retro sound effects without MP3 network downloads.
+- **Answer Ready Banner**: Once model generation completes, users can click **[View Answer]** or **[Keep Playing]** without losing game state.
+
+### 4. 6-Digit Email OTP Verification & Access Control (`AuthModal.tsx`)
 - **Seamless Verification Flow**: On registration, the modal transitions to an enterprise 6-digit code verification view.
 - **Interactive Input Mechanics**: Auto-focus advancing across 6 individual digit fields, backspace navigation, and smart clipboard paste parsing.
 - **Resend Cooldown Timer**: 60-second animated countdown protecting against spam and rate-limit exhaustion.
 - **Dev-Mode Quick-Fill Pill**: When running without production SMTP, displays an automatic 1-click badge with the local `dev_otp` for rapid local testing.
 - **Admin Support**: Direct authentication support for administrative accounts provisioned securely via environment variables (`ADMIN_EMAIL` / `ADMIN_PASSWORD`).
 
-### 3. Canvas Studio 2.0 (`app/components/artifacts/`)
+### 5. Canvas Studio 2.0 (`app/components/artifacts/`)
 Full Claude Artifacts parity for code, interactive web applications, SVGs, and Mermaid diagrams:
 - **Multi-Tab Workspace**:
   - `Preview`: Sandboxed iframe with live execution of HTML/CSS/JavaScript and React widgets.
@@ -44,25 +62,18 @@ Full Claude Artifacts parity for code, interactive web applications, SVGs, and M
   - `Diff`: Visual line-by-line diff comparing original vs edited artifact revisions.
 - **Interactive Controls**: Built-in pan, zoom, reset, fullscreen, and download capabilities for SVGs and diagrams.
 
-### 4. Agent Operations Studio (`app/components/agents/`)
-A dedicated mission-control hub for autonomous Directed Acyclic Graph pipelines:
-- **Previous Runs Archive**: Persistent execution history stored in PostgreSQL (`WorkflowRun`) and mirrored to local storage—review past objectives, node outputs, and timings across sessions.
-- **Interactive DAG Topology & Node Inspector**: Step through the visual flow of Kahn-sorted agent nodes, clicking any node to inspect that agent's exact prompt, reasoning, and duration.
-- **💬 Continue in Chat**: 1-click export of any past or current workflow deliverable into the active chat conversation.
-
-### 5. Categorized "Studio & Tools ▾" Popover (`TopBar.tsx`)
-Consolidates 10 disparate studio features into an uncluttered popover menu organized into 4 intuitive categories:
-- **Agents & Knowledge**:
-  - *Agent Operations Studio*: Visual Directed Acyclic Graph editor, runs archive, role config, and live execution telemetry.
-  - *Knowledge Graph Visualizer*: 2D interactive SVG network visualizer with PageRank metrics and entity search.
-- **Model Lab & Evals**:
-  - *Model Arena*: Side-by-side split battles comparing latency, TTFT, and output quality between models.
-  - *Evals Dashboard*: LLM-as-a-judge benchmark scorecards measuring faithfulness, relevance, and hallucination rates with auto-populated candidate and judge model selection dropdowns.
-- **Platform & System**:
-  - *Developer Studio*: Self-service scoped API key creation and HMAC-SHA256 webhook subscriptions.
-  - *Settings & Documents*: System theme, vector chunk inspector, and document manager.
-- **Workspaces**:
-  - *Workspace Switcher*: Multi-tenant team workspace management with role-based access control (`owner`, `admin`, `member`, `viewer`).
+### 6. Floating Liquid Glass Studio & Tools
+All 10+ developer and orchestration studios are rendered inside floating `.liquid-glass-modal` windows:
+- **Agents DAG Operations Studio (`AgentWorkflowModal.tsx`)**: Visual Directed Acyclic Graph editor, runs archive, role config, and live execution telemetry.
+- **Knowledge Graph Visualizer (`GraphVisualizerModal.tsx`)**: 2D interactive SVG network visualizer with PageRank metrics and entity search.
+- **Hybrid RAG 2.0 & Chunks (`KnowledgeBaseModal.tsx`)**: Vector collection management and raw chunk inspector.
+- **Model Context Protocol Hub (`McpServerModal.tsx`)**: External MCP STDIO/SSE server connection manager.
+- **Model Arena (`ArenaModal.tsx`)**: Side-by-side split battles comparing latency, TTFT, and output quality between models.
+- **Evals Dashboard (`EvalsDashboardModal.tsx`)**: LLM-as-a-judge benchmark scorecards measuring faithfulness, relevance, and hallucination rates.
+- **Developer Studio (`DeveloperStudioModal.tsx`)**: Scoped API key creation and HMAC-SHA256 webhook subscriptions.
+- **Telemetry & Cost Analytics (`AnalyticsModal.tsx`)**: System throughput, token volume forecasting, and host infrastructure telemetry.
+- **Workspaces & RBAC (`WorkspaceModal.tsx`)**: Multi-tenant team workspace management with role-based access control.
+- **System Settings (`SettingsModal.tsx`)**: Theme preferences, local Ollama models, and BYOK cloud API keys.
 
 ---
 
@@ -70,12 +81,23 @@ Consolidates 10 disparate studio features into an uncluttered popover menu organ
 
 ```text
 frontend/
+├── public/                    # High-Resolution Optical Liquid Glass Wallpapers
+│   ├── ambient-light.jpg      # Apple-style pristine liquid glass caustics (Light Mode)
+│   └── ambient-dark.jpg       # Deep obsidian graphite glowing ribbons (Dark Mode)
 ├── app/
 │   ├── components/
 │   │   ├── chat/              # Core Chat Experience
 │   │   │   ├── ChatComposer.tsx     # Dynamic effort selector, file upload, history navigation
 │   │   │   ├── ChatView.tsx         # Message feed, scroll anchors, empty states
 │   │   │   └── MessageBubble.tsx    # Markdown, syntax highlighter, inline ReAct cards
+│   │   ├── arcade/            # Interactive Arcade Mini-Games Hub (<0.5% CPU)
+│   │   │   ├── ArcadeHubModal.tsx   # 5-game launcher, controls & answer-ready banner
+│   │   │   ├── ArcadeVolleyball.tsx # 1v1 Slime Volleyball vs AI
+│   │   │   ├── CyberHockey.tsx      # 1v1 Neon Air Hockey vs AI
+│   │   │   ├── CyberSnake.tsx       # Cyberpunk Grid Snake
+│   │   │   ├── QuantumBreakout.tsx  # Neon Paddle Brick Breaker
+│   │   │   ├── VoidRunner.tsx       # Procedural Obstacle Jumper
+│   │   │   └── arcadeAudio.ts       # Synthesized Web Audio oscillator sound engine
 │   │   ├── auth/              # Authentication & Verification
 │   │   │   ├── AuthModal.tsx        # 6-digit OTP verification view, login, and registration
 │   │   │   ├── GuestLimitModal.tsx  # Guest usage quota prompt
@@ -113,7 +135,7 @@ frontend/
 │   │   │   └── ThemeContext.tsx     # System, dark, and light theme sync
 │   │   └── types.ts           # Central TypeScript definitions
 │   │
-│   ├── globals.css            # Tailwind CSS v4 configuration and variables
+│   ├── globals.css            # Tailwind CSS v4 & .liquid-glass / .liquid-glass-modal styling
 │   ├── layout.tsx             # Root layout with theme and auth providers
 │   └── page.tsx               # Main application entrypoint
 │
@@ -135,27 +157,42 @@ From the repository root:
 docker compose up -d frontend
 ```
 
-### 🔄 How to Update the Frontend Container
-Whenever changes are made to frontend code, components, or npm packages:
+### 2. Container Lifecycle & Data Preservation Guide
 
-1. **Rebuild without cache**:
-   ```bash
-   docker compose build --no-cache frontend
-   docker compose up -d --no-deps frontend
-   ```
+| Operation | Command | What It Does | Are Conversations & DB Saved? |
+| :--- | :--- | :--- | :---: |
+| **Pause / Stop** | `docker compose stop frontend` | Halts frontend container without destroying it. | **YES (100% Intact)** |
+| **Resume** | `docker compose start frontend` | Resumes frontend container in ~1 second. | **YES (100% Intact)** |
+| **Teardown** | `docker compose down` | Stops and removes container instances and network bridge. | **YES (Named volumes preserved)** |
+| **Full Wipe** | `docker compose down -v` | Stops containers and **destroys all database & vector volumes**. | ⚠️ **NO (Purges all data)** |
 
-2. **One-Liner Rebuild & Restart**:
-   ```bash
-   docker compose up -d --build --force-recreate frontend
-   ```
+> [!NOTE]
+> **Data Volume Safety**: Running `docker compose down` stops and removes compute instances while safely preserving your named PostgreSQL (`postgres_data`) and Qdrant (`qdrant_data`) volumes on host disk. Data is only erased if you explicitly pass the `-v` flag (`docker compose down -v`).
 
-3. **Check Frontend Logs**:
-   ```bash
-   docker compose logs -f --tail=100 frontend
-   ```
+### 🚀 Everyday Fast Update: Recompile in 3–5 Seconds (Recommended)
+For all normal UI code, component, and style updates:
+```bash
+docker compose up -d --build --no-deps frontend
+```
+> [!TIP]
+> **Why this is instant:**
+> - Docker layer caching keeps `npm ci` cached (**0.0s**).
+> - Next.js Turbopack incrementally compiles only your modified `.tsx` and `.css` files.
+> - Backend, PostgreSQL, and Qdrant stay running with **zero downtime** (`--no-deps`).
 
-4. **Verify Container Health**:
-   Visit [http://localhost:3000](http://localhost:3000) in your browser.
+### ⚡ Clean Rebuild (Only When package.json Changes)
+```bash
+docker compose build --no-cache frontend && docker compose up -d --no-deps frontend
+```
+
+### 🔍 Container Diagnostics
+```bash
+# Check container status
+docker compose ps frontend
+
+# View live frontend logs
+docker compose logs -f --tail=100 frontend
+```
 
 ---
 

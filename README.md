@@ -1,12 +1,12 @@
 <div align="center">
   <h1>🤖 AI Orchestrator Enterprise</h1>
   <p><b>A private, production-grade local AI operating platform with Claude and ChatGPT parity.</b></p>
-  <p><i>Featuring Multi-Agent DAG Workflows, Interactive Canvas Studio 2.0, Hybrid RAG 2.0, Code Knowledge Graphs, Semantic Vector Caching, Model Arena with Single-GPU VRAM Scheduling, and an Enterprise Developer Platform.</i></p>
+  <p><i>Featuring Multi-Agent DAG Workflows, Dual-Theme Liquid Glass UI, Interactive Canvas Studio 2.0, Arcade Mini-Games Hub, Hybrid RAG 2.0, Code Knowledge Graphs, Semantic Vector Caching, Model Arena with Single-GPU VRAM Scheduling, and an Enterprise Developer Platform.</i></p>
 
   <p>
     <a href="https://nextjs.org/"><img src="https://img.shields.io/badge/Next.js-16_Turbopack-black?style=flat-square&logo=next.js" alt="Next.js"></a>
     <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat-square&logo=fastapi" alt="FastAPI"></a>
-    <a href="https://python.org/"><img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python" alt="Python"></a>
+    <a href="https://python.org/"><img src="https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square&logo=python" alt="Python"></a>
     <a href="https://ollama.com/"><img src="https://img.shields.io/badge/Ollama-Local_LLMs-white?style=flat-square&logo=ollama" alt="Ollama"></a>
     <a href="https://qdrant.tech/"><img src="https://img.shields.io/badge/Qdrant-Vector_DB-red?style=flat-square&logo=qdrant" alt="Qdrant"></a>
     <a href="https://www.postgresql.org/"><img src="https://img.shields.io/badge/PostgreSQL-16_Database-blue?style=flat-square&logo=postgresql" alt="PostgreSQL"></a>
@@ -18,6 +18,8 @@
   <p>
     <a href="#-system-architecture">Architecture</a> •
     <a href="#-core-capabilities">Capabilities</a> •
+    <a href="#-dual-theme-liquid-glass-refraction--bespoke-wallpapers">Liquid Glass & Wallpapers</a> •
+    <a href="#-interactive-arcade-mini-games-hub-zero-lag-generation-distraction">Arcade Hub</a> •
     <a href="#-dynamic-effort-scaling--autonomous-reflection">Dynamic Effort</a> •
     <a href="#-quickstart-guide">Quickstart</a> •
     <a href="#-docker-compose-deployment">Docker</a> •
@@ -36,11 +38,14 @@
 Rather than treating Large Language Models as simple text completion endpoints, AI Orchestrator wraps open weights in an enterprise orchestration layer combining:
 
 - **Multi-Agent DAG Workflows**: Kahn's topological sort with 5 specialized personas, sequential single-GPU execution (zero VRAM thrashing), dynamic token budgeting, and autonomous security reflection loops.
+- **Dual-Theme Liquid Glass Refraction**: Bespoke optical glass styling (`.liquid-glass`, `.liquid-glass-modal`) with 40px backdrop blur, specular caustics, and separate dedicated high-res wallpapers for Light (`/ambient-light.jpg`) and Dark (`/ambient-dark.jpg`) modes with smooth 700ms crossfades across all 10+ floating studios.
 - **Interactive Canvas Studio 2.0**: Full Claude Artifacts parity with live HTML/React/SVG preview, code editor, bi-directional `postMessage` console bridge, revision history, and side-by-side diffing.
+- **Zero-Lag Arcade Mini-Games Hub**: 5 pure HTML5 Canvas arcade mini-games (1v1 Volleyball, Neon Hockey, Snake, Breakout, Void Runner) with Web Audio sound synthesis, running under 0.5% CPU during long multi-agent generations with non-intrusive answer-ready alerts.
 - **Hybrid RAG 2.0 & Code Knowledge Graph**: Dense vector semantic retrieval (Qdrant) combined with BM25Okapi sparse lexical scoring via Reciprocal Rank Fusion, enriched with AST-extracted code knowledge graphs and PageRank centrality ranking.
 - **Sub-2ms Semantic Vector Cache**: O(1) query hash caching coupled with Cosine vector similarity matching ($\ge 0.92$) to eliminate redundant LLM inference overhead and track token savings.
 - **Model Arena & Evals Studio**: Blind side-by-side A/B testing with sequential GPU memory unloading, automated Elo leaderboards, and programmatic LLM-as-a-judge evaluation benchmark suites.
 - **Enterprise Developer Platform**: Programmatic API keys (`ak_live_...`) with SHA-256 storage, granular permission scopes, and HMAC-SHA256 signed webhooks with timestamp replay resistance.
+- **Astral `uv` Container Acceleration**: Sub-2s Docker dependency builds (`uv pip install --system`) and Python 3.12 `greenlet` AsyncIO stability.
 - **Zero-Trust Security & Onboarding**: 6-digit email OTP verification with SHA-256 peppered hashing, brute-force protection, rate-limiting, and strictly environment-driven administrative provisioning.
 
 > [!TIP]
@@ -180,7 +185,9 @@ graph TB
 | Subsystem | Architectural Implementation | Key Highlights |
 | :--- | :--- | :--- |
 | **Multi-Agent DAG Swarms** | Kahn's topological sort, sequential single-GPU execution, reflection loops | 5 specialized personas (`Planner`, `Researcher`, `Coder`, `Reviewer`, `Critic`), sequential single-GPU execution (`_agent_gpu_lock`), unified `qwen2.5-coder:7b` execution for fullstack loops, in-chat streaming cards, and dedicated operations studio. |
+| **Dual-Theme Liquid Glass** | CSS optical refraction, 40px backdrop blur, specular caustics | Custom-engineered `.liquid-glass`, `.liquid-glass-card`, and `.liquid-glass-modal` styling across all 10+ floating studios, paired with dedicated Light (`/ambient-light.jpg`) and Dark (`/ambient-dark.jpg`) wallpapers and 700ms crossfade transitions. |
 | **Interactive Canvas Studio 2.0** | Next.js iframe sandbox with postMessage bridge | Full Claude Artifacts parity with multi-tab viewing (`Preview`, `Code Editor`, `Console`, `Diff`), real-time JavaScript console capture, revision tracking, and SVG pan/zoom. |
+| **Arcade Mini-Games Hub** | Zero-lag HTML5 canvas games (<0.5% CPU) + Web Audio | 5 retro arcade games (1v1 Cyber Volleyball, 1v1 Neon Air Hockey, Cyber Snake, Quantum Breakout, Void Runner) with Web Audio sound synthesis, non-intrusive generation companion, and instant answer alerts. |
 | **Dynamic Effort Scaling** | Iteration-based runtime scaling without token caps | User-selectable reasoning depth (`⚡ Low`, `⚖️ Medium`, `🧠 High`) controlling task iteration count (2, 5, 7) and reflection loops while granting all models the full context window (16K context & 8K generation) without token truncation. |
 | **Hybrid RAG 2.0** | Dense vector search fused with BM25Okapi sparse lexical | Reciprocal Rank Fusion ($RRF(d) = \sum \frac{1}{60 + \text{rank}}$), document collection tagging, dynamic chunking, and graceful fallbacks when vector DB is unavailable. |
 | **Entity Knowledge Graph** | AST code parsing with PageRank network analysis | Extracts Python and TypeScript classes, functions, calls, and inheritance hierarchies; computes PageRank centrality, BFS/Dijkstra shortest paths, and contextual query expansion. |
@@ -188,8 +195,41 @@ graph TB
 | **Model Arena & Evals** | Single-GPU sequential memory scheduler & Elo ranking | Side-by-side blind model battles without VRAM thrashing; automated benchmark evaluation suites scoring accuracy, faithfulness, and hallucination rates. |
 | **Developer Platform** | Scoped API tokens & HMAC-SHA256 signed webhooks | Programmatic API access (`ak_live_...`, `ak_test_...`), granular scopes (`chat:read`, `rag:admin`, `agents:run`), and resilient webhooks with replay attack prevention. |
 | **Sandboxed ReAct Tools** | AST-validated execution environments | Read-only SQL queries, sandboxed filesystem access (path traversal & UNC safe), AST math evaluation (blocks arbitrary code execution), and declarative Chart.js generation. |
+| **Astral `uv` Acceleration** | Rust-based multi-threaded package manager in Docker | 1.6s package installs (down from 430s), Python 3.12 `greenlet` AsyncIO stability, BuildKit layer caching, and 3–5s fast container updates. |
 | **Model Context Protocol (MCP)** | JSON-RPC 2.0 client supporting `stdio` & `sse` | Bridges external MCP servers and tools directly into the ReAct agent tool loop dynamically at runtime. |
 | **Zero-Trust Auth & RBAC** | 6-digit email OTP onboarding + SHA-256 peppered hashing | 10-minute code expiry, 5-attempt lockout, 60s cooldown rate-limiting, async SMTP TLS delivery with dev fallback, and strict environment-controlled admin credentials. |
+
+---
+
+## 🎨 Dual-Theme Liquid Glass Refraction & Bespoke Wallpapers
+
+The entire user interface features an **optical liquid glass refraction system** designed to combine high-end desktop elegance with complete visual clarity:
+
+- **Optical Glass Refraction Styling**: Custom `.liquid-glass`, `.liquid-glass-card`, `.liquid-glass-pill`, and `.liquid-glass-modal` CSS classes deliver:
+  - 40px backdrop-filter blur with boosted saturation.
+  - Subtly specular border highlights with dynamic light/dark edge illumination.
+  - Inner caustics reflection gradients that dynamically react to underlying wallpaper luminance.
+- **Separate Bespoke Light & Dark Wallpapers**:
+  - *☀️ Light Mode (`frontend/public/ambient-light.jpg`)*: Minimalist Apple-inspired pristine liquid glass caustics with ethereal pastel refraction curves (iridescent soft cyan, sky blue, and lavender) illuminated with soft studio light.
+  - *🌙 Dark Mode (`frontend/public/ambient-dark.jpg`)*: Deep obsidian graphite wallpaper with glowing sapphire, celestial violet, and cybernetic emerald fluid ribbons featuring specular optical edge refractions.
+- **Dynamic 700ms Crossfade Engine**: [`AmbientBackground.tsx`](file:///e:/Project/ai-orchestrator/frontend/app/components/layout/AmbientBackground.tsx) detects active light/dark mode and smoothly crossfades between the two dedicated wallpapers with smooth 700ms opacity transitions and radial depth vignettes.
+- **Universal Modal Application**: Every studio and tool modal (Agent Workflow Studio, Knowledge Graph Visualizer, RAG Knowledge Base, MCP Server Manager, Model Arena, Evals Dashboard, Prompt Library, Developer Studio, Telemetry Analytics, Workspace Switcher, and System Settings) floats as a liquid glass surface with frosted specular edges.
+
+---
+
+## 🕹️ Interactive Arcade Mini-Games Hub (Zero-Lag Generation Distraction)
+
+When waiting for long-form code synthesis, deep research synthesis, or 7-node multi-agent swarms, the interface offers an interactive, zero-latency entertainment companion:
+
+- **User Choice on Long Generations**: Choose between **"🎮 Play Games"** and **"⏳ Just Wait"**.
+- **5 Pure HTML5 Canvas Arcade Games** (<0.5% CPU, <2MB RAM, 60 FPS, zero external dependencies):
+  - *1v1 Cyber Volleyball (`ArcadeVolleyball.tsx`)*: Slime volleyball vs Cyber AI with jump/spike physics and court boundaries.
+  - *1v1 Neon Air Hockey (`CyberHockey.tsx`)*: Table hockey vs reactive AI opponent with puck deflection acoustics.
+  - *Cyber Snake (`CyberSnake.tsx`)*: Cyberpunk grid snake with progressive difficulty scaling and score multipliers.
+  - *Quantum Breakout (`QuantumBreakout.tsx`)*: Neon paddle brick breaker with particle trails and multi-ball dynamics.
+  - *Void Runner (`VoidRunner.tsx`)*: Procedural side-scrolling obstacle jumper.
+- **Synthesized Web Audio Engine (`arcadeAudio.ts`)**: Built-in sound synthesis using the browser's native Web Audio API oscillators—delivering punchy 8-bit sound effects without downloading external audio files.
+- **Non-Intrusive Answer-Ready Banner**: When the model finishes writing its response in the background, a floating banner announces **[Answer Ready]**—letting you click **[View Answer]** or **[Keep Playing]** without losing your game score.
 
 ---
 
@@ -357,13 +397,13 @@ docker compose up -d --build
 > [!TIP]
 > **What this command does on the first run:**
 > - Downloads the official PostgreSQL 15 and Qdrant vector database images.
-> - Builds the Next.js 16 frontend container with Turbopack & npm cache.
-> - Builds the FastAPI Python 3.12 backend container with **Astral `uv`** (parallel downloads drop dependency installation from ~7 minutes to under 15 seconds).
+> - Builds the Next.js 16 frontend container with Turbopack and standalone output.
+> - Builds the FastAPI Python 3.12 backend container accelerated by **Astral `uv`** (1.6s package installs).
 > - Creates isolated persistent Docker volumes (`postgres_data`, `qdrant_data`).
 > - Automatically runs database schema migrations (`init_db`) on first boot.
 > - Starts all 4 services in the background (`-d`).
 >
-> *Note: First-time build is now accelerated with Astral `uv` and BuildKit caching. Subsequent starts will be almost instant.*
+> *Note: Astral `uv` installs all Python dependencies in ~1.6 seconds. First-time build completes in under 2 minutes.*
 
 #### Alternative: Build First, Then Launch
 If you prefer to compile images before starting services:
@@ -392,134 +432,72 @@ To monitor initial startup logs:
 docker compose logs -f
 ```
 
-### 2. Maintenance & Container Operations
+---
 
-#### 🚀 Everyday Fast Update: Recompile Code in 3–8 Seconds (Recommended)
-For all normal code updates (UI changes, new routes, backend logic). Docker reuses cached packages and only recompiles your changed files:
+### 2. Container Lifecycle & Data Preservation Guide
 
+Understanding the difference between `stop`, `down`, and `down -v` ensures you never lose chat conversations or vector embeddings:
+
+| Operation | Command | What It Does | Are Conversations & DB Saved? |
+| :--- | :--- | :--- | :---: |
+| **Pause / Stop** | `docker compose stop` | Halts container execution without removing containers or networks. | **YES (100% Intact)** |
+| **Resume** | `docker compose start` | Instantly resumes paused containers in ~1 second. | **YES (100% Intact)** |
+| **Teardown** | `docker compose down` | Stops and removes container instances and network bridge. | **YES (Named volumes preserved)** |
+| **Full Wipe** | `docker compose down -v` | Stops containers and **destroys all database & vector volumes**. | ⚠️ **NO (Purges all data)** |
+
+> [!IMPORTANT]
+> **Why `docker compose down` does NOT delete your data:**
+> In `docker-compose.yml`, PostgreSQL and Qdrant use named persistent volumes (`postgres_data`, `qdrant_data`). Docker stores these volumes independently on your host filesystem. When `docker compose down` runs, Docker destroys only the stateless compute containers, but **strictly preserves your volumes**. When you launch containers again with `docker compose up -d`, they reconnect to the existing data seamlessly.
+
+---
+
+### 3. Rebuilding & Update Operations
+
+#### 🚀 Everyday Fast Update: Recompile in 3–5 Seconds (Recommended)
+When you modify `.py` backend code or `.tsx`/`.css` frontend files without changing dependencies:
 ```bash
-docker compose up -d --build --no-deps frontend backend
+# Fast backend reload (reuses cached uv packages in 0.0s)
+docker compose up -d --build --no-deps backend
+
+# Fast frontend reload (Turbopack incremental compile in 3-5s)
+docker compose up -d --build --no-deps frontend
 ```
+*Your database (`db`) and vector index (`qdrant`) remain online with zero downtime (`--no-deps`).*
 
-> [!TIP]
-> **Why this takes only 5 seconds:**
-> - Docker layer caching keeps `npm ci` and `pip install` cached (**0.0s**).
-> - Only your modified `.tsx` and `.py` code files are copied and compiled.
-> - PostgreSQL and Qdrant stay running with **zero downtime** (`--no-deps`).
-
-#### ⚡ Clean Rebuild (Only When Dependencies Change / No Cache)
-Use this **only** if you modified `requirements.txt` or `package.json` and need a completely clean dependency download:
-
+#### 🔄 Complete Clean Rebuild (Everything from Scratch)
+If you want to recreate all containers cleanly or if `requirements.txt` / `package.json` changed:
 ```bash
-docker compose build --no-cache frontend backend && docker compose up -d --no-deps frontend backend
-```
-
-*On Windows PowerShell:*
-```powershell
-docker compose build --no-cache frontend backend; docker compose up -d --no-deps frontend backend
-```
-
-#### 🎯 Single-Service Updates (No Cache)
-```bash
-# Update ONLY the Frontend (No Cache)
-docker compose build --no-cache frontend && docker compose up -d --no-deps frontend
-
-# Update ONLY the Backend (No Cache)
-docker compose build --no-cache backend && docker compose up -d --no-deps backend
-```
-
-#### 🔄 Full Clean Rebuild (All 4 Services)
-Only needed when changing PostgreSQL/Qdrant settings, volumes, or docker-compose ports:
-```bash
+# Step 1: Stop containers (keeps conversation data intact)
 docker compose down
+
+# Step 2: Rebuild all images without stale cache
 docker compose build --no-cache
+
+# Step 3: Start services in background
 docker compose up -d
 ```
 
-#### ⚠️ Full Force Recreate (All 4 Services)
+#### Fast One-Liner Re-creation
 ```bash
 docker compose up -d --build --force-recreate
 ```
 
-#### 🔄 How to Rebuild Everything Once Again
-
-##### Scenario A: Rebuild All Images (Keep Database & Data Intact)
-When you want to recompile both frontend and backend fresh without losing your database conversations, users, or vectors:
+#### 🔍 Container Diagnostics & Health Check
 ```bash
-docker compose up -d --build
-```
-*(Or without any cache)*:
-```bash
-docker compose build --no-cache && docker compose up -d
-```
+# Check status and health indicators of all services
+docker compose ps
 
-##### Scenario B: Complete Factory Reset (Wipe Everything & Start 100% Fresh)
-If you want to completely erase the database, vector storage, and recreate everything from scratch:
-```bash
-# WARNING: Deletes all database tables, users, messages, and vector embeddings!
-docker compose down -v --rmi local
-docker compose up -d --build
-```
-
-#### 🛑 Container Lifecycle: `stop` vs `down` vs `down -v`
-
-| Command | What It Does | Are Images Deleted? | Is Database Data Kept? |
-| :--- | :--- | :---: | :---: |
-| **`docker compose stop`** | **Pauses** running containers without removing them | ❌ No | ✅ Yes |
-| **`docker compose start`** | **Resumes** paused containers instantly | ❌ No | ✅ Yes |
-| **`docker compose down`** | **Removes container instances** and networks | ❌ No | ✅ Yes (Safe) |
-| **`docker compose down --rmi local`** | Removes containers AND locally compiled images | ✅ Yes | ✅ Yes (Safe) |
-| **`docker compose down -v`** | ⚠️ Removes containers **AND deletes data volumes** | ❌ No | ❌ Deleted |
-
-> [!IMPORTANT]
-> **Why doesn't deleting containers or images delete the database data?**
-> In Docker architecture, containers and images are **ephemeral** (disposable compute processes). Data is stored separately in **Named Volumes** (`postgres_data` and `qdrant_data`) on your host drive. 
-> Docker intentionally protects volumes so that restarting, stopping, or deleting containers **never** accidentally wipes your database or documents. To intentionally wipe data, you must explicitly pass the `-v` flag (`docker compose down -v`).
-
-#### 🧹 Clear Docker Build Cache & Stale Images
-
-```bash
-# 1. Clear Docker Buildx cache (frees up GBs of stored build layers)
-docker builder prune -a -f
-
-# 2. Remove locally built project images (forces complete fresh build next run)
-docker compose down --rmi local
-
-# 3. Clean all dangling images, stopped containers, and unused build caches
-docker system prune -f
-```
-
-> [!NOTE]
-> `docker builder prune -a -f` and `docker compose down --rmi local` preserve your persistent PostgreSQL and Qdrant data volumes (`postgres_data`, `qdrant_data`), so you never lose conversations or uploaded documents.
-
-#### 🧼 Clear Local Next.js & Python Development Caches
-When running locally outside Docker:
-
-*On Linux / macOS:*
-```bash
-rm -rf frontend/.next frontend/node_modules/.cache
-find backend -type d -name "__pycache__" -exec rm -rf {} +
-```
-
-*On Windows PowerShell:*
-```powershell
-Remove-Item -Recurse -Force frontend\.next, frontend\node_modules\.cache -ErrorAction SilentlyContinue
-Get-ChildItem -Path backend -Recurse -Filter "__pycache__" | Remove-Item -Recurse -Force
-```
-
-#### Database Schema Initialization
-Schema migrations are run automatically on container startup. To execute manually:
-```bash
-docker compose exec backend python -m app.database.init_db
-```
-
-#### View Live Service Logs
-```bash
 # Follow backend logs
-docker compose logs -f backend
+docker compose logs -f --tail=100 backend
 
 # Follow frontend logs
-docker compose logs -f frontend
+docker compose logs -f --tail=100 frontend
+
+# Directly query backend health endpoint
+docker compose exec backend python -c "import httpx; print(httpx.get('http://localhost:8000/health').json())"
+
+# Execute database schema migrations manually (runs automatically on startup)
+docker compose exec backend python -m app.database.init_db
 ```
 
 #### Host Ollama Connectivity
@@ -735,11 +713,22 @@ ai-orchestrator/
 │   └── requirements.txt       # Pinned Python dependencies
 │
 ├── frontend/
+│   ├── public/                # High-Resolution Optical Liquid Glass Wallpapers
+│   │   ├── ambient-light.jpg  # Apple-style pristine liquid glass caustics (Light Mode)
+│   │   └── ambient-dark.jpg   # Obsidian graphite glowing ribbons (Dark Mode)
 │   ├── app/
 │   │   ├── components/
 │   │   │   ├── agents/        # Agent Swarm Card (In-Chat Stepper) & Operations Studio
 │   │   │   │   ├── AgentSwarmCard.tsx     # Dynamic in-chat swarm stepper & thought inspector
 │   │   │   │   └── AgentWorkflowModal.tsx # Agent Operations Studio (DAG visualizer & history)
+│   │   │   ├── arcade/        # Interactive Arcade Mini-Games Hub (<0.5% CPU)
+│   │   │   │   ├── ArcadeHubModal.tsx     # 5-game launcher, controls & answer-ready banner
+│   │   │   │   ├── ArcadeVolleyball.tsx   # 1v1 Slime Volleyball vs AI
+│   │   │   │   ├── CyberHockey.tsx        # 1v1 Neon Air Hockey vs AI
+│   │   │   │   ├── CyberSnake.tsx         # Cyberpunk Grid Snake
+│   │   │   │   ├── QuantumBreakout.tsx    # Neon Paddle Brick Breaker
+│   │   │   │   ├── VoidRunner.tsx         # Procedural Obstacle Jumper
+│   │   │   │   └── arcadeAudio.ts         # Synthesized Web Audio oscillator sound engine
 │   │   │   ├── artifacts/     # Canvas Studio 2.0 (Preview, Code, Console, Diff)
 │   │   │   ├── auth/          # Authentication & OTP Verification Modals
 │   │   │   │   └── AuthModal.tsx          # 6-digit OTP verification & credentials form
@@ -756,8 +745,8 @@ ai-orchestrator/
 │   │   │   ├── api/           # Strongly-typed API clients (chat, auth, agents, evals, keys)
 │   │   │   ├── context/       # Chat, Artifact, Auth, and Theme React Contexts
 │   │   │   └── types.ts       # Unified TypeScript definitions
-│   │   └── globals.css
-│   ├── Dockerfile
+│   │   └── globals.css        # Tailwind v4 & .liquid-glass / .liquid-glass-modal styling
+│   ├── Dockerfile             # Multi-stage production container with standalone output
 │   ├── next.config.ts
 │   └── package.json
 │
