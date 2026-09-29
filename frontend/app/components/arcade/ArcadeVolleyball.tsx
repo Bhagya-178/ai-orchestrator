@@ -12,8 +12,6 @@ interface Slime {
   radius: number;
   speed: number;
   isJumping: boolean;
-  isDiving: boolean;
-  diveTimer: number;
 }
 
 interface Particle {
@@ -25,9 +23,12 @@ interface Particle {
   maxLife: number;
   color: string;
   size: number;
+  active: boolean;
 }
 
-export default function ArcadeVolleyball() {
+const MAX_PARTICLES = 32;
+
+function ArcadeVolleyball() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [playerScore, setPlayerScore] = useState(0);
   const [aiScore, setAiScore] = useState(0);
@@ -36,45 +37,52 @@ export default function ArcadeVolleyball() {
   const [winner, setWinner] = useState<"player" | "ai" | null>(null);
 
   const stateRef = useRef({
-    court: { groundY: 300, netX: 180, netW: 6, netH: 70 },
+    court: { groundY: 280, netX: 180, netW: 6, netH: 62 },
     player: {
-      x: 80,
-      y: 300,
+      x: 75,
+      y: 280,
       vx: 0,
       vy: 0,
-      radius: 25,
-      speed: 7.2,
+      radius: 24,
+      speed: 6.8,
       isJumping: false,
-      isDiving: false,
-      diveTimer: 0,
     } as Slime,
     ai: {
-      x: 280,
-      y: 300,
+      x: 285,
+      y: 280,
       vx: 0,
       vy: 0,
-      radius: 25,
-      speed: 6.2,
+      radius: 24,
+      speed: 5.8,
       isJumping: false,
-      isDiving: false,
-      diveTimer: 0,
     } as Slime,
     ball: {
-      x: 90,
-      y: 140,
-      vx: 3.5,
-      vy: -2,
+      x: 80,
+      y: 130,
+      vx: 3.2,
+      vy: -3.5,
       radius: 9,
       rotation: 0,
       isSpiked: false,
     },
-    keys: { left: false, right: false, jump: false, dive: false },
-    gravity: 0.50,
-    ballGravity: 0.42,
+    keys: { left: false, right: false, jump: false },
+    gravity: 0.46,
+    ballGravity: 0.36,
     pointScoredPause: 0,
     server: "player" as "player" | "ai",
-    particles: [] as Particle[],
-    trail: [] as { x: number; y: number; color: string; alpha: number }[],
+    particlePool: Array.from({ length: MAX_PARTICLES }, () => ({
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      life: 0,
+      maxLife: 1,
+      color: "#38bdf8",
+      size: 2,
+      active: false,
+    })) as Particle[],
+    trail: Array.from({ length: 8 }, () => ({ x: 80, y: 130, active: false })),
+    trailIdx: 0,
     screenShake: 0,
     lastTime: 0,
   });
@@ -90,57 +98,56 @@ export default function ArcadeVolleyball() {
     stateRef.current.screenShake = Math.max(stateRef.current.screenShake, amount);
   };
 
-  const spawnParticles = (x: number, y: number, color: string, count = 10, speedMult = 1) => {
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = (Math.random() * 4 + 2) * speedMult;
-      stateRef.current.particles.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 1,
-        maxLife: Math.random() * 0.4 + 0.3,
-        color,
-        size: Math.random() * 3 + 2,
-      });
+  const spawnParticles = (x: number, y: number, color: string, count = 8, speedMult = 1) => {
+    const pool = stateRef.current.particlePool;
+    let spawned = 0;
+    for (let i = 0; i < pool.length && spawned < count; i++) {
+      if (!pool[i].active) {
+        const angle = Math.random() * Math.PI * 2;
+        const spd = (Math.random() * 3.5 + 1.5) * speedMult;
+        pool[i].x = x;
+        pool[i].y = y;
+        pool[i].vx = Math.cos(angle) * spd;
+        pool[i].vy = Math.sin(angle) * spd;
+        pool[i].life = 1.0;
+        pool[i].maxLife = Math.random() * 0.3 + 0.25;
+        pool[i].color = color;
+        pool[i].size = Math.random() * 2.5 + 1.5;
+        pool[i].active = true;
+        spawned++;
+      }
     }
   };
 
   const resetRally = useCallback((serverWinner: "player" | "ai") => {
     const { player, ai, ball, court } = stateRef.current;
-    player.x = 80;
+    player.x = 75;
     player.y = court.groundY;
     player.vx = 0;
     player.vy = 0;
     player.isJumping = false;
-    player.isDiving = false;
-    player.diveTimer = 0;
 
-    ai.x = 280;
+    ai.x = 285;
     ai.y = court.groundY;
     ai.vx = 0;
     ai.vy = 0;
     ai.isJumping = false;
-    ai.isDiving = false;
-    ai.diveTimer = 0;
 
     ball.isSpiked = false;
-    stateRef.current.trail = [];
     stateRef.current.server = serverWinner;
 
     if (serverWinner === "player") {
-      ball.x = 80;
+      ball.x = 75;
       ball.y = 150;
-      ball.vx = 3.2;
-      ball.vy = -6;
+      ball.vx = 2.8;
+      ball.vy = -5.8;
     } else {
-      ball.x = 280;
+      ball.x = 285;
       ball.y = 150;
-      ball.vx = -3.2;
-      ball.vy = -6;
+      ball.vx = -2.8;
+      ball.vy = -5.8;
     }
-    stateRef.current.pointScoredPause = 25; // ~0.4s pause for fast game flow
+    stateRef.current.pointScoredPause = 30; // ~0.5s pause
   }, []);
 
   const startGame = useCallback(() => {
@@ -148,32 +155,18 @@ export default function ArcadeVolleyball() {
     setAiScore(0);
     setWinner(null);
     setIsPlaying(true);
-    stateRef.current.particles = [];
     resetRally("player");
     arcadeAudio.playWhistle();
   }, [resetRally]);
 
-  const handleJumpInput = () => {
+  const handleJump = useCallback(() => {
     const p = stateRef.current.player;
     if (!p.isJumping) {
-      p.vy = -10.5;
+      p.vy = -9.6;
       p.isJumping = true;
       arcadeAudio.playJump();
-      spawnParticles(p.x, p.y, "#38bdf8", 6, 0.6);
     }
-  };
-
-  const handleDiveInput = () => {
-    const p = stateRef.current.player;
-    if (!p.isDiving && p.diveTimer <= 0) {
-      p.isDiving = true;
-      p.diveTimer = 18;
-      const dir = stateRef.current.keys.right ? 1 : stateRef.current.keys.left ? -1 : 1;
-      p.vx = dir * 11.5;
-      arcadeAudio.playTurbo();
-      spawnParticles(p.x, p.y, "#06b6d4", 8, 1);
-    }
-  };
+  }, []);
 
   // Keyboard controls
   useEffect(() => {
@@ -182,15 +175,12 @@ export default function ArcadeVolleyball() {
         if (e.code === "Space" || e.code === "Enter") startGame();
         return;
       }
-
       if (e.key === "ArrowLeft" || e.key === "a" || e.key === "A") {
         stateRef.current.keys.left = true;
       } else if (e.key === "ArrowRight" || e.key === "d" || e.key === "D") {
         stateRef.current.keys.right = true;
       } else if (e.key === "ArrowUp" || e.key === "w" || e.key === "W" || e.code === "Space") {
-        handleJumpInput();
-      } else if (e.key === "ArrowDown" || e.key === "s" || e.key === "S" || e.key === "Shift") {
-        handleDiveInput();
+        handleJump();
       }
     };
 
@@ -208,14 +198,14 @@ export default function ArcadeVolleyball() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isPlaying, startGame]);
+  }, [isPlaying, handleJump, startGame]);
 
-  // Main 60-120 FPS Physics & Render Loop
+  // Main 60-120 FPS Loop
   useEffect(() => {
     let animId: number;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
     stateRef.current.lastTime = performance.now();
@@ -224,7 +214,6 @@ export default function ArcadeVolleyball() {
       const state = stateRef.current;
       const rawDt = (time - state.lastTime) / 1000;
       state.lastTime = time;
-      // Normalize dt to 60fps unit factor (1.0 at 60fps)
       const dtFactor = Math.min(2.0, Math.max(0.5, rawDt * 60));
 
       const { player, ai, ball, court, keys, gravity, ballGravity } = state;
@@ -237,20 +226,10 @@ export default function ArcadeVolleyball() {
           state.pointScoredPause -= dtFactor;
         } else {
           // ── Update Player ──
-          if (player.isDiving) {
-            player.x += player.vx * dtFactor;
-            player.vx *= 0.90;
-            player.diveTimer -= dtFactor;
-            if (player.diveTimer <= 0) {
-              player.isDiving = false;
-            }
-          } else {
-            const targetVx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-            player.vx += (targetVx * player.speed - player.vx) * 0.35 * dtFactor;
-            player.x += player.vx * dtFactor;
-          }
-
-          player.x = Math.max(player.radius + 6, Math.min(netLeft - player.radius - 2, player.x));
+          const targetVx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+          player.vx += (targetVx * player.speed - player.vx) * 0.45 * dtFactor;
+          player.x += player.vx * dtFactor;
+          player.x = Math.max(player.radius + 4, Math.min(netLeft - player.radius - 2, player.x));
 
           player.vy += gravity * dtFactor;
           player.y += player.vy * dtFactor;
@@ -260,29 +239,42 @@ export default function ArcadeVolleyball() {
             player.isJumping = false;
           }
 
-          // ── Fast Predictive AI Bot ──
-          let aiTargetX = 280;
-          if (ball.x > court.netX - 20) {
-            // Predict ball landing position via trajectory
-            const timeToGround = Math.max(0.1, (court.groundY - ball.y) / Math.max(2, ball.vy + 3));
-            aiTargetX = ball.x + ball.vx * Math.min(15, timeToGround);
+          // ── Predictive AI Solver ──
+          let aiTargetX = 285;
+          if (ball.vx > 0.2 || ball.x > court.netX - 25) {
+            // Solve parabolic equation to find exact landing position
+            const dy = court.groundY - 20 - ball.y;
+            const a = 0.5 * ballGravity;
+            const b = ball.vy;
+            const c = -dy;
+            const discriminant = b * b - 4 * a * c;
+            if (discriminant >= 0) {
+              const t = (-b + Math.sqrt(discriminant)) / (2 * a);
+              if (t > 0 && t < 120) {
+                let landingX = ball.x + ball.vx * t;
+                // Account for potential wall bounce
+                if (landingX > canvas.width - ball.radius) {
+                  landingX = (canvas.width - ball.radius) - (landingX - (canvas.width - ball.radius));
+                }
+                aiTargetX = Math.max(netRight + ai.radius + 8, Math.min(canvas.width - ai.radius - 8, landingX));
+              }
+            }
           }
 
           const aiDist = aiTargetX - ai.x;
           if (Math.abs(aiDist) > 3) {
             const aiDir = Math.sign(aiDist);
-            ai.vx += (aiDir * ai.speed - ai.vx) * 0.3 * dtFactor;
+            ai.vx += (aiDir * ai.speed - ai.vx) * 0.35 * dtFactor;
             ai.x += ai.vx * dtFactor;
           } else {
-            ai.vx *= 0.8;
+            ai.vx *= 0.85;
           }
+          ai.x = Math.max(netRight + ai.radius + 2, Math.min(canvas.width - ai.radius - 4, ai.x));
 
-          ai.x = Math.max(netRight + ai.radius + 2, Math.min(canvas.width - ai.radius - 6, ai.x));
-
-          // AI Jump & Spike Decision
-          const ballNearAI = ball.x > court.netX + 20 && Math.abs(ball.x - ai.x) < 35;
-          if (ballNearAI && ball.y < court.groundY - 50 && !ai.isJumping && ball.vy > -1) {
-            ai.vy = -10.0;
+          // AI Jump Timing: jump when ball is dropping in its sector
+          const ballNearAI = ball.x > court.netX + 15 && Math.abs(ball.x - ai.x) < 32;
+          if (ballNearAI && ball.y < court.groundY - 45 && ball.vy > -1 && !ai.isJumping) {
+            ai.vy = -9.2;
             ai.isJumping = true;
           }
 
@@ -300,107 +292,120 @@ export default function ArcadeVolleyball() {
           ball.y += ball.vy * dtFactor;
           ball.rotation += ball.vx * 0.08 * dtFactor;
 
-          // Trail points
-          state.trail.push({
-            x: ball.x,
-            y: ball.y,
-            color: ball.isSpiked ? "#f59e0b" : "#38bdf8",
-            alpha: 0.8,
-          });
-          if (state.trail.length > 10) state.trail.shift();
+          // Record trail
+          state.trail[state.trailIdx] = { x: ball.x, y: ball.y, active: true };
+          state.trailIdx = (state.trailIdx + 1) % state.trail.length;
 
           // Wall Bounces
           if (ball.x - ball.radius <= 0) {
             ball.x = ball.radius;
-            ball.vx = Math.abs(ball.vx) * 0.92;
+            ball.vx = Math.abs(ball.vx) * 0.94;
             arcadeAudio.playBounce();
-            spawnParticles(ball.x, ball.y, "#38bdf8", 5);
           } else if (ball.x + ball.radius >= canvas.width) {
             ball.x = canvas.width - ball.radius;
-            ball.vx = -Math.abs(ball.vx) * 0.92;
+            ball.vx = -Math.abs(ball.vx) * 0.94;
             arcadeAudio.playBounce();
-            spawnParticles(ball.x, ball.y, "#ec4899", 5);
           }
 
           // Ceiling Bounce
           if (ball.y - ball.radius <= 0) {
             ball.y = ball.radius;
-            ball.vy = Math.abs(ball.vy) * 0.85;
+            ball.vy = Math.abs(ball.vy) * 0.90;
             arcadeAudio.playBounce();
           }
 
-          // Net Collision
-          if (ball.y + ball.radius >= netTopY && ball.x + ball.radius >= netLeft && ball.x - ball.radius <= netRight) {
-            if (ball.y < netTopY + 8) {
-              ball.y = netTopY - ball.radius;
-              ball.vy = -Math.abs(ball.vy) * 0.8;
-            } else if (ball.x < court.netX) {
-              ball.x = netLeft - ball.radius;
-              ball.vx = -Math.abs(ball.vx) * 0.75;
-            } else {
-              ball.x = netRight + ball.radius;
-              ball.vx = Math.abs(ball.vx) * 0.75;
-            }
+          // ── Solid Net Collision ──
+          if (
+            ball.y + ball.radius >= netTopY &&
+            ball.x + ball.radius >= netLeft &&
+            ball.x - ball.radius <= netRight
+          ) {
+            arcadeAudio.playBounce();
             ball.isSpiked = false;
-            arcadeAudio.playBounce();
-            spawnParticles(court.netX, netTopY, "#ffffff", 6);
+
+            if (ball.y < netTopY + 6) {
+              // Top tape bounce
+              ball.y = netTopY - ball.radius;
+              ball.vy = -Math.abs(ball.vy) * 0.85;
+            } else if (ball.x < court.netX) {
+              // Rebound to player side
+              ball.x = netLeft - ball.radius;
+              ball.vx = -Math.abs(ball.vx) * 0.8;
+            } else {
+              // Rebound to AI side
+              ball.x = netRight + ball.radius;
+              ball.vx = Math.abs(ball.vx) * 0.8;
+            }
           }
 
-          // ── Slime Dome Collision & Dynamic Spikes ──
+          // ── Slime Dome Collision & Guaranteed Net-Clearing Spike Physics ──
           const checkSlimeHit = (s: Slime, isPlayer: boolean) => {
             const dx = ball.x - s.x;
             const dy = ball.y - s.y;
             const dist = Math.hypot(dx, dy);
 
             if (dist < s.radius + ball.radius && ball.y <= s.y + 4) {
-              const angle = Math.atan2(dy, dx);
-              const isHighSpike = s.isJumping && s.y < court.groundY - 35 && ball.y < netTopY + 25;
+              // Angle from slime apex (-PI/2 is straight up)
+              let normalX = dx / Math.max(1, dist);
+              let normalY = dy / Math.max(1, dist);
 
-              if (isHighSpike) {
-                // Explosive Spike Smash!
+              // Strictly enforce upward impulse (never spike straight into floor!)
+              if (normalY > -0.35) normalY = -0.35;
+              const len = Math.hypot(normalX, normalY) || 1;
+              normalX /= len;
+              normalY /= len;
+
+              const isJumpingHit = s.isJumping && s.y < court.groundY - 25;
+
+              if (isJumpingHit) {
+                // ── EXCELLENT PLAYABLE SPIKE: Guaranteed Net-Clearing Drive ──
                 arcadeAudio.playSpike();
                 ball.isSpiked = true;
-                addScreenShake(6);
-                spawnParticles(ball.x, ball.y, "#f59e0b", 16, 1.4);
+                addScreenShake(5);
+                spawnParticles(ball.x, ball.y, isPlayer ? "#38bdf8" : "#ec4899", 10, 1.2);
 
-                const spikeSpeed = 13.5;
+                const spikeSpeed = 10.5;
                 if (isPlayer) {
-                  ball.vx = Math.cos(Math.PI * 0.22) * spikeSpeed;
-                  ball.vy = Math.sin(Math.PI * 0.22) * spikeSpeed;
+                  // Forward trajectory that clears the net tape
+                  const distToNet = Math.max(10, court.netX - ball.x);
+                  const neededVy = ball.y > netTopY - 15 ? -4.5 : -2.5; // arc over net
+                  ball.vx = Math.max(6.5, spikeSpeed * 0.85);
+                  ball.vy = neededVy;
                 } else {
-                  ball.vx = -Math.cos(Math.PI * 0.22) * spikeSpeed;
-                  ball.vy = Math.sin(Math.PI * 0.22) * spikeSpeed;
+                  // AI spike toward player court
+                  const neededVy = ball.y > netTopY - 15 ? -4.5 : -2.5;
+                  ball.vx = -Math.max(6.5, spikeSpeed * 0.85);
+                  ball.vy = neededVy;
                 }
               } else {
-                // Snappy Pop / Bump
+                // ── Normal Playable Bump / Set ──
                 arcadeAudio.playBounce();
                 ball.isSpiked = false;
-                spawnParticles(ball.x, ball.y, isPlayer ? "#06b6d4" : "#ec4899", 7);
+                spawnParticles(ball.x, ball.y, isPlayer ? "#06b6d4" : "#ec4899", 5);
 
-                const hitSpeed = Math.min(11.0, Math.hypot(ball.vx, ball.vy) * 0.95 + 3.0);
-                ball.vx = Math.cos(angle) * hitSpeed;
-                ball.vy = Math.min(-6.5, Math.sin(angle) * hitSpeed);
+                const bumpSpeed = Math.min(8.8, Math.hypot(ball.vx, ball.vy) * 0.85 + 3.2);
+                ball.vx = normalX * bumpSpeed + s.vx * 0.35;
+                ball.vy = Math.min(-5.2, normalY * bumpSpeed);
 
-                // Add forward momentum based on slime movement
-                ball.vx += s.vx * 0.45;
-                if (isPlayer && ball.vx < 2) ball.vx = 3.5;
-                if (!isPlayer && ball.vx > -2) ball.vx = -3.5;
+                // Ensure forward momentum toward the net
+                if (isPlayer && ball.vx < 1.8) ball.vx = 2.8;
+                if (!isPlayer && ball.vx > -1.8) ball.vx = -2.8;
               }
 
-              // Push ball out of collision zone
-              ball.x = s.x + Math.cos(angle) * (s.radius + ball.radius + 2);
-              ball.y = s.y + Math.sin(angle) * (s.radius + ball.radius + 2);
+              // Place ball outside dome without pushing into ground
+              ball.x = s.x + normalX * (s.radius + ball.radius + 1);
+              ball.y = Math.min(court.groundY - ball.radius - 2, s.y + normalY * (s.radius + ball.radius + 1));
             }
           };
 
           checkSlimeHit(player, true);
           checkSlimeHit(ai, false);
 
-          // ── Point Scored ──
+          // ── Floor Landing / Point Scored ──
           if (ball.y + ball.radius >= court.groundY) {
             arcadeAudio.playWhistle();
-            addScreenShake(5);
-            spawnParticles(ball.x, court.groundY, "#facc15", 20, 1.2);
+            addScreenShake(4);
+            spawnParticles(ball.x, court.groundY, "#facc15", 14);
 
             if (ball.x < court.netX) {
               // Point for AI
@@ -441,63 +446,44 @@ export default function ArcadeVolleyball() {
         }
       }
 
-      // Update particles
-      for (let i = state.particles.length - 1; i >= 0; i--) {
-        const p = state.particles[i];
-        p.x += p.vx * dtFactor;
-        p.y += p.vy * dtFactor;
-        p.life -= 0.035 * dtFactor;
-        if (p.life <= 0) state.particles.splice(i, 1);
+      // Update particle pool
+      for (const p of state.particlePool) {
+        if (p.active) {
+          p.x += p.vx * dtFactor;
+          p.y += p.vy * dtFactor;
+          p.life -= 0.05 * dtFactor;
+          if (p.life <= 0) p.active = false;
+        }
       }
 
-      // Update Screen Shake
-      if (state.screenShake > 0) {
-        state.screenShake = Math.max(0, state.screenShake - 0.4 * dtFactor);
-      }
+      if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - 0.4 * dtFactor);
 
       // ── Draw Graphics ──
       ctx.save();
       if (state.screenShake > 0) {
-        const shakeX = (Math.random() - 0.5) * state.screenShake * 2.5;
-        const shakeY = (Math.random() - 0.5) * state.screenShake * 2.5;
-        ctx.translate(shakeX, shakeY);
+        ctx.translate(
+          (Math.random() - 0.5) * state.screenShake * 2,
+          (Math.random() - 0.5) * state.screenShake * 2
+        );
       }
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Sky gradient
-      const sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      sky.addColorStop(0, "#060913");
-      sky.addColorStop(1, "#0f172a");
-      ctx.fillStyle = sky;
+      // Solid background fill (instant, no gradient allocation)
+      ctx.fillStyle = "#070c18";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Cyber court grid background lines
-      ctx.strokeStyle = "rgba(56, 189, 248, 0.08)";
-      ctx.lineWidth = 1;
-      for (let x = 30; x < canvas.width; x += 35) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, court.groundY);
-        ctx.stroke();
-      }
-
-      // Ground Floor
+      // Court ground
       ctx.fillStyle = "#1e293b";
       ctx.fillRect(0, court.groundY, canvas.width, canvas.height - court.groundY);
       ctx.fillStyle = "#38bdf8";
-      ctx.shadowColor = "#38bdf8";
-      ctx.shadowBlur = 8;
       ctx.fillRect(0, court.groundY, canvas.width, 2.5);
-      ctx.shadowBlur = 0;
 
-      // Slime Court Shadows
+      // Shadows
       const drawShadow = (x: number, y: number, r: number) => {
-        const distFromFloor = court.groundY - y;
-        const shadowScale = Math.max(0.3, 1 - distFromFloor / 180);
-        ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+        const dist = court.groundY - y;
+        const scale = Math.max(0.3, 1 - dist / 160);
+        ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
         ctx.beginPath();
-        ctx.ellipse(x, court.groundY + 3, r * shadowScale, 5 * shadowScale, 0, 0, Math.PI * 2);
+        ctx.ellipse(x, court.groundY + 3, r * scale, 4 * scale, 0, 0, Math.PI * 2);
         ctx.fill();
       };
       drawShadow(player.x, player.y, player.radius);
@@ -506,86 +492,71 @@ export default function ArcadeVolleyball() {
 
       // Net
       ctx.fillStyle = "#f8fafc";
-      ctx.shadowColor = "rgba(255, 255, 255, 0.6)";
-      ctx.shadowBlur = 6;
       ctx.fillRect(netLeft, netTopY, court.netW, court.netH);
-      ctx.shadowBlur = 0;
-
-      // Net cross-hatch
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.3)";
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.35)";
       ctx.lineWidth = 1;
-      for (let y = netTopY; y < court.groundY; y += 7) {
+      for (let y = netTopY; y < court.groundY; y += 8) {
         ctx.beginPath();
         ctx.moveTo(netLeft, y);
         ctx.lineTo(netRight, y);
         ctx.stroke();
       }
 
-      // Draw Slimes
-      const drawSlime = (s: Slime, color: string, eyeOffsetX: number, isDiving: boolean) => {
+      // Slimes
+      const drawSlime = (s: Slime, color: string, eyeOffsetX: number) => {
         ctx.save();
         ctx.fillStyle = color;
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 12;
         ctx.beginPath();
-        if (isDiving) {
-          ctx.ellipse(s.x, s.y - 4, s.radius * 1.3, s.radius * 0.65, 0, 0, Math.PI * 2);
-        } else {
-          ctx.arc(s.x, s.y, s.radius, Math.PI, 0);
-        }
+        ctx.arc(s.x, s.y, s.radius, Math.PI, 0);
         ctx.closePath();
         ctx.fill();
 
-        // Eye white
+        // Eye
         const eyeX = s.x + eyeOffsetX;
-        const eyeY = s.y - (isDiving ? 6 : 10);
+        const eyeY = s.y - 10;
         ctx.fillStyle = "#ffffff";
-        ctx.shadowBlur = 0;
         ctx.beginPath();
-        ctx.arc(eyeX, eyeY, 4.5, 0, Math.PI * 2);
+        ctx.arc(eyeX, eyeY, 4, 0, Math.PI * 2);
         ctx.fill();
 
         // Pupil tracking ball
         const angle = Math.atan2(ball.y - eyeY, ball.x - eyeX);
-        const pupilX = eyeX + Math.cos(angle) * 2;
-        const pupilY = eyeY + Math.sin(angle) * 2;
         ctx.fillStyle = "#09090b";
         ctx.beginPath();
-        ctx.arc(pupilX, pupilY, 2, 0, Math.PI * 2);
+        ctx.arc(eyeX + Math.cos(angle) * 1.8, eyeY + Math.sin(angle) * 1.8, 1.8, 0, Math.PI * 2);
         ctx.fill();
-
         ctx.restore();
       };
 
-      drawSlime(player, "#06b6d4", 8, player.isDiving);
-      drawSlime(ai, "#ec4899", -8, ai.isDiving);
+      drawSlime(player, "#06b6d4", 7);
+      drawSlime(ai, "#ec4899", -7);
 
-      // Draw Ball Trail
+      // Ball Trail
       for (let i = 0; i < state.trail.length; i++) {
         const pt = state.trail[i];
-        const alpha = (i / state.trail.length) * 0.45;
-        ctx.fillStyle = pt.color;
-        ctx.globalAlpha = alpha;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, ball.radius * (i / state.trail.length), 0, Math.PI * 2);
-        ctx.fill();
+        if (pt.active) {
+          ctx.fillStyle = ball.isSpiked ? "rgba(245, 158, 11, 0.3)" : "rgba(56, 189, 248, 0.25)";
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, ball.radius * 0.7, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
-      ctx.globalAlpha = 1.0;
 
-      // Draw Volleyball
+      // Ball
       ctx.save();
       ctx.translate(ball.x, ball.y);
       ctx.rotate(ball.rotation);
       ctx.shadowColor = ball.isSpiked ? "#f59e0b" : "#facc15";
-      ctx.shadowBlur = ball.isSpiked ? 18 : 10;
+      ctx.shadowBlur = 8;
       ctx.fillStyle = ball.isSpiked ? "#f59e0b" : "#facc15";
       ctx.beginPath();
       ctx.arc(0, 0, ball.radius, 0, Math.PI * 2);
       ctx.fill();
+      ctx.shadowBlur = 0;
 
-      // Ball seams
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.45)";
-      ctx.lineWidth = 1.4;
+      // Seam
+      ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+      ctx.lineWidth = 1.2;
       ctx.beginPath();
       ctx.arc(0, 0, ball.radius, 0, Math.PI);
       ctx.stroke();
@@ -595,13 +566,15 @@ export default function ArcadeVolleyball() {
       ctx.stroke();
       ctx.restore();
 
-      // Draw Particles
-      for (const p of state.particles) {
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.life / p.maxLife;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
+      // Particles
+      for (const p of state.particlePool) {
+        if (p.active) {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.life / p.maxLife;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.globalAlpha = 1.0;
 
@@ -640,8 +613,8 @@ export default function ArcadeVolleyball() {
         <canvas
           ref={canvasRef}
           width={360}
-          height={330}
-          className="block aspect-[12/11] max-w-[340px] sm:max-w-[360px]"
+          height={310}
+          className="block aspect-[36/31] max-w-[340px] sm:max-w-[360px]"
         />
 
         {/* Start / Game Over Overlay */}
@@ -677,7 +650,7 @@ export default function ArcadeVolleyball() {
                 </div>
                 <h4 className="text-sm font-semibold text-white mb-1">Arcade Volleyball 1v1</h4>
                 <p className="text-[11px] text-[var(--muted)] max-w-[240px] mb-4">
-                  A / D to Move · Space to Jump · Jump + Ball at Apex to <b>SPIKE SMASH</b>! S or Down to <b>Dive</b>.
+                  <b>A / D</b> to Move · <b>W / Space</b> to Jump & Spike. Clear the net to outplay the Cyber AI!
                 </p>
                 <button
                   onClick={startGame}
@@ -697,37 +670,39 @@ export default function ArcadeVolleyball() {
           <button
             onTouchStart={() => (stateRef.current.keys.left = true)}
             onTouchEnd={() => (stateRef.current.keys.left = false)}
-            className="w-11 h-10 rounded-xl bg-white/10 active:bg-white/20 text-white text-sm font-bold flex items-center justify-center"
+            onTouchCancel={() => (stateRef.current.keys.left = false)}
+            onMouseDown={() => (stateRef.current.keys.left = true)}
+            onMouseUp={() => (stateRef.current.keys.left = false)}
+            onMouseLeave={() => (stateRef.current.keys.left = false)}
+            className="w-12 h-10 rounded-xl bg-white/10 active:bg-white/20 text-white text-sm font-bold flex items-center justify-center cursor-pointer select-none active:scale-95"
           >
             ◀
           </button>
           <button
             onTouchStart={() => (stateRef.current.keys.right = true)}
             onTouchEnd={() => (stateRef.current.keys.right = false)}
-            className="w-11 h-10 rounded-xl bg-white/10 active:bg-white/20 text-white text-sm font-bold flex items-center justify-center"
+            onTouchCancel={() => (stateRef.current.keys.right = false)}
+            onMouseDown={() => (stateRef.current.keys.right = true)}
+            onMouseUp={() => (stateRef.current.keys.right = false)}
+            onMouseLeave={() => (stateRef.current.keys.right = false)}
+            className="w-12 h-10 rounded-xl bg-white/10 active:bg-white/20 text-white text-sm font-bold flex items-center justify-center cursor-pointer select-none active:scale-95"
           >
             ▶
           </button>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={handleDiveInput}
-            className="px-3 h-10 rounded-xl bg-indigo-500/30 border border-indigo-400/40 text-indigo-300 text-xs font-bold active:scale-95 flex items-center justify-center"
-          >
-            DIVE
-          </button>
-          <button
-            onClick={handleJumpInput}
-            className="px-4 h-10 rounded-xl bg-cyan-500 text-black text-xs font-bold shadow-md active:scale-95 flex items-center justify-center"
-          >
-            JUMP ⤒
-          </button>
-        </div>
+        <button
+          onClick={handleJump}
+          className="px-6 h-10 rounded-xl bg-cyan-500 text-black text-xs font-bold shadow-md active:scale-95 flex items-center justify-center"
+        >
+          JUMP ⤒
+        </button>
       </div>
 
       <p className="text-[10px] text-[var(--muted)] mt-2 hidden sm:block">
-        Controls: <b>A / D</b> Move · <b>W / Space</b> Jump & Spike · <b>S / Shift</b> Dive Slide
+        Controls: <b>A / D / Arrows</b> to Move · <b>W / Space</b> to Jump & Spike
       </p>
     </div>
   );
 }
+
+export default React.memo(ArcadeVolleyball);

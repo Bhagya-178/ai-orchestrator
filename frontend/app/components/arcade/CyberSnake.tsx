@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Play, RotateCcw, Trophy, Flame, Zap } from "lucide-react";
+import { Play, RotateCcw, Trophy, Flame, Zap, Palette } from "lucide-react";
 import { arcadeAudio } from "./arcadeAudio";
 
 interface Point {
@@ -17,9 +17,58 @@ interface Particle {
   life: number;
   color: string;
   size: number;
+  active: boolean;
 }
 
-export default function CyberSnake() {
+type SkinType = "viper" | "solar" | "matrix";
+
+interface SkinConfig {
+  name: string;
+  head: string;
+  headBorder: string;
+  armorPrimary: string;
+  armorSecondary: string;
+  spine: string;
+  visor: string;
+  foodColor: string;
+}
+
+const SKINS: Record<SkinType, SkinConfig> = {
+  viper: {
+    name: "Mecha Viper",
+    head: "#06b6d4",
+    headBorder: "#38bdf8",
+    armorPrimary: "#0284c7",
+    armorSecondary: "#4f46e5",
+    spine: "#facc15",
+    visor: "#ffffff",
+    foodColor: "#10b981",
+  },
+  solar: {
+    name: "Solar Dragon",
+    head: "#f97316",
+    headBorder: "#fbbf24",
+    armorPrimary: "#ea580c",
+    armorSecondary: "#7c2d12",
+    spine: "#fef08a",
+    visor: "#ffffff",
+    foodColor: "#38bdf8",
+  },
+  matrix: {
+    name: "Matrix Serpent",
+    head: "#10b981",
+    headBorder: "#34d399",
+    armorPrimary: "#059669",
+    armorSecondary: "#064e3b",
+    spine: "#a7f3d0",
+    visor: "#ffffff",
+    foodColor: "#ec4899",
+  },
+};
+
+const MAX_PARTICLES = 36;
+
+function CyberSnake() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
@@ -27,6 +76,7 @@ export default function CyberSnake() {
   const [isGameOver, setIsGameOver] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isTurbo, setIsTurbo] = useState(false);
+  const [activeSkin, setActiveSkin] = useState<SkinType>("viper");
 
   const stateRef = useRef({
     gridSize: 20,
@@ -46,10 +96,20 @@ export default function CyberSnake() {
     dir: { x: 1, y: 0 } as Point,
     inputQueue: [] as Point[],
     lastTick: 0,
-    baseTickInterval: 68, // fast arcade pace
-    turboTickInterval: 32, // blazing turbo pace
+    baseTickInterval: 70, // snappy arcade rhythm
+    turboTickInterval: 35, // nitro speed
     isTurboActive: false,
-    particles: [] as Particle[],
+    skin: "viper" as SkinType,
+    particlePool: Array.from({ length: MAX_PARTICLES }, () => ({
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      life: 0,
+      color: "#38bdf8",
+      size: 2,
+      active: false,
+    })) as Particle[],
     screenShake: 0,
     quickEatCount: 0,
     lastEatTime: 0,
@@ -57,51 +117,103 @@ export default function CyberSnake() {
 
   useEffect(() => {
     try {
-      const saved = localStorage.getItem("ai_arcade_snake_highscore");
-      if (saved) setHighScore(parseInt(saved, 10));
+      const savedScore = localStorage.getItem("ai_arcade_snake_highscore");
+      if (savedScore) setHighScore(parseInt(savedScore, 10));
+      const savedSkin = localStorage.getItem("ai_arcade_snake_skin") as SkinType;
+      if (savedSkin && SKINS[savedSkin]) {
+        setActiveSkin(savedSkin);
+        stateRef.current.skin = savedSkin;
+      }
     } catch {}
   }, []);
+
+  const changeSkin = (newSkin: SkinType) => {
+    setActiveSkin(newSkin);
+    stateRef.current.skin = newSkin;
+    try {
+      localStorage.setItem("ai_arcade_snake_skin", newSkin);
+    } catch {}
+  };
 
   const addScreenShake = (amount: number) => {
     stateRef.current.screenShake = Math.max(stateRef.current.screenShake, amount);
   };
 
-  const spawnParticles = (x: number, y: number, color: string, count = 12) => {
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = Math.random() * 4 + 1.5;
-      stateRef.current.particles.push({
-        x,
-        y,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        life: 1.0,
-        color,
-        size: Math.random() * 3 + 2,
-      });
+  const spawnParticles = (x: number, y: number, color: string, count = 10) => {
+    const pool = stateRef.current.particlePool;
+    let spawned = 0;
+    for (let i = 0; i < pool.length && spawned < count; i++) {
+      if (!pool[i].active) {
+        const angle = Math.random() * Math.PI * 2;
+        const spd = Math.random() * 3.5 + 1.2;
+        pool[i].x = x;
+        pool[i].y = y;
+        pool[i].vx = Math.cos(angle) * spd;
+        pool[i].vy = Math.sin(angle) * spd;
+        pool[i].life = 1.0;
+        pool[i].color = color;
+        pool[i].size = Math.random() * 2.5 + 1.5;
+        pool[i].active = true;
+        spawned++;
+      }
     }
   };
 
   const spawnFood = useCallback(() => {
     const { tileCount, snake } = stateRef.current;
     let newFood: Point = { x: 0, y: 0 };
-    while (true) {
-      newFood = {
-        x: Math.floor(Math.random() * tileCount),
-        y: Math.floor(Math.random() * tileCount),
-      };
-      const onSnake = snake.some((seg) => seg.x === newFood.x && seg.y === newFood.y);
-      if (!onSnake) break;
+    let placed = false;
+    let attempts = 0;
+
+    // Fast-path random probing (O(1) average when board is not saturated)
+    while (attempts++ < 200) {
+      const rx = Math.floor(Math.random() * tileCount);
+      const ry = Math.floor(Math.random() * tileCount);
+      const onSnake = snake.some((seg) => seg.x === rx && seg.y === ry);
+      if (!onSnake) {
+        newFood = { x: rx, y: ry };
+        placed = true;
+        break;
+      }
     }
+
+    // Fallback: Exact scan of remaining open cells if board is densely populated
+    if (!placed) {
+      const occupied = new Set(snake.map((s) => `${s.x},${s.y}`));
+      const freeSlots: Point[] = [];
+      for (let x = 0; x < tileCount; x++) {
+        for (let y = 0; y < tileCount; y++) {
+          if (!occupied.has(`${x},${y}`)) {
+            freeSlots.push({ x, y });
+          }
+        }
+      }
+      if (freeSlots.length > 0) {
+        newFood = freeSlots[Math.floor(Math.random() * freeSlots.length)];
+      } else {
+        // Grid fully filled - player won the game!
+        setIsGameOver(true);
+        setIsPlaying(false);
+        arcadeAudio.playReadyChime();
+        return;
+      }
+    }
+
     stateRef.current.food = newFood;
 
-    // 25% chance of spawning bonus golden core
-    if (Math.random() < 0.30 && !stateRef.current.bonusFood) {
-      stateRef.current.bonusFood = {
-        x: Math.floor(Math.random() * tileCount),
-        y: Math.floor(Math.random() * tileCount),
-        timer: 100,
-      };
+    // 25% chance of bonus golden core (must not overlap food or snake)
+    if (Math.random() < 0.25 && !stateRef.current.bonusFood) {
+      let bAttempts = 0;
+      while (bAttempts++ < 50) {
+        const bx = Math.floor(Math.random() * tileCount);
+        const by = Math.floor(Math.random() * tileCount);
+        const onSnake = snake.some((seg) => seg.x === bx && seg.y === by);
+        const onFood = newFood.x === bx && newFood.y === by;
+        if (!onSnake && !onFood) {
+          stateRef.current.bonusFood = { x: bx, y: by, timer: 100 };
+          break;
+        }
+      }
     }
   }, []);
 
@@ -115,7 +227,6 @@ export default function CyberSnake() {
     stateRef.current.prevSnake = [...initialSnake];
     stateRef.current.dir = { x: 1, y: 0 };
     stateRef.current.inputQueue = [];
-    stateRef.current.particles = [];
     stateRef.current.quickEatCount = 0;
     stateRef.current.bonusFood = null;
     stateRef.current.screenShake = 0;
@@ -133,7 +244,7 @@ export default function CyberSnake() {
     const { inputQueue, dir } = stateRef.current;
     const lastPending = inputQueue.length > 0 ? inputQueue[inputQueue.length - 1] : dir;
 
-    // Disallow 180-degree immediate reversal
+    // Disallow 180-degree immediate self-reversal
     if (dx !== 0 && lastPending.x === 0) {
       if (inputQueue.length < 3) inputQueue.push({ x: dx, y: 0 });
     } else if (dy !== 0 && lastPending.y === 0) {
@@ -197,12 +308,12 @@ export default function CyberSnake() {
     };
   }, [isPlaying, queueDirection, startGame]);
 
-  // Main 60-120 FPS Loop with Sub-Tile Interpolation
+  // Main 60-120 FPS Loop
   useEffect(() => {
     let animId: number;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
     stateRef.current.lastTick = performance.now();
@@ -211,17 +322,15 @@ export default function CyberSnake() {
       const state = stateRef.current;
       const { tileCount, snake, prevSnake, food, bonusFood } = state;
       const cellSize = canvas.width / tileCount;
+      const skin = SKINS[state.skin] || SKINS.viper;
 
       const currentInterval = state.isTurboActive ? state.turboTickInterval : state.baseTickInterval;
 
-      // ── Game Physics Tick ──
+      // ── Physics Tick ──
       if (isPlaying && !isGameOver && time - state.lastTick >= currentInterval) {
         state.lastTick = time;
-
-        // Save current positions for smooth visual interpolation
         state.prevSnake = snake.map((s) => ({ ...s }));
 
-        // Pop next direction from buffer queue
         if (state.inputQueue.length > 0) {
           state.dir = state.inputQueue.shift()!;
         }
@@ -237,12 +346,12 @@ export default function CyberSnake() {
         if (head.y < 0) head.y = tileCount - 1;
         if (head.y >= tileCount) head.y = 0;
 
-        // Self-collision check
+        // Self-collision
         const selfHit = snake.some((seg) => seg.x === head.x && seg.y === head.y);
         if (selfHit) {
           arcadeAudio.playCrash();
-          addScreenShake(8);
-          spawnParticles(head.x * cellSize + cellSize / 2, head.y * cellSize + cellSize / 2, "#ef4444", 25);
+          addScreenShake(7);
+          spawnParticles(head.x * cellSize + cellSize / 2, head.y * cellSize + cellSize / 2, "#ef4444", 20);
           setIsGameOver(true);
           setIsPlaying(false);
           return;
@@ -250,11 +359,11 @@ export default function CyberSnake() {
 
         snake.unshift(head);
 
-        // Check Food Eaten
+        // Food collision
         if (head.x === food.x && head.y === food.y) {
           arcadeAudio.playPoint();
           const now = performance.now();
-          const isQuick = now - state.lastEatTime < 2500;
+          const isQuick = now - state.lastEatTime < 2400;
           state.lastEatTime = now;
 
           if (isQuick) {
@@ -268,7 +377,7 @@ export default function CyberSnake() {
           const multiplier = state.isTurboActive ? 2 : 1;
           const pointsEarned = 10 * (state.quickEatCount > 1 ? 2 : 1) * multiplier;
 
-          spawnParticles(food.x * cellSize + cellSize / 2, food.y * cellSize + cellSize / 2, "#10b981", 14);
+          spawnParticles(food.x * cellSize + cellSize / 2, food.y * cellSize + cellSize / 2, skin.foodColor, 12);
 
           setScore((prev) => {
             const next = prev + pointsEarned;
@@ -286,57 +395,48 @@ export default function CyberSnake() {
 
           spawnFood();
         } else if (bonusFood && head.x === bonusFood.x && head.y === bonusFood.y) {
-          // Bonus Golden Food
           arcadeAudio.playPowerup();
           addScreenShake(4);
-          spawnParticles(bonusFood.x * cellSize + cellSize / 2, bonusFood.y * cellSize + cellSize / 2, "#facc15", 20);
+          spawnParticles(bonusFood.x * cellSize + cellSize / 2, bonusFood.y * cellSize + cellSize / 2, "#facc15", 16);
           setScore((prev) => prev + 50);
           state.bonusFood = null;
         } else {
-          // Normal move: remove tail
           snake.pop();
         }
 
-        // Bonus Food Timer countdown
         if (state.bonusFood) {
           state.bonusFood.timer -= 1;
           if (state.bonusFood.timer <= 0) state.bonusFood = null;
         }
-
-        // Spawn turbo exhaust particles from snake tail
-        if (state.isTurboActive && snake.length > 1) {
-          const tail = snake[snake.length - 1];
-          spawnParticles(tail.x * cellSize + cellSize / 2, tail.y * cellSize + cellSize / 2, "#38bdf8", 2);
-        }
       }
 
-      // Update Particles
-      for (let i = state.particles.length - 1; i >= 0; i--) {
-        const p = state.particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.life -= 0.05;
-        if (p.life <= 0) state.particles.splice(i, 1);
+      // Update particle pool
+      for (const p of state.particlePool) {
+        if (p.active) {
+          p.x += p.vx;
+          p.y += p.vy;
+          p.life -= 0.05;
+          if (p.life <= 0) p.active = false;
+        }
       }
 
       if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - 0.4);
 
-      // ── Render Graphics ──
+      // ── Draw Graphics ──
       ctx.save();
       if (state.screenShake > 0) {
         ctx.translate(
-          (Math.random() - 0.5) * state.screenShake * 2.5,
-          (Math.random() - 0.5) * state.screenShake * 2.5
+          (Math.random() - 0.5) * state.screenShake * 2,
+          (Math.random() - 0.5) * state.screenShake * 2
         );
       }
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Cyber Grid Background
+      // Background
       ctx.fillStyle = "#070c14";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      ctx.strokeStyle = "rgba(16, 185, 129, 0.06)";
+      // Cyber Grid
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
       ctx.lineWidth = 1;
       for (let i = 0; i <= tileCount; i++) {
         ctx.beginPath();
@@ -350,51 +450,39 @@ export default function CyberSnake() {
         ctx.stroke();
       }
 
-      // Sub-tile visual interpolation factor (0.0 to 1.0)
+      // Sub-tile visual interpolation
       const interpAlpha = Math.min(1.0, Math.max(0.0, (time - state.lastTick) / currentInterval));
 
-      // Draw Bonus Gold Food
+      // Draw Bonus Food
       if (bonusFood) {
         const bx = bonusFood.x * cellSize + cellSize / 2;
         const by = bonusFood.y * cellSize + cellSize / 2;
-        const pulse = Math.sin(time * 0.015) * 3;
-
-        ctx.save();
-        ctx.shadowColor = "#facc15";
-        ctx.shadowBlur = 15;
         ctx.fillStyle = "#facc15";
         ctx.beginPath();
-        ctx.arc(bx, by, cellSize / 2 - 2 + pulse, 0, Math.PI * 2);
+        ctx.arc(bx, by, cellSize / 2 - 2, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
       }
 
-      // Draw Standard Energy Core (Food)
+      // Draw Food
       const fx = food.x * cellSize + cellSize / 2;
       const fy = food.y * cellSize + cellSize / 2;
-      const fPulse = Math.sin(time * 0.01) * 2;
-
-      ctx.save();
-      ctx.shadowColor = "#10b981";
-      ctx.shadowBlur = 14;
-      ctx.fillStyle = "#10b981";
+      ctx.fillStyle = skin.foodColor;
       ctx.beginPath();
-      ctx.arc(fx, fy, cellSize / 2 - 3 + fPulse, 0, Math.PI * 2);
+      ctx.arc(fx, fy, cellSize / 2 - 3, 0, Math.PI * 2);
       ctx.fill();
-
-      // Core Sparkle
       ctx.fillStyle = "#ffffff";
       ctx.beginPath();
-      ctx.arc(fx - 2, fy - 2, 2.5, 0, Math.PI * 2);
+      ctx.arc(fx - 2, fy - 2, 2, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
 
-      // Draw Smooth Snake Body Segments
+      // ── DRAW BRAND NEW MECHA VIPER SNAKE SKIN ──
       for (let i = snake.length - 1; i >= 0; i--) {
         const cur = snake[i];
         const prev = prevSnake[i] || cur;
 
-        // Handle wrap-around distance anomaly
         let renderX = cur.x;
         let renderY = cur.y;
         if (Math.abs(cur.x - prev.x) <= 1) {
@@ -410,43 +498,60 @@ export default function CyberSnake() {
 
         ctx.save();
         if (isHead) {
-          ctx.shadowColor = state.isTurboActive ? "#38bdf8" : "#10b981";
-          ctx.shadowBlur = state.isTurboActive ? 22 : 14;
-          ctx.fillStyle = state.isTurboActive ? "#38bdf8" : "#34d399";
-        } else {
-          const ratio = 1 - i / snake.length;
-          ctx.shadowColor = "#10b981";
-          ctx.shadowBlur = 6 * ratio;
-          ctx.fillStyle = state.isTurboActive ? `rgba(56, 189, 248, ${0.4 + 0.6 * ratio})` : `rgba(16, 185, 129, ${0.35 + 0.65 * ratio})`;
-        }
+          // Mecha Viper Head (Shield Hood)
+          ctx.fillStyle = skin.head;
+          ctx.strokeStyle = skin.headBorder;
+          ctx.lineWidth = 2;
 
-        ctx.beginPath();
-        const segRadius = isHead ? cellSize / 2 - 1 : (cellSize / 2 - 2) * (0.75 + 0.25 * (1 - i / snake.length));
-        ctx.arc(px, py, Math.max(3, segRadius), 0, Math.PI * 2);
-        ctx.fill();
-
-        // Eyes on Head facing direction
-        if (isHead) {
-          const eyeDist = 4;
-          const eyeOffX = state.dir.y !== 0 ? eyeDist : state.dir.x * 3;
-          const eyeOffY = state.dir.x !== 0 ? eyeDist : state.dir.y * 3;
-
-          ctx.fillStyle = "#ffffff";
           ctx.beginPath();
-          ctx.arc(px + eyeOffX, py + eyeOffY, 2.2, 0, Math.PI * 2);
-          ctx.arc(px - (state.dir.y !== 0 ? eyeDist : -state.dir.x * 3), py - (state.dir.x !== 0 ? eyeDist : -state.dir.y * 3), 2.2, 0, Math.PI * 2);
+          ctx.roundRect(px - cellSize / 2 + 1, py - cellSize / 2 + 1, cellSize - 2, cellSize - 2, 6);
+          ctx.fill();
+          ctx.stroke();
+
+          // Cyber Optic Visor
+          const eyeDist = 4;
+          const eyeOffX = state.dir.y !== 0 ? eyeDist : state.dir.x * 4;
+          const eyeOffY = state.dir.x !== 0 ? eyeDist : state.dir.y * 4;
+
+          ctx.fillStyle = skin.visor;
+          ctx.beginPath();
+          ctx.arc(px + eyeOffX, py + eyeOffY, 2.5, 0, Math.PI * 2);
+          ctx.arc(
+            px - (state.dir.y !== 0 ? eyeDist : -state.dir.x * 4),
+            py - (state.dir.x !== 0 ? eyeDist : -state.dir.y * 4),
+            2.5,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+        } else {
+          // Articulated Cyber-Armor Body Scales
+          const ratio = 1 - i / snake.length;
+          const segSize = (cellSize / 2 - 1) * (0.75 + 0.25 * ratio);
+
+          ctx.fillStyle = i % 2 === 0 ? skin.armorPrimary : skin.armorSecondary;
+          ctx.beginPath();
+          ctx.roundRect(px - segSize, py - segSize, segSize * 2, segSize * 2, 4);
+          ctx.fill();
+
+          // Glowing Central Energy Spine
+          ctx.fillStyle = skin.spine;
+          ctx.beginPath();
+          ctx.arc(px, py, Math.max(1.5, 2.5 * ratio), 0, Math.PI * 2);
           ctx.fill();
         }
         ctx.restore();
       }
 
       // Draw Particles
-      for (const p of state.particles) {
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.life;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
+      for (const p of state.particlePool) {
+        if (p.active) {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.life;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.globalAlpha = 1.0;
 
@@ -461,16 +566,16 @@ export default function CyberSnake() {
   return (
     <div className="flex flex-col items-center w-full">
       {/* HUD Header */}
-      <div className="flex items-center justify-between w-full px-2 mb-3 text-xs">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between w-full px-2 mb-2 text-xs">
+        <div className="flex items-center gap-2.5">
           <div className="flex items-center gap-1.5 font-mono">
             <span className="text-emerald-400 font-bold">SCORE:</span>
             <span className="font-extrabold text-white text-sm">{score}</span>
           </div>
           {combo > 1 && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/30 animate-pulse">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
               <Flame className="w-3 h-3 text-emerald-400" />
-              <span>{combo}X COMBO</span>
+              <span>{combo}X</span>
             </div>
           )}
           {isTurbo && (
@@ -487,13 +592,36 @@ export default function CyberSnake() {
         </div>
       </div>
 
+      {/* Skin Selector Bar */}
+      <div className="flex items-center justify-between w-full px-2 mb-2 text-[11px]">
+        <div className="flex items-center gap-1 text-[var(--muted)]">
+          <Palette className="w-3.5 h-3.5 text-sky-400" />
+          <span>SKIN:</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {(["viper", "solar", "matrix"] as SkinType[]).map((sk) => (
+            <button
+              key={sk}
+              onClick={() => changeSkin(sk)}
+              className={`px-2 py-0.5 rounded-lg border text-[10px] font-semibold transition-all cursor-pointer ${
+                activeSkin === sk
+                  ? "bg-white/20 border-white/40 text-white shadow-xs"
+                  : "bg-white/5 border-transparent text-[var(--muted)] hover:text-white"
+              }`}
+            >
+              {SKINS[sk].name}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Canvas Grid */}
       <div className="relative rounded-2xl overflow-hidden border border-emerald-500/25 shadow-2xl bg-black/80 backdrop-blur-md">
         <canvas
           ref={canvasRef}
           width={360}
-          height={360}
-          className="block aspect-square max-w-[340px] sm:max-w-[360px]"
+          height={330}
+          className="block aspect-[12/11] max-w-[340px] sm:max-w-[360px]"
         />
 
         {/* Start / Game Over Overlay */}
@@ -525,7 +653,7 @@ export default function CyberSnake() {
                 </div>
                 <h4 className="text-sm font-semibold text-white mb-1">Cyber Snake 2.0</h4>
                 <p className="text-[11px] text-[var(--muted)] max-w-[240px] mb-4">
-                  WASD / Arrows to turn. Hold <b>Spacebar</b> for <b>Turbo Nitro Boost</b>! Buffer turns without missing corners.
+                  WASD / Arrows to turn. Hold <b>Spacebar</b> for <b>Turbo Boost</b>! Switch skins anytime.
                 </p>
                 <button
                   onClick={startGame}
@@ -563,7 +691,24 @@ export default function CyberSnake() {
               stateRef.current.isTurboActive = false;
               setIsTurbo(false);
             }}
-            className="w-12 h-10 rounded-xl bg-sky-500 text-black font-bold flex items-center justify-center text-xs"
+            onTouchCancel={() => {
+              stateRef.current.isTurboActive = false;
+              setIsTurbo(false);
+            }}
+            onMouseDown={() => {
+              stateRef.current.isTurboActive = true;
+              setIsTurbo(true);
+            }}
+            onMouseUp={() => {
+              stateRef.current.isTurboActive = false;
+              setIsTurbo(false);
+            }}
+            onMouseLeave={() => {
+              stateRef.current.isTurboActive = false;
+              setIsTurbo(false);
+            }}
+            className="w-12 h-10 rounded-xl bg-sky-500 text-black font-bold flex items-center justify-center text-xs cursor-pointer select-none active:scale-95"
+            title="Hold for Turbo"
           >
             ⚡
           </button>
@@ -588,3 +733,5 @@ export default function CyberSnake() {
     </div>
   );
 }
+
+export default React.memo(CyberSnake);

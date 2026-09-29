@@ -18,7 +18,6 @@ interface Asteroid {
 interface Star {
   x: number;
   y: number;
-  z: number;
   size: number;
   speed: number;
 }
@@ -38,9 +37,12 @@ interface Particle {
   life: number;
   color: string;
   size: number;
+  active: boolean;
 }
 
-export default function VoidRunner() {
+const MAX_PARTICLES = 36;
+
+function VoidRunner() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
@@ -48,16 +50,23 @@ export default function VoidRunner() {
   const [isGameOver, setIsGameOver] = useState(false);
   const [hasShield, setHasShield] = useState(false);
   const [nearMissAlert, setNearMissAlert] = useState(false);
+  const nearMissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (nearMissTimerRef.current) clearTimeout(nearMissTimerRef.current);
+    };
+  }, []);
 
   const stateRef = useRef({
     ship: {
       x: 180,
-      y: 310,
+      y: 300,
       vx: 0,
       targetX: 180,
-      w: 22,
-      h: 28,
-      speed: 10.0,
+      w: 20,
+      h: 26,
+      speed: 9.5,
       tilt: 0,
       shieldTimer: 0,
     },
@@ -65,9 +74,18 @@ export default function VoidRunner() {
     stars: [] as Star[],
     asteroids: [] as Asteroid[],
     energyOrbs: [] as EnergyOrb[],
-    particles: [] as Particle[],
+    particlePool: Array.from({ length: MAX_PARTICLES }, () => ({
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      life: 0,
+      color: "#38bdf8",
+      size: 2,
+      active: false,
+    })) as Particle[],
     gameTime: 0,
-    baseSpeed: 6.5,
+    baseSpeed: 6.0,
     screenShake: 0,
     lastTime: 0,
   });
@@ -83,31 +101,34 @@ export default function VoidRunner() {
     stateRef.current.screenShake = Math.max(stateRef.current.screenShake, amount);
   };
 
-  const spawnParticles = (x: number, y: number, color: string, count = 10, speedMult = 1) => {
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const spd = (Math.random() * 4 + 2) * speedMult;
-      stateRef.current.particles.push({
-        x,
-        y,
-        vx: Math.cos(angle) * spd,
-        vy: Math.sin(angle) * spd,
-        life: 1.0,
-        color,
-        size: Math.random() * 3 + 2,
-      });
+  const spawnParticles = (x: number, y: number, color: string, count = 8, speedMult = 1) => {
+    const pool = stateRef.current.particlePool;
+    let spawned = 0;
+    for (let i = 0; i < pool.length && spawned < count; i++) {
+      if (!pool[i].active) {
+        const angle = Math.random() * Math.PI * 2;
+        const spd = (Math.random() * 3.5 + 1.5) * speedMult;
+        pool[i].x = x;
+        pool[i].y = y;
+        pool[i].vx = Math.cos(angle) * spd;
+        pool[i].vy = Math.sin(angle) * spd;
+        pool[i].life = 1.0;
+        pool[i].color = color;
+        pool[i].size = Math.random() * 2.5 + 1.5;
+        pool[i].active = true;
+        spawned++;
+      }
     }
   };
 
   const initStars = () => {
     const stars: Star[] = [];
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 45; i++) {
       stars.push({
         x: Math.random() * 360,
-        y: Math.random() * 360,
-        z: Math.random() * 2 + 1,
-        size: Math.random() * 1.6 + 0.6,
-        speed: Math.random() * 4 + 3,
+        y: Math.random() * 340,
+        size: Math.random() * 1.5 + 0.6,
+        speed: Math.random() * 3 + 2.5,
       });
     }
     stateRef.current.stars = stars;
@@ -117,20 +138,19 @@ export default function VoidRunner() {
     initStars();
     stateRef.current.ship = {
       x: 180,
-      y: 310,
+      y: 300,
       vx: 0,
       targetX: 180,
-      w: 22,
-      h: 28,
-      speed: 10.0,
+      w: 20,
+      h: 26,
+      speed: 9.5,
       tilt: 0,
       shieldTimer: 0,
     };
     stateRef.current.asteroids = [];
     stateRef.current.energyOrbs = [];
-    stateRef.current.particles = [];
     stateRef.current.gameTime = 0;
-    stateRef.current.baseSpeed = 6.5;
+    stateRef.current.baseSpeed = 6.0;
     stateRef.current.screenShake = 0;
     setHasShield(false);
     setNearMissAlert(false);
@@ -140,18 +160,17 @@ export default function VoidRunner() {
     arcadeAudio.playReadyChime();
   }, []);
 
-  // Pointer / Touch drag for ship
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isPlaying) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
     const scaleX = canvas.width / rect.width;
     const clientX = e.clientX - rect.left;
     stateRef.current.ship.targetX = Math.max(16, Math.min(canvas.width - 16, clientX * scaleX));
   };
 
-  // Keyboard controls
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isPlaying) {
@@ -185,7 +204,7 @@ export default function VoidRunner() {
     let animId: number;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
     initStars();
@@ -201,36 +220,31 @@ export default function VoidRunner() {
 
       if (isPlaying && !isGameOver) {
         state.gameTime += dtFactor;
-        // High speed ramp
-        state.baseSpeed = 6.5 + Math.min(7.5, state.gameTime * 0.0035);
+        state.baseSpeed = 6.0 + Math.min(7.0, state.gameTime * 0.003);
 
-        // Ship Handling with Kinetic Acceleration & Banking
+        // Ship Handling
         let targetVx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
         if (keys.left || keys.right) {
           ship.vx += (targetVx * ship.speed - ship.vx) * 0.45 * dtFactor;
           ship.x += ship.vx * dtFactor;
         } else {
-          // Follow pointer target smoothly
           const dx = ship.targetX - ship.x;
           ship.vx += (Math.sign(dx) * Math.min(ship.speed, Math.abs(dx) * 0.4) - ship.vx) * 0.5 * dtFactor;
           ship.x += ship.vx * dtFactor;
         }
 
         ship.x = Math.max(16, Math.min(canvas.width - 16, ship.x));
-        // Visual Banking / Tilt
-        ship.tilt = -ship.vx * 0.04;
+        ship.tilt = -ship.vx * 0.038;
 
-        // Engine Thruster Particle stream
-        spawnParticles(ship.x - 5, ship.y + 12, "#38bdf8", 1, 0.5);
-        spawnParticles(ship.x + 5, ship.y + 12, "#06b6d4", 1, 0.5);
+        // Thruster particles
+        spawnParticles(ship.x - 4, ship.y + 11, "#38bdf8", 1, 0.4);
+        spawnParticles(ship.x + 4, ship.y + 11, "#06b6d4", 1, 0.4);
 
-        // Shield countdown
         if (ship.shieldTimer > 0) {
           ship.shieldTimer -= dtFactor;
           if (ship.shieldTimer <= 0) setHasShield(false);
         }
 
-        // Score ticks
         if (Math.floor(state.gameTime) % 6 === 0) {
           setScore((prev) => {
             const next = prev + 1;
@@ -248,48 +262,46 @@ export default function VoidRunner() {
         }
 
         // Spawn Asteroids
-        if (Math.random() < (0.045 + state.gameTime * 0.00004) * dtFactor) {
-          const vertCount = 8;
+        if (Math.random() < (0.042 + state.gameTime * 0.000035) * dtFactor) {
           const verts = [];
-          for (let v = 0; v < vertCount; v++) {
-            verts.push(0.75 + Math.random() * 0.5);
+          for (let v = 0; v < 7; v++) {
+            verts.push(0.8 + Math.random() * 0.4);
           }
           asteroids.push({
             x: Math.random() * (canvas.width - 40) + 20,
             y: -30,
-            radius: Math.random() * 12 + 11,
-            speed: state.baseSpeed + Math.random() * 2.5,
+            radius: Math.random() * 11 + 10,
+            speed: state.baseSpeed + Math.random() * 2.2,
             angle: 0,
-            spin: (Math.random() - 0.5) * 0.06,
+            spin: (Math.random() - 0.5) * 0.05,
             vertices: verts,
             scoredNearMiss: false,
           });
         }
 
         // Spawn Energy Orbs
-        if (Math.random() < 0.015 * dtFactor) {
+        if (Math.random() < 0.012 * dtFactor) {
           energyOrbs.push({
             x: Math.random() * (canvas.width - 40) + 20,
             y: -20,
-            radius: 7,
+            radius: 6,
             speed: state.baseSpeed * 0.85,
           });
         }
 
-        // Move Energy Orbs
+        // Move Orbs
         for (let i = energyOrbs.length - 1; i >= 0; i--) {
           const orb = energyOrbs[i];
           orb.y += orb.speed * dtFactor;
 
-          // Pickup check
           const dist = Math.hypot(ship.x - orb.x, ship.y - orb.y);
-          if (dist < ship.w / 2 + orb.radius + 6) {
+          if (dist < ship.w / 2 + orb.radius + 5) {
             arcadeAudio.playPowerup();
-            ship.shieldTimer = 240; // ~4s shield
+            ship.shieldTimer = 220;
             setHasShield(true);
             setScore((s) => s + 75);
-            addScreenShake(3);
-            spawnParticles(orb.x, orb.y, "#a855f7", 18, 1.3);
+            addScreenShake(2);
+            spawnParticles(orb.x, orb.y, "#a855f7", 12, 1.2);
             energyOrbs.splice(i, 1);
             continue;
           }
@@ -297,64 +309,65 @@ export default function VoidRunner() {
           if (orb.y > canvas.height + 20) energyOrbs.splice(i, 1);
         }
 
-        // Move Asteroids & Collision Detection
+        // Move Asteroids
         for (let i = asteroids.length - 1; i >= 0; i--) {
           const a = asteroids[i];
           a.y += a.speed * dtFactor;
           a.angle += a.spin * dtFactor;
 
           const dist = Math.hypot(ship.x - a.x, ship.y - a.y);
+          const effectiveRadius = a.radius * 0.82; // Tight, accurate hitbox
 
-          // Direct Hit
-          if (dist < a.radius + 10) {
+          // Collision
+          if (dist < effectiveRadius + 8) {
             if (ship.shieldTimer > 0) {
-              // Shield absorbs crash
               arcadeAudio.playSpike();
-              addScreenShake(5);
-              spawnParticles(a.x, a.y, "#a855f7", 20, 1.4);
+              addScreenShake(4);
+              spawnParticles(a.x, a.y, "#a855f7", 14, 1.3);
               asteroids.splice(i, 1);
               continue;
             } else {
-              // Ship Destroyed!
               arcadeAudio.playCrash();
-              addScreenShake(10);
-              spawnParticles(ship.x, ship.y, "#ef4444", 30, 2.0);
+              addScreenShake(8);
+              spawnParticles(ship.x, ship.y, "#ef4444", 24, 1.8);
               setIsGameOver(true);
               setIsPlaying(false);
               return;
             }
           }
 
-          // Near Miss Reward! (Grazing within 25px without collision)
-          if (!a.scoredNearMiss && dist < a.radius + 24 && a.y > ship.y - 15 && a.y < ship.y + 15) {
+          // Single-Fire Near Miss (+40 pts)
+          if (!a.scoredNearMiss && dist < effectiveRadius + 22 && a.y > ship.y - 12 && a.y < ship.y + 12) {
             a.scoredNearMiss = true;
             arcadeAudio.playTurbo();
             setNearMissAlert(true);
-            setTimeout(() => setNearMissAlert(false), 500);
+            if (nearMissTimerRef.current) clearTimeout(nearMissTimerRef.current);
+            nearMissTimerRef.current = setTimeout(() => setNearMissAlert(false), 450);
             setScore((s) => s + 40);
-            spawnParticles(a.x, a.y, "#facc15", 8, 0.8);
+            spawnParticles(a.x, a.y, "#facc15", 6, 0.7);
           }
 
-          if (a.y > canvas.height + 40) asteroids.splice(i, 1);
+          if (a.y > canvas.height + 35) asteroids.splice(i, 1);
         }
       }
 
       // Move Warp Starfield
       for (const star of stars) {
-        star.y += (star.speed + (isPlaying ? state.baseSpeed * 1.5 : 1)) * dtFactor;
+        star.y += (star.speed + (isPlaying ? state.baseSpeed * 1.4 : 1)) * dtFactor;
         if (star.y > canvas.height) {
           star.y = 0;
           star.x = Math.random() * canvas.width;
         }
       }
 
-      // Update Particles
-      for (let i = state.particles.length - 1; i >= 0; i--) {
-        const p = state.particles[i];
-        p.x += p.vx * dtFactor;
-        p.y += p.vy * dtFactor;
-        p.life -= 0.05 * dtFactor;
-        if (p.life <= 0) state.particles.splice(i, 1);
+      // Update particle pool
+      for (const p of state.particlePool) {
+        if (p.active) {
+          p.x += p.vx * dtFactor;
+          p.y += p.vy * dtFactor;
+          p.life -= 0.05 * dtFactor;
+          if (p.life <= 0) p.active = false;
+        }
       }
 
       if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - 0.4 * dtFactor);
@@ -363,22 +376,20 @@ export default function VoidRunner() {
       ctx.save();
       if (state.screenShake > 0) {
         ctx.translate(
-          (Math.random() - 0.5) * state.screenShake * 3,
-          (Math.random() - 0.5) * state.screenShake * 3
+          (Math.random() - 0.5) * state.screenShake * 2.5,
+          (Math.random() - 0.5) * state.screenShake * 2.5
         );
       }
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Hyperspace Void Canvas
+      // Void Background
       ctx.fillStyle = "#050811";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Draw Warp Speed Stars (Streaks)
-      const warpMult = isPlaying ? Math.min(20, state.baseSpeed * 2.2) : 2;
+      // Warp Speed Stars
+      const warpMult = isPlaying ? Math.min(18, state.baseSpeed * 2.0) : 2;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
+      ctx.lineWidth = 1.2;
       for (const s of stars) {
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.4 + s.size * 0.3})`;
-        ctx.lineWidth = s.size;
         ctx.beginPath();
         ctx.moveTo(s.x, s.y);
         ctx.lineTo(s.x, s.y + warpMult);
@@ -387,9 +398,6 @@ export default function VoidRunner() {
 
       // Draw Energy Orbs
       for (const orb of energyOrbs) {
-        ctx.save();
-        ctx.shadowColor = "#a855f7";
-        ctx.shadowBlur = 15;
         ctx.fillStyle = "#c084fc";
         ctx.beginPath();
         ctx.arc(orb.x, orb.y, orb.radius, 0, Math.PI * 2);
@@ -399,20 +407,17 @@ export default function VoidRunner() {
         ctx.beginPath();
         ctx.arc(orb.x, orb.y, orb.radius * 0.4, 0, Math.PI * 2);
         ctx.fill();
-        ctx.restore();
       }
 
-      // Draw Asteroids (Jagged Polygons)
+      // Draw Asteroids
       for (const a of asteroids) {
         ctx.save();
         ctx.translate(a.x, a.y);
         ctx.rotate(a.angle);
 
-        ctx.shadowColor = "#f59e0b";
-        ctx.shadowBlur = 8;
         ctx.fillStyle = "#27272a";
         ctx.strokeStyle = "#f59e0b";
-        ctx.lineWidth = 1.6;
+        ctx.lineWidth = 1.5;
 
         ctx.beginPath();
         const numVerts = a.vertices.length;
@@ -428,38 +433,32 @@ export default function VoidRunner() {
         ctx.fill();
         ctx.stroke();
 
-        // Mineral crater
         ctx.fillStyle = "#3f3f46";
         ctx.beginPath();
-        ctx.arc(a.radius * 0.25, a.radius * 0.2, a.radius * 0.25, 0, Math.PI * 2);
+        ctx.arc(a.radius * 0.25, a.radius * 0.2, a.radius * 0.22, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
 
-      // Draw Spaceship with Banking Tilt
+      // Draw Spaceship
       ctx.save();
       ctx.translate(ship.x, ship.y);
       ctx.rotate(ship.tilt);
 
-      // Shield Aura
       if (ship.shieldTimer > 0) {
-        ctx.strokeStyle = `rgba(168, 85, 247, ${0.5 + Math.sin(time * 0.02) * 0.3})`;
+        ctx.strokeStyle = "rgba(168, 85, 247, 0.7)";
         ctx.lineWidth = 2.5;
-        ctx.shadowColor = "#a855f7";
-        ctx.shadowBlur = 18;
         ctx.beginPath();
-        ctx.arc(0, 0, ship.w + 6, 0, Math.PI * 2);
+        ctx.arc(0, 0, ship.w + 5, 0, Math.PI * 2);
         ctx.stroke();
       }
 
       // Hull
-      ctx.shadowColor = "#06b6d4";
-      ctx.shadowBlur = 14;
       ctx.fillStyle = "#06b6d4";
       ctx.beginPath();
       ctx.moveTo(0, -ship.h / 2);
       ctx.lineTo(ship.w / 2, ship.h / 2);
-      ctx.lineTo(0, ship.h / 2 - 5);
+      ctx.lineTo(0, ship.h / 2 - 4);
       ctx.lineTo(-ship.w / 2, ship.h / 2);
       ctx.closePath();
       ctx.fill();
@@ -467,17 +466,19 @@ export default function VoidRunner() {
       // Cockpit
       ctx.fillStyle = "#ffffff";
       ctx.beginPath();
-      ctx.ellipse(0, -2, 3, 7, 0, 0, Math.PI * 2);
+      ctx.ellipse(0, -2, 2.5, 6, 0, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
 
-      // Draw Particles
-      for (const p of state.particles) {
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.life;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
+      // Particles
+      for (const p of state.particlePool) {
+        if (p.active) {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.life;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.globalAlpha = 1.0;
 
@@ -499,13 +500,13 @@ export default function VoidRunner() {
             <span className="font-extrabold text-white text-sm">{score}</span>
           </div>
           {hasShield && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-bold border border-purple-500/30 animate-pulse">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-[10px] font-bold border border-purple-500/30">
               <Shield className="w-3 h-3 text-purple-400 fill-purple-400" />
-              <span>SHIELD ACTIVE</span>
+              <span>SHIELD</span>
             </div>
           )}
           {nearMissAlert && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 text-[10px] font-bold border border-yellow-500/30 animate-bounce">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 text-[10px] font-bold border border-yellow-500/30">
               <Zap className="w-3 h-3 text-yellow-400 fill-yellow-400" />
               <span>NEAR MISS +40!</span>
             </div>
@@ -523,9 +524,9 @@ export default function VoidRunner() {
         <canvas
           ref={canvasRef}
           width={360}
-          height={340}
+          height={330}
           onPointerMove={handlePointerMove}
-          className="block aspect-[18/17] max-w-[340px] sm:max-w-[360px] cursor-none touch-none"
+          className="block aspect-[12/11] max-w-[340px] sm:max-w-[360px] cursor-none touch-none"
         />
 
         {/* Start / Game Over Overlay */}
@@ -557,7 +558,7 @@ export default function VoidRunner() {
                 </div>
                 <h4 className="text-sm font-semibold text-white mb-1">Void Runner Hyperspace</h4>
                 <p className="text-[11px] text-[var(--muted)] max-w-[240px] mb-4">
-                  Move mouse or A / D to steer. Graze close to asteroids for <b>Near Miss</b> bonuses, collect purple <b>Shield Orbs</b>!
+                  Move mouse or A / D to steer. Graze close for <b>Near Miss</b> bonuses, collect purple <b>Shield Orbs</b>!
                 </p>
                 <button
                   onClick={startGame}
@@ -577,3 +578,5 @@ export default function VoidRunner() {
     </div>
   );
 }
+
+export default React.memo(VoidRunner);

@@ -34,9 +34,12 @@ interface Particle {
   life: number;
   color: string;
   size: number;
+  active: boolean;
 }
 
-export default function CyberHockey() {
+const MAX_PARTICLES = 32;
+
+function CyberHockey() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [playerScore, setPlayerScore] = useState(0);
   const [aiScore, setAiScore] = useState(0);
@@ -45,42 +48,52 @@ export default function CyberHockey() {
   const [winner, setWinner] = useState<"player" | "ai" | null>(null);
 
   const stateRef = useRef({
-    table: { w: 360, h: 320, goalY1: 105, goalY2: 215 },
+    table: { w: 360, h: 310, goalY1: 100, goalY2: 210 },
     player: {
       x: 65,
-      y: 160,
+      y: 155,
       lastX: 65,
-      lastY: 160,
+      lastY: 155,
       vx: 0,
       vy: 0,
       radius: 19,
       color: "#38bdf8",
-      speed: 8.5,
+      speed: 8.0,
     } as Striker,
     ai: {
       x: 295,
-      y: 160,
+      y: 155,
       lastX: 295,
-      lastY: 160,
+      lastY: 155,
       vx: 0,
       vy: 0,
       radius: 19,
       color: "#a855f7",
-      speed: 7.2,
+      speed: 6.8,
     } as Striker,
     puck: {
       x: 180,
-      y: 160,
-      vx: 5.5,
+      y: 155,
+      vx: 5.0,
       vy: 2.0,
       radius: 10,
-      speed: 6.0,
+      speed: 5.5,
       isSuperCharged: false,
     } as Puck,
-    keys: { up: false, down: false, left: false, right: false, boost: false },
+    keys: { up: false, down: false, left: false, right: false },
     scorePause: 0,
-    trails: [] as { x: number; y: number; alpha: number; color: string }[],
-    particles: [] as Particle[],
+    trails: Array.from({ length: 8 }, () => ({ x: 180, y: 155, active: false })),
+    trailIdx: 0,
+    particlePool: Array.from({ length: MAX_PARTICLES }, () => ({
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      life: 0,
+      color: "#38bdf8",
+      size: 2,
+      active: false,
+    })) as Particle[],
     screenShake: 0,
     lastTime: 0,
     railFlash: 0,
@@ -98,45 +111,48 @@ export default function CyberHockey() {
   };
 
   const spawnParticles = (x: number, y: number, color: string, count = 8, speedMult = 1) => {
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const spd = (Math.random() * 4 + 2) * speedMult;
-      stateRef.current.particles.push({
-        x,
-        y,
-        vx: Math.cos(angle) * spd,
-        vy: Math.sin(angle) * spd,
-        life: 1.0,
-        color,
-        size: Math.random() * 3 + 2,
-      });
+    const pool = stateRef.current.particlePool;
+    let spawned = 0;
+    for (let i = 0; i < pool.length && spawned < count; i++) {
+      if (!pool[i].active) {
+        const angle = Math.random() * Math.PI * 2;
+        const spd = (Math.random() * 3.5 + 1.5) * speedMult;
+        pool[i].x = x;
+        pool[i].y = y;
+        pool[i].vx = Math.cos(angle) * spd;
+        pool[i].vy = Math.sin(angle) * spd;
+        pool[i].life = 1.0;
+        pool[i].color = color;
+        pool[i].size = Math.random() * 2.5 + 1.5;
+        pool[i].active = true;
+        spawned++;
+      }
     }
   };
 
   const resetPuck = useCallback((towards: "player" | "ai") => {
     const { puck, player, ai } = stateRef.current;
     player.x = 65;
-    player.y = 160;
+    player.y = 155;
     player.lastX = 65;
-    player.lastY = 160;
+    player.lastY = 155;
     player.vx = 0;
     player.vy = 0;
 
     ai.x = 295;
-    ai.y = 160;
+    ai.y = 155;
     ai.lastX = 295;
-    ai.lastY = 160;
+    ai.lastY = 155;
     ai.vx = 0;
     ai.vy = 0;
 
     puck.x = 180;
-    puck.y = 160;
-    puck.vx = towards === "player" ? -5.5 : 5.5;
-    puck.vy = (Math.random() - 0.5) * 4.5;
+    puck.y = 155;
+    puck.vx = towards === "player" ? -5.0 : 5.0;
+    puck.vy = (Math.random() - 0.5) * 4.0;
     puck.isSuperCharged = false;
 
-    stateRef.current.trails = [];
-    stateRef.current.scorePause = 25; // ~0.4s fast pause
+    stateRef.current.scorePause = 25;
   }, []);
 
   const startGame = useCallback(() => {
@@ -144,17 +160,16 @@ export default function CyberHockey() {
     setAiScore(0);
     setWinner(null);
     setIsPlaying(true);
-    stateRef.current.particles = [];
     resetPuck("player");
     arcadeAudio.playWhistle();
   }, [resetPuck]);
 
-  // Pointer move tracking for player striker
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isPlaying) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
 
@@ -165,8 +180,7 @@ export default function CyberHockey() {
     player.lastX = player.x;
     player.lastY = player.y;
 
-    // Constrain player to their half of the table
-    player.x = Math.max(player.radius + 6, Math.min(table.w / 2 - player.radius - 8, targetX));
+    player.x = Math.max(player.radius + 6, Math.min(table.w / 2 - player.radius - 6, targetX));
     player.y = Math.max(player.radius + 6, Math.min(table.h - player.radius - 6, targetY));
 
     player.vx = player.x - player.lastX;
@@ -175,11 +189,10 @@ export default function CyberHockey() {
 
   const handlePowerStrike = () => {
     const { player, table } = stateRef.current;
-    // Thrust forward towards center
-    player.vx = 12.0;
-    player.x = Math.min(table.w / 2 - player.radius - 8, player.x + 25);
+    player.vx = 11.0;
+    player.x = Math.min(table.w / 2 - player.radius - 6, player.x + 22);
     arcadeAudio.playTurbo();
-    spawnParticles(player.x, player.y, "#38bdf8", 8, 1.2);
+    spawnParticles(player.x, player.y, "#38bdf8", 6, 1.2);
   };
 
   // Keyboard navigation
@@ -216,7 +229,7 @@ export default function CyberHockey() {
     let animId: number;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
     stateRef.current.lastTime = performance.now();
@@ -233,7 +246,7 @@ export default function CyberHockey() {
         if (state.scorePause > 0) {
           state.scorePause -= dtFactor;
         } else {
-          // Keyboard player movement with responsive acceleration
+          // Keyboard player movement
           player.lastX = player.x;
           player.lastY = player.y;
 
@@ -250,24 +263,22 @@ export default function CyberHockey() {
           player.x += player.vx * dtFactor;
           player.y += player.vy * dtFactor;
 
-          player.x = Math.max(player.radius + 6, Math.min(table.w / 2 - player.radius - 8, player.x));
+          player.x = Math.max(player.radius + 6, Math.min(table.w / 2 - player.radius - 6, player.x));
           player.y = Math.max(player.radius + 6, Math.min(table.h - player.radius - 6, player.y));
 
-          // ── Fast Aggressive Cyber AI Striker ──
+          // ── Cyber AI Striker ──
           ai.lastX = ai.x;
           ai.lastY = ai.y;
 
           let aiTargetY = puck.y;
           let aiTargetX = 295;
 
-          // If puck is on AI side, AI actively hunts and charges into the puck
           if (puck.x > table.w / 2 + 10) {
-            aiTargetX = Math.min(table.w - ai.radius - 10, puck.x + 8);
+            aiTargetX = Math.min(table.w - ai.radius - 8, puck.x + 6);
             aiTargetY = puck.y;
           } else {
-            // Guard goal center with slight tracking
-            aiTargetX = 300;
-            aiTargetY = 160 + (puck.y - 160) * 0.55;
+            aiTargetX = 295;
+            aiTargetY = 155 + (puck.y - 155) * 0.55;
           }
 
           const dy = aiTargetY - ai.y;
@@ -278,162 +289,152 @@ export default function CyberHockey() {
           ai.x += ai.vx * dtFactor;
           ai.y += ai.vy * dtFactor;
 
-          ai.x = Math.max(table.w / 2 + ai.radius + 8, Math.min(table.w - ai.radius - 6, ai.x));
+          ai.x = Math.max(table.w / 2 + ai.radius + 6, Math.min(table.w - ai.radius - 6, ai.x));
           ai.y = Math.max(ai.radius + 6, Math.min(table.h - ai.radius - 6, ai.y));
 
-          // ── Move Puck with Air Table Physics ──
-          puck.x += puck.vx * dtFactor;
-          puck.y += puck.vy * dtFactor;
+          // ── Continuous Collision Sub-Stepping (Prevents High-Speed Tunneling) ──
+          const subSteps = 3;
+          const subDt = dtFactor / subSteps;
 
-          // Low air table friction
-          puck.vx *= Math.pow(0.994, dtFactor);
-          puck.vy *= Math.pow(0.994, dtFactor);
+          for (let step = 0; step < subSteps; step++) {
+            puck.x += puck.vx * subDt;
+            puck.y += puck.vy * subDt;
 
-          // Trail points
-          state.trails.push({
-            x: puck.x,
-            y: puck.y,
-            alpha: 0.8,
-            color: puck.isSuperCharged ? "#f59e0b" : "#38bdf8",
-          });
-          if (state.trails.length > 12) state.trails.shift();
+            // Air friction
+            puck.vx *= Math.pow(0.995, subDt);
+            puck.vy *= Math.pow(0.995, subDt);
 
-          // Top and Bottom Rail Bounces
-          if (puck.y - puck.radius <= 0) {
-            puck.y = puck.radius;
-            puck.vy = Math.abs(puck.vy) * 0.96;
-            arcadeAudio.playBounce();
-            state.railFlash = 5;
-            spawnParticles(puck.x, 0, "#38bdf8", 6);
-          } else if (puck.y + puck.radius >= table.h) {
-            puck.y = table.h - puck.radius;
-            puck.vy = -Math.abs(puck.vy) * 0.96;
-            arcadeAudio.playBounce();
-            state.railFlash = 5;
-            spawnParticles(puck.x, table.h, "#38bdf8", 6);
-          }
-
-          // Left Wall / Goal Check (Player Goal)
-          if (puck.x - puck.radius <= 0) {
-            if (puck.y >= table.goalY1 && puck.y <= table.goalY2) {
-              // Goal for AI!
-              arcadeAudio.playWhistle();
-              addScreenShake(7);
-              spawnParticles(0, puck.y, "#ec4899", 20, 1.4);
-
-              setAiScore((prev) => {
-                const next = prev + 1;
-                if (next >= 5) {
-                  setWinner("ai");
-                  setIsPlaying(false);
-                } else {
-                  resetPuck("player");
-                }
-                return next;
-              });
-            } else {
-              puck.x = puck.radius;
-              puck.vx = Math.abs(puck.vx) * 0.94;
+            // Top / Bottom rails
+            if (puck.y - puck.radius <= 0) {
+              puck.y = puck.radius;
+              puck.vy = Math.abs(puck.vy) * 0.96;
               arcadeAudio.playBounce();
-              spawnParticles(0, puck.y, "#38bdf8", 6);
+              state.railFlash = 3;
+            } else if (puck.y + puck.radius >= table.h) {
+              puck.y = table.h - puck.radius;
+              puck.vy = -Math.abs(puck.vy) * 0.96;
+              arcadeAudio.playBounce();
+              state.railFlash = 3;
             }
-          }
 
-          // Right Wall / Goal Check (AI Goal)
-          if (puck.x + puck.radius >= table.w) {
-            if (puck.y >= table.goalY1 && puck.y <= table.goalY2) {
-              // Goal for Player!
-              arcadeAudio.playSpike();
-              addScreenShake(8);
-              spawnParticles(table.w, puck.y, "#38bdf8", 24, 1.5);
+            // Left Goal / Wall
+            if (puck.x - puck.radius <= 0) {
+              if (puck.y >= table.goalY1 && puck.y <= table.goalY2) {
+                // Goal for AI!
+                arcadeAudio.playWhistle();
+                addScreenShake(6);
+                spawnParticles(0, puck.y, "#ec4899", 16, 1.3);
 
-              setPlayerScore((prev) => {
-                const next = prev + 1;
-                setHighScore((prevHigh) => {
-                  if (next > prevHigh) {
-                    try {
-                      localStorage.setItem("ai_arcade_hockey_highscore", String(next));
-                    } catch {}
-                    return next;
+                setAiScore((prev) => {
+                  const next = prev + 1;
+                  if (next >= 5) {
+                    setWinner("ai");
+                    setIsPlaying(false);
+                  } else {
+                    resetPuck("player");
                   }
-                  return prevHigh;
+                  return next;
                 });
-                if (next >= 5) {
-                  arcadeAudio.playReadyChime();
-                  setWinner("player");
-                  setIsPlaying(false);
-                } else {
-                  resetPuck("ai");
-                }
-                return next;
-              });
-            } else {
-              puck.x = table.w - puck.radius;
-              puck.vx = -Math.abs(puck.vx) * 0.94;
-              arcadeAudio.playBounce();
-              spawnParticles(table.w, puck.y, "#ec4899", 6);
-            }
-          }
-
-          // ── Real Kinetic Momentum Striker Collision ──
-          const handleStrikerHit = (s: Striker, isPlayer: boolean) => {
-            const cdx = puck.x - s.x;
-            const cdy = puck.y - s.y;
-            const dist = Math.hypot(cdx, cdy);
-
-            if (dist < s.radius + puck.radius) {
-              const angle = Math.atan2(cdy, cdx);
-
-              // Calculate striker swing velocity
-              const swingSpeed = Math.hypot(s.vx, s.vy);
-              const isSmash = swingSpeed > 5.0 || (isPlayer && s.vx > 4);
-
-              let hitSpeed = Math.hypot(puck.vx, puck.vy) * 0.75 + swingSpeed * 1.35 + 4.5;
-              hitSpeed = Math.min(18.5, Math.max(7.0, hitSpeed));
-
-              puck.vx = Math.cos(angle) * hitSpeed;
-              puck.vy = Math.sin(angle) * hitSpeed;
-
-              // Transfer direct striker swing direction vector
-              puck.vx += s.vx * 0.45;
-              puck.vy += s.vy * 0.45;
-
-              // Ensure forward exit momentum
-              if (isPlayer && puck.vx < 3.5) puck.vx = 4.5;
-              if (!isPlayer && puck.vx > -3.5) puck.vx = -4.5;
-
-              // Push puck outside striker immediately to prevent sticky overlaps
-              puck.x = s.x + Math.cos(angle) * (s.radius + puck.radius + 2);
-              puck.y = s.y + Math.sin(angle) * (s.radius + puck.radius + 2);
-
-              if (isSmash || hitSpeed > 13.0) {
-                puck.isSuperCharged = true;
-                arcadeAudio.playSpike();
-                addScreenShake(5);
-                spawnParticles(puck.x, puck.y, "#f59e0b", 12, 1.3);
+                break;
               } else {
-                puck.isSuperCharged = false;
+                puck.x = puck.radius;
+                puck.vx = Math.abs(puck.vx) * 0.94;
                 arcadeAudio.playBounce();
-                spawnParticles(puck.x, puck.y, s.color, 6);
               }
             }
-          };
 
-          handleStrikerHit(player, true);
-          handleStrikerHit(ai, false);
+            // Right Goal / Wall
+            if (puck.x + puck.radius >= table.w) {
+              if (puck.y >= table.goalY1 && puck.y <= table.goalY2) {
+                // Goal for Player!
+                arcadeAudio.playSpike();
+                addScreenShake(7);
+                spawnParticles(table.w, puck.y, "#38bdf8", 18, 1.4);
+
+                setPlayerScore((prev) => {
+                  const next = prev + 1;
+                  setHighScore((prevHigh) => {
+                    if (next > prevHigh) {
+                      try {
+                        localStorage.setItem("ai_arcade_hockey_highscore", String(next));
+                      } catch {}
+                      return next;
+                    }
+                    return prevHigh;
+                  });
+                  if (next >= 5) {
+                    arcadeAudio.playReadyChime();
+                    setWinner("player");
+                    setIsPlaying(false);
+                  } else {
+                    resetPuck("ai");
+                  }
+                  return next;
+                });
+                break;
+              } else {
+                puck.x = table.w - puck.radius;
+                puck.vx = -Math.abs(puck.vx) * 0.94;
+                arcadeAudio.playBounce();
+              }
+            }
+
+            // Striker collision with sub-step checking
+            const checkStrikerHit = (s: Striker, isPlayer: boolean) => {
+              const cdx = puck.x - s.x;
+              const cdy = puck.y - s.y;
+              const dist = Math.hypot(cdx, cdy);
+
+              if (dist < s.radius + puck.radius) {
+                const angle = Math.atan2(cdy, cdx);
+                const swingSpeed = Math.hypot(s.vx, s.vy);
+                const isSmash = swingSpeed > 4.5 || (isPlayer && s.vx > 3.5);
+
+                let hitSpeed = Math.hypot(puck.vx, puck.vy) * 0.72 + swingSpeed * 1.35 + 4.2;
+                hitSpeed = Math.min(17.0, Math.max(6.5, hitSpeed));
+
+                puck.vx = Math.cos(angle) * hitSpeed + s.vx * 0.45;
+                puck.vy = Math.sin(angle) * hitSpeed + s.vy * 0.45;
+
+                if (isPlayer && puck.vx < 3.2) puck.vx = 4.2;
+                if (!isPlayer && puck.vx > -3.2) puck.vx = -4.2;
+
+                puck.x = s.x + Math.cos(angle) * (s.radius + puck.radius + 1.5);
+                puck.y = s.y + Math.sin(angle) * (s.radius + puck.radius + 1.5);
+
+                if (isSmash || hitSpeed > 12.0) {
+                  puck.isSuperCharged = true;
+                  arcadeAudio.playSpike();
+                  addScreenShake(4);
+                  spawnParticles(puck.x, puck.y, "#f59e0b", 8, 1.2);
+                } else {
+                  puck.isSuperCharged = false;
+                  arcadeAudio.playBounce();
+                  spawnParticles(puck.x, puck.y, s.color, 4);
+                }
+              }
+            };
+
+            checkStrikerHit(player, true);
+            checkStrikerHit(ai, false);
+          }
+
+          // Trail
+          state.trails[state.trailIdx] = { x: puck.x, y: puck.y, active: true };
+          state.trailIdx = (state.trailIdx + 1) % state.trails.length;
         }
       }
 
-      // Update Particles
-      for (let i = state.particles.length - 1; i >= 0; i--) {
-        const p = state.particles[i];
-        p.x += p.vx * dtFactor;
-        p.y += p.vy * dtFactor;
-        p.life -= 0.04 * dtFactor;
-        if (p.life <= 0) state.particles.splice(i, 1);
+      // Update particle pool
+      for (const p of state.particlePool) {
+        if (p.active) {
+          p.x += p.vx * dtFactor;
+          p.y += p.vy * dtFactor;
+          p.life -= 0.05 * dtFactor;
+          if (p.life <= 0) p.active = false;
+        }
       }
 
-      // Update Screen Shake & Rail Flash
       if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - 0.4 * dtFactor);
       if (state.railFlash > 0) state.railFlash = Math.max(0, state.railFlash - 0.3 * dtFactor);
 
@@ -441,22 +442,16 @@ export default function CyberHockey() {
       ctx.save();
       if (state.screenShake > 0) {
         ctx.translate(
-          (Math.random() - 0.5) * state.screenShake * 2.5,
-          (Math.random() - 0.5) * state.screenShake * 2.5
+          (Math.random() - 0.5) * state.screenShake * 2,
+          (Math.random() - 0.5) * state.screenShake * 2
         );
       }
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Cyber Rink Table Surface
-      const surfaceGrad = ctx.createLinearGradient(0, 0, canvas.width, 0);
-      surfaceGrad.addColorStop(0, "#080c16");
-      surfaceGrad.addColorStop(0.5, "#0b1120");
-      surfaceGrad.addColorStop(1, "#080c16");
-      ctx.fillStyle = surfaceGrad;
+      // Table Surface
+      ctx.fillStyle = "#080c16";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      // Cyber Rink Centerline & Face-Off Circle
+      // Centerline & Face-Off Circle
       ctx.strokeStyle = "rgba(56, 189, 248, 0.2)";
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -465,57 +460,50 @@ export default function CyberHockey() {
       ctx.stroke();
 
       ctx.beginPath();
-      ctx.arc(canvas.width / 2, canvas.height / 2, 45, 0, Math.PI * 2);
+      ctx.arc(canvas.width / 2, canvas.height / 2, 40, 0, Math.PI * 2);
       ctx.stroke();
 
       // Goal Creases
-      ctx.strokeStyle = "rgba(56, 189, 248, 0.35)";
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.3)";
       ctx.beginPath();
-      ctx.arc(0, canvas.height / 2, 55, -Math.PI / 2, Math.PI / 2);
+      ctx.arc(0, canvas.height / 2, 50, -Math.PI / 2, Math.PI / 2);
       ctx.stroke();
 
-      ctx.strokeStyle = "rgba(168, 85, 247, 0.35)";
+      ctx.strokeStyle = "rgba(168, 85, 247, 0.3)";
       ctx.beginPath();
-      ctx.arc(canvas.width, canvas.height / 2, 55, Math.PI / 2, (3 * Math.PI) / 2);
+      ctx.arc(canvas.width, canvas.height / 2, 50, Math.PI / 2, (3 * Math.PI) / 2);
       ctx.stroke();
 
-      // Rails with dynamic flash
-      const railGlow = state.railFlash > 0 ? "rgba(56, 189, 248, 0.9)" : "rgba(56, 189, 248, 0.35)";
-      ctx.strokeStyle = railGlow;
+      // Rails
+      ctx.strokeStyle = state.railFlash > 0 ? "#38bdf8" : "rgba(56, 189, 248, 0.4)";
       ctx.lineWidth = 3;
       ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
 
-      // Goal Opening Visuals
-      ctx.fillStyle = "rgba(236, 72, 153, 0.25)";
-      ctx.fillRect(0, table.goalY1, 6, table.goalY2 - table.goalY1);
-      ctx.fillStyle = "rgba(56, 189, 248, 0.25)";
-      ctx.fillRect(canvas.width - 6, table.goalY1, 6, table.goalY2 - table.goalY1);
+      // Goal Openings
+      ctx.fillStyle = "rgba(236, 72, 153, 0.3)";
+      ctx.fillRect(0, table.goalY1, 5, table.goalY2 - table.goalY1);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.3)";
+      ctx.fillRect(canvas.width - 5, table.goalY1, 5, table.goalY2 - table.goalY1);
 
       // Puck Trail
       for (let i = 0; i < state.trails.length; i++) {
         const pt = state.trails[i];
-        const alpha = (i / state.trails.length) * 0.55;
-        ctx.fillStyle = pt.color;
-        ctx.globalAlpha = alpha;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, puck.radius * (i / state.trails.length), 0, Math.PI * 2);
-        ctx.fill();
+        if (pt.active) {
+          ctx.fillStyle = puck.isSuperCharged ? "rgba(245, 158, 11, 0.3)" : "rgba(56, 189, 248, 0.25)";
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, puck.radius * 0.7, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
-      ctx.globalAlpha = 1.0;
 
       // Draw Strikers
-      const drawStriker = (s: Striker, isPlayer: boolean) => {
+      const drawStriker = (s: Striker) => {
         ctx.save();
-        ctx.shadowColor = s.color;
-        ctx.shadowBlur = 15;
-
-        // Outer Ring
         ctx.fillStyle = s.color;
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
         ctx.fill();
 
-        // Inner Core Knob
         ctx.fillStyle = "#09090b";
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.radius * 0.55, 0, Math.PI * 2);
@@ -525,37 +513,38 @@ export default function CyberHockey() {
         ctx.beginPath();
         ctx.arc(s.x, s.y, s.radius * 0.25, 0, Math.PI * 2);
         ctx.fill();
-
         ctx.restore();
       };
 
-      drawStriker(player, true);
-      drawStriker(ai, false);
+      drawStriker(player);
+      drawStriker(ai);
 
       // Draw Puck
       ctx.save();
       ctx.shadowColor = puck.isSuperCharged ? "#f59e0b" : "#38bdf8";
-      ctx.shadowBlur = puck.isSuperCharged ? 20 : 12;
+      ctx.shadowBlur = 10;
       ctx.fillStyle = puck.isSuperCharged ? "#f59e0b" : "#f8fafc";
       ctx.beginPath();
       ctx.arc(puck.x, puck.y, puck.radius, 0, Math.PI * 2);
       ctx.fill();
+      ctx.shadowBlur = 0;
 
-      // Puck cyber pattern
       ctx.strokeStyle = puck.isSuperCharged ? "#78350f" : "#0284c7";
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.arc(puck.x, puck.y, puck.radius * 0.5, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
 
       // Draw Particles
-      for (const p of state.particles) {
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.life;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
+      for (const p of state.particlePool) {
+        if (p.active) {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.life;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.globalAlpha = 1.0;
 
@@ -594,9 +583,9 @@ export default function CyberHockey() {
         <canvas
           ref={canvasRef}
           width={360}
-          height={320}
+          height={310}
           onPointerMove={handlePointerMove}
-          className="block aspect-[9/8] max-w-[340px] sm:max-w-[360px] cursor-none touch-none"
+          className="block aspect-[36/31] max-w-[340px] sm:max-w-[360px] cursor-none touch-none"
         />
 
         {/* Start / Game Over Overlay */}
@@ -632,7 +621,7 @@ export default function CyberHockey() {
                 </div>
                 <h4 className="text-sm font-semibold text-white mb-1">Neon Air Hockey 1v1</h4>
                 <p className="text-[11px] text-[var(--muted)] max-w-[240px] mb-4">
-                  Move mouse or WASD to control striker. Swing forward or press Space to <b>SMASH</b> the puck at high velocity!
+                  Move mouse or WASD to control striker. Swing into puck or press Space to <b>SMASH</b>!
                 </p>
                 <button
                   onClick={startGame}
@@ -664,3 +653,5 @@ export default function CyberHockey() {
     </div>
   );
 }
+
+export default React.memo(CyberHockey);

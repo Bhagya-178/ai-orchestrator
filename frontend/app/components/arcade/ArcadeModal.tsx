@@ -80,7 +80,7 @@ interface ArcadeModalProps {
   onViewAnswer: () => void;
 }
 
-export default function ArcadeModal({
+function ArcadeModal({
   isOpen,
   onClose,
   isGenerating,
@@ -393,3 +393,12 @@ export default function ArcadeModal({
     </div>
   );
 }
+
+function arePropsEqual(prevProps: ArcadeModalProps, nextProps: ArcadeModalProps) {
+  return (
+    prevProps.isOpen === nextProps.isOpen &&
+    prevProps.isGenerating === nextProps.isGenerating
+  );
+}
+
+export default React.memo(ArcadeModal, arePropsEqual);

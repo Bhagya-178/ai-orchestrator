@@ -125,6 +125,12 @@ export default function ChatView() {
     }
   }, [messages, isGenerating, scrollToBottom]);
 
+  const handleCloseArcade = useCallback(() => setIsArcadeOpen(false), []);
+  const handleViewAnswer = useCallback(() => {
+    setIsArcadeOpen(false);
+    scrollToBottom("smooth");
+  }, [scrollToBottom]);
+
   // ── Empty State ──
   if (messages.length === 0) {
     return (
@@ -176,9 +182,9 @@ export default function ChatView() {
         {/* Neural Arcade mini-games modal */}
         <ArcadeModal
           isOpen={isArcadeOpen}
-          onClose={() => setIsArcadeOpen(false)}
+          onClose={handleCloseArcade}
           isGenerating={isGenerating}
-          onViewAnswer={() => scrollToBottom("smooth")}
+          onViewAnswer={handleViewAnswer}
         />
       </div>
     );
@@ -230,9 +236,9 @@ export default function ChatView() {
       {/* Neural Arcade mini-games modal */}
       <ArcadeModal
         isOpen={isArcadeOpen}
-        onClose={() => setIsArcadeOpen(false)}
+        onClose={handleCloseArcade}
         isGenerating={isGenerating}
-        onViewAnswer={() => scrollToBottom("smooth")}
+        onViewAnswer={handleViewAnswer}
       />
     </div>
   );

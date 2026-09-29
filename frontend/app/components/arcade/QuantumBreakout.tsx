@@ -23,9 +23,12 @@ interface Particle {
   life: number;
   color: string;
   size: number;
+  active: boolean;
 }
 
-export default function QuantumBreakout() {
+const MAX_PARTICLES = 36;
+
+function QuantumBreakout() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [score, setScore] = useState(0);
   const [highScore, setHighScore] = useState(0);
@@ -38,25 +41,35 @@ export default function QuantumBreakout() {
   const stateRef = useRef({
     paddle: {
       x: 135,
-      y: 320,
+      y: 315,
       w: 80,
       h: 11,
       lastX: 135,
       vx: 0,
-      speed: 9.5,
+      speed: 9.0,
     },
     ball: {
       x: 175,
-      y: 300,
-      vx: 4.5,
-      vy: -6.5,
+      y: 295,
+      vx: 4.2,
+      vy: -6.0,
       radius: 6,
-      speed: 8.0,
+      speed: 7.5,
       isFireball: false,
     },
     bricks: [] as Brick[],
-    particles: [] as Particle[],
-    trails: [] as { x: number; y: number; alpha: number; color: string }[],
+    trails: Array.from({ length: 8 }, () => ({ x: 175, y: 295, active: false })),
+    trailIdx: 0,
+    particlePool: Array.from({ length: MAX_PARTICLES }, () => ({
+      x: 0,
+      y: 0,
+      vx: 0,
+      vy: 0,
+      life: 0,
+      color: "#ec4899",
+      size: 2,
+      active: false,
+    })) as Particle[],
     keys: { left: false, right: false },
     screenShake: 0,
     brickCombo: 0,
@@ -75,18 +88,22 @@ export default function QuantumBreakout() {
   };
 
   const spawnParticles = (x: number, y: number, color: string, count = 10, speedMult = 1) => {
-    for (let i = 0; i < count; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const spd = (Math.random() * 4 + 2) * speedMult;
-      stateRef.current.particles.push({
-        x,
-        y,
-        vx: Math.cos(angle) * spd,
-        vy: Math.sin(angle) * spd,
-        life: 1.0,
-        color,
-        size: Math.random() * 3 + 2,
-      });
+    const pool = stateRef.current.particlePool;
+    let spawned = 0;
+    for (let i = 0; i < pool.length && spawned < count; i++) {
+      if (!pool[i].active) {
+        const angle = Math.random() * Math.PI * 2;
+        const spd = (Math.random() * 3.5 + 1.5) * speedMult;
+        pool[i].x = x;
+        pool[i].y = y;
+        pool[i].vx = Math.cos(angle) * spd;
+        pool[i].vy = Math.sin(angle) * spd;
+        pool[i].life = 1.0;
+        pool[i].color = color;
+        pool[i].size = Math.random() * 2.5 + 1.5;
+        pool[i].active = true;
+        spawned++;
+      }
     }
   };
 
@@ -101,7 +118,7 @@ export default function QuantumBreakout() {
     const bricks: Brick[] = [];
 
     const rowColors = [
-      { color: "#ec4899", points: 30, hits: 2 }, // Pink (2-hit fortified)
+      { color: "#ec4899", points: 30, hits: 2 }, // Pink (2-hit)
       { color: "#a855f7", points: 20, hits: 1 }, // Purple
       { color: "#3b82f6", points: 15, hits: 1 }, // Blue
       { color: "#06b6d4", points: 10, hits: 1 }, // Cyan
@@ -131,15 +148,14 @@ export default function QuantumBreakout() {
     stateRef.current.ball = {
       x: paddle.x + paddle.w / 2,
       y: paddle.y - 12,
-      vx: dir * 4.5,
-      vy: -6.5,
+      vx: dir * 4.2,
+      vy: -6.0,
       radius: 6,
-      speed: 8.0,
+      speed: 7.5,
       isFireball: false,
     };
     stateRef.current.brickCombo = 0;
     setCombo(0);
-    stateRef.current.trails = [];
   }, []);
 
   const startGame = useCallback(() => {
@@ -147,7 +163,6 @@ export default function QuantumBreakout() {
     stateRef.current.paddle.x = 140;
     stateRef.current.paddle.vx = 0;
     resetBall();
-    stateRef.current.particles = [];
     stateRef.current.screenShake = 0;
     setScore(0);
     setLives(3);
@@ -157,12 +172,12 @@ export default function QuantumBreakout() {
     arcadeAudio.playReadyChime();
   }, [initBricks, resetBall]);
 
-  // Pointer / Mouse move tracking
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!isPlaying) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
+    if (!rect.width) return;
     const scaleX = canvas.width / rect.width;
     const clientX = e.clientX - rect.left;
     const canvasX = clientX * scaleX;
@@ -207,7 +222,7 @@ export default function QuantumBreakout() {
     let animId: number;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: false });
     if (!ctx) return;
 
     stateRef.current.lastTime = performance.now();
@@ -221,172 +236,168 @@ export default function QuantumBreakout() {
       const { paddle, ball, bricks, keys } = state;
 
       if (isPlaying && !isGameOver && !isWon) {
-        // Paddle keyboard physics
+        // Paddle movement
         paddle.lastX = paddle.x;
         const targetVx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
         paddle.vx += (targetVx * paddle.speed - paddle.vx) * 0.45 * dtFactor;
         paddle.x += paddle.vx * dtFactor;
         paddle.x = Math.max(0, Math.min(canvas.width - paddle.w, paddle.x));
 
-        // Ball physics
-        ball.x += ball.vx * dtFactor;
-        ball.y += ball.vy * dtFactor;
+        // Sub-stepped ball physics (2 sub-steps to prevent brick tunneling)
+        const subSteps = 2;
+        const subDt = dtFactor / subSteps;
 
-        // Trail points
-        state.trails.push({
-          x: ball.x,
-          y: ball.y,
-          alpha: 0.8,
-          color: ball.isFireball ? "#f59e0b" : "#ec4899",
-        });
-        if (state.trails.length > 10) state.trails.shift();
+        for (let step = 0; step < subSteps; step++) {
+          ball.x += ball.vx * subDt;
+          ball.y += ball.vy * subDt;
 
-        // Left / Right wall rebounds
-        if (ball.x - ball.radius <= 0) {
-          ball.x = ball.radius;
-          ball.vx = Math.abs(ball.vx);
-          arcadeAudio.playBounce();
-          spawnParticles(0, ball.y, "#38bdf8", 5);
-        } else if (ball.x + ball.radius >= canvas.width) {
-          ball.x = canvas.width - ball.radius;
-          ball.vx = -Math.abs(ball.vx);
-          arcadeAudio.playBounce();
-          spawnParticles(canvas.width, ball.y, "#38bdf8", 5);
-        }
+          // ── ANTI-TRAP SAFEGUARD ──
+          // If vertical velocity is too low, inject downward push so it never drifts endlessly horizontally
+          if (Math.abs(ball.vy) < 1.4) {
+            ball.vy = ball.vy >= 0 ? 2.5 : -2.5;
+          }
 
-        // Top wall rebound
-        if (ball.y - ball.radius <= 0) {
-          ball.y = ball.radius;
-          ball.vy = Math.abs(ball.vy);
-          arcadeAudio.playBounce();
-          spawnParticles(ball.x, 0, "#ec4899", 5);
-        }
+          // Left / Right walls
+          if (ball.x - ball.radius <= 0) {
+            ball.x = ball.radius;
+            ball.vx = Math.abs(ball.vx);
+            arcadeAudio.playBounce();
+          } else if (ball.x + ball.radius >= canvas.width) {
+            ball.x = canvas.width - ball.radius;
+            ball.vx = -Math.abs(ball.vx);
+            arcadeAudio.playBounce();
+          }
 
-        // ── Dynamic Paddle Rebound & Spin Slicing ──
-        if (
-          ball.y + ball.radius >= paddle.y &&
-          ball.y - ball.radius <= paddle.y + paddle.h &&
-          ball.x >= paddle.x - ball.radius &&
-          ball.x <= paddle.x + paddle.w + ball.radius &&
-          ball.vy > 0
-        ) {
-          arcadeAudio.playBounce();
-          ball.y = paddle.y - ball.radius;
+          // Top ceiling
+          if (ball.y - ball.radius <= 0) {
+            ball.y = ball.radius;
+            ball.vy = Math.abs(ball.vy);
+            arcadeAudio.playBounce();
+          }
 
-          // Normalized hit offset (-1 to 1)
-          const hitOffset = (ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2);
-          const bounceAngle = hitOffset * (Math.PI * 0.38); // up to ~68 degrees angle
-
-          // Dynamic speed scaling with combo
-          const currentSpeed = Math.min(13.5, ball.speed + 0.15);
-          ball.speed = currentSpeed;
-
-          ball.vx = Math.sin(bounceAngle) * currentSpeed;
-          ball.vy = -Math.cos(bounceAngle) * currentSpeed;
-
-          // Impart paddle momentum
-          ball.vx += paddle.vx * 0.45;
-
-          // Reset combo upon paddle catch
-          state.brickCombo = 0;
-          setCombo(0);
-          ball.isFireball = false;
-
-          spawnParticles(ball.x, paddle.y, "#38bdf8", 7);
-        }
-
-        // ── Brick Collisions ──
-        for (let i = bricks.length - 1; i >= 0; i--) {
-          const b = bricks[i];
+          // Paddle Collision
           if (
-            ball.x + ball.radius >= b.x &&
-            ball.x - ball.radius <= b.x + b.w &&
-            ball.y + ball.radius >= b.y &&
-            ball.y - ball.radius <= b.y + b.h
+            ball.y + ball.radius >= paddle.y &&
+            ball.y - ball.radius <= paddle.y + paddle.h &&
+            ball.x >= paddle.x - ball.radius &&
+            ball.x <= paddle.x + paddle.w + ball.radius &&
+            ball.vy > 0
           ) {
-            // Determine collision edge
-            const overlapLeft = ball.x + ball.radius - b.x;
-            const overlapRight = b.x + b.w - (ball.x - ball.radius);
-            const overlapTop = ball.y + ball.radius - b.y;
-            const overlapBottom = b.y + b.h - (ball.y - ball.radius);
+            arcadeAudio.playBounce();
+            ball.y = paddle.y - ball.radius;
 
-            const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
-            if (minOverlap === overlapLeft || minOverlap === overlapRight) {
-              ball.vx = -ball.vx;
-            } else {
-              ball.vy = -ball.vy;
-            }
+            const hitOffset = (ball.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2);
+            const bounceAngle = hitOffset * (Math.PI * 0.38);
 
-            b.hits -= ball.isFireball ? 2 : 1;
+            const currentSpeed = Math.min(13.0, ball.speed + 0.12);
+            ball.speed = currentSpeed;
 
-            state.brickCombo += 1;
-            setCombo(state.brickCombo);
-            if (state.brickCombo >= 3) {
-              ball.isFireball = true;
-              arcadeAudio.playTurbo();
-            }
+            ball.vx = Math.sin(bounceAngle) * currentSpeed + paddle.vx * 0.4;
+            ball.vy = -Math.cos(bounceAngle) * currentSpeed;
 
-            const pointsEarned = b.points * (ball.isFireball ? 2 : 1);
-            setScore((prev) => {
-              const next = prev + pointsEarned;
-              setHighScore((prevHigh) => {
-                if (next > prevHigh) {
-                  try {
-                    localStorage.setItem("ai_arcade_breakout_highscore", String(next));
-                  } catch {}
-                  return next;
-                }
-                return prevHigh;
+            state.brickCombo = 0;
+            setCombo(0);
+            ball.isFireball = false;
+            break;
+          }
+
+          // Brick Collisions
+          for (let i = bricks.length - 1; i >= 0; i--) {
+            const b = bricks[i];
+            if (
+              ball.x + ball.radius >= b.x &&
+              ball.x - ball.radius <= b.x + b.w &&
+              ball.y + ball.radius >= b.y &&
+              ball.y - ball.radius <= b.y + b.h
+            ) {
+              const overlapLeft = ball.x + ball.radius - b.x;
+              const overlapRight = b.x + b.w - (ball.x - ball.radius);
+              const overlapTop = ball.y + ball.radius - b.y;
+              const overlapBottom = b.y + b.h - (ball.y - ball.radius);
+
+              const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+              if (minOverlap === overlapLeft || minOverlap === overlapRight) {
+                ball.vx = -ball.vx;
+              } else {
+                ball.vy = -ball.vy;
+              }
+
+              b.hits -= ball.isFireball ? 2 : 1;
+
+              state.brickCombo += 1;
+              setCombo(state.brickCombo);
+              if (state.brickCombo >= 3) {
+                ball.isFireball = true;
+                arcadeAudio.playTurbo();
+              }
+
+              const pointsEarned = b.points * (ball.isFireball ? 2 : 1);
+              setScore((prev) => {
+                const next = prev + pointsEarned;
+                setHighScore((prevHigh) => {
+                  if (next > prevHigh) {
+                    try {
+                      localStorage.setItem("ai_arcade_breakout_highscore", String(next));
+                    } catch {}
+                    return next;
+                  }
+                  return prevHigh;
+                });
+                return next;
               });
+
+              if (b.hits <= 0) {
+                arcadeAudio.playBreak();
+                addScreenShake(3);
+                spawnParticles(b.x + b.w / 2, b.y + b.h / 2, b.color, 12, 1.1);
+                bricks.splice(i, 1);
+              } else {
+                arcadeAudio.playBounce();
+                spawnParticles(ball.x, ball.y, b.color, 5);
+              }
+
+              if (bricks.length === 0) {
+                arcadeAudio.playReadyChime();
+                setIsWon(true);
+                setIsPlaying(false);
+                return;
+              }
+
+              break;
+            }
+          }
+
+          // Ball Out (Floor)
+          if (ball.y - ball.radius > canvas.height) {
+            arcadeAudio.playCrash();
+            addScreenShake(5);
+            setLives((prev) => {
+              const next = prev - 1;
+              if (next <= 0) {
+                setIsGameOver(true);
+                setIsPlaying(false);
+              } else {
+                resetBall();
+              }
               return next;
             });
-
-            if (b.hits <= 0) {
-              arcadeAudio.playBreak();
-              addScreenShake(4);
-              spawnParticles(b.x + b.w / 2, b.y + b.h / 2, b.color, 16, 1.2);
-              bricks.splice(i, 1);
-            } else {
-              arcadeAudio.playBounce();
-              spawnParticles(ball.x, ball.y, b.color, 6);
-            }
-
-            // Check Win Condition
-            if (bricks.length === 0) {
-              arcadeAudio.playReadyChime();
-              setIsWon(true);
-              setIsPlaying(false);
-              return;
-            }
-
-            break; // Handle 1 brick collision per frame
+            break;
           }
         }
 
-        // ── Ball Lost (Bottom Floor) ──
-        if (ball.y - ball.radius > canvas.height) {
-          arcadeAudio.playCrash();
-          addScreenShake(6);
-          setLives((prev) => {
-            const next = prev - 1;
-            if (next <= 0) {
-              setIsGameOver(true);
-              setIsPlaying(false);
-            } else {
-              resetBall();
-            }
-            return next;
-          });
-        }
+        // Trail
+        state.trails[state.trailIdx] = { x: ball.x, y: ball.y, active: true };
+        state.trailIdx = (state.trailIdx + 1) % state.trails.length;
       }
 
-      // Update Particles
-      for (let i = state.particles.length - 1; i >= 0; i--) {
-        const p = state.particles[i];
-        p.x += p.vx * dtFactor;
-        p.y += p.vy * dtFactor;
-        p.life -= 0.04 * dtFactor;
-        if (p.life <= 0) state.particles.splice(i, 1);
+      // Update particle pool
+      for (const p of state.particlePool) {
+        if (p.active) {
+          p.x += p.vx * dtFactor;
+          p.y += p.vy * dtFactor;
+          p.life -= 0.05 * dtFactor;
+          if (p.life <= 0) p.active = false;
+        }
       }
 
       if (state.screenShake > 0) state.screenShake = Math.max(0, state.screenShake - 0.4 * dtFactor);
@@ -395,34 +406,25 @@ export default function QuantumBreakout() {
       ctx.save();
       if (state.screenShake > 0) {
         ctx.translate(
-          (Math.random() - 0.5) * state.screenShake * 2.5,
-          (Math.random() - 0.5) * state.screenShake * 2.5
+          (Math.random() - 0.5) * state.screenShake * 2,
+          (Math.random() - 0.5) * state.screenShake * 2
         );
       }
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Neon Gradient Backdrop
-      const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      bgGrad.addColorStop(0, "#080c16");
-      bgGrad.addColorStop(1, "#0f172a");
-      ctx.fillStyle = bgGrad;
+      // Background
+      ctx.fillStyle = "#080c16";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       // Draw Bricks
       for (const b of bricks) {
-        ctx.save();
-        ctx.shadowColor = b.color;
-        ctx.shadowBlur = b.hits > 1 ? 12 : 8;
         ctx.fillStyle = b.color;
         ctx.beginPath();
-        ctx.roundRect(b.x, b.y, b.w, b.h, 4);
+        ctx.roundRect(b.x, b.y, b.w, b.h, 3);
         ctx.fill();
 
-        // 2-Hit Crack line
         if (b.hits === 1 && b.maxHits > 1) {
-          ctx.strokeStyle = "rgba(0, 0, 0, 0.55)";
-          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+          ctx.lineWidth = 1.4;
           ctx.beginPath();
           ctx.moveTo(b.x + 8, b.y + 3);
           ctx.lineTo(b.x + b.w / 2, b.y + b.h - 3);
@@ -430,55 +432,49 @@ export default function QuantumBreakout() {
           ctx.stroke();
         }
 
-        // Brick Top Bevel
         ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
         ctx.fillRect(b.x + 2, b.y + 1, b.w - 4, 2);
-        ctx.restore();
       }
 
-      // Draw Ball Trails
+      // Draw Trails
       for (let i = 0; i < state.trails.length; i++) {
         const pt = state.trails[i];
-        const alpha = (i / state.trails.length) * 0.55;
-        ctx.fillStyle = pt.color;
-        ctx.globalAlpha = alpha;
-        ctx.beginPath();
-        ctx.arc(pt.x, pt.y, ball.radius * (i / state.trails.length), 0, Math.PI * 2);
-        ctx.fill();
+        if (pt.active) {
+          ctx.fillStyle = ball.isFireball ? "rgba(245, 158, 11, 0.3)" : "rgba(236, 72, 153, 0.25)";
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, ball.radius * 0.7, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
-      ctx.globalAlpha = 1.0;
 
       // Draw Ball
       ctx.save();
       ctx.shadowColor = ball.isFireball ? "#f59e0b" : "#ec4899";
-      ctx.shadowBlur = ball.isFireball ? 20 : 12;
+      ctx.shadowBlur = 8;
       ctx.fillStyle = ball.isFireball ? "#f59e0b" : "#f8fafc";
       ctx.beginPath();
       ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
       ctx.fill();
+      ctx.shadowBlur = 0;
       ctx.restore();
 
       // Draw Paddle
-      ctx.save();
-      ctx.shadowColor = "#38bdf8";
-      ctx.shadowBlur = 15;
       ctx.fillStyle = "#38bdf8";
       ctx.beginPath();
-      ctx.roundRect(paddle.x, paddle.y, paddle.w, paddle.h, 6);
+      ctx.roundRect(paddle.x, paddle.y, paddle.w, paddle.h, 5);
       ctx.fill();
-
-      // Paddle neon center line
       ctx.fillStyle = "#ffffff";
-      ctx.fillRect(paddle.x + paddle.w / 2 - 8, paddle.y + 3, 16, 2);
-      ctx.restore();
+      ctx.fillRect(paddle.x + paddle.w / 2 - 8, paddle.y + 2, 16, 2);
 
       // Draw Particles
-      for (const p of state.particles) {
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.life;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fill();
+      for (const p of state.particlePool) {
+        if (p.active) {
+          ctx.fillStyle = p.color;
+          ctx.globalAlpha = p.life;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.globalAlpha = 1.0;
 
@@ -510,9 +506,9 @@ export default function QuantumBreakout() {
             ))}
           </div>
           {combo >= 3 && (
-            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30 animate-pulse">
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold border border-amber-500/30">
               <Zap className="w-3 h-3 text-amber-400 fill-amber-400" />
-              <span>HYPER BALL</span>
+              <span>HYPER</span>
             </div>
           )}
         </div>
@@ -528,9 +524,9 @@ export default function QuantumBreakout() {
         <canvas
           ref={canvasRef}
           width={360}
-          height={340}
+          height={335}
           onPointerMove={handlePointerMove}
-          className="block aspect-[18/17] max-w-[340px] sm:max-w-[360px] cursor-none touch-none"
+          className="block aspect-[72/67] max-w-[340px] sm:max-w-[360px] cursor-none touch-none"
         />
 
         {/* Start / Game Over Overlay */}
@@ -581,7 +577,7 @@ export default function QuantumBreakout() {
                 </div>
                 <h4 className="text-sm font-semibold text-white mb-1">Quantum Breakout</h4>
                 <p className="text-[11px] text-[var(--muted)] max-w-[240px] mb-4">
-                  Move mouse or A/D to steer paddle. Slice into the ball while moving to launch fast angle cuts!
+                  Move mouse or A/D to steer paddle. Slice into ball while moving to launch fast angle cuts!
                 </p>
                 <button
                   onClick={startGame}
@@ -596,8 +592,10 @@ export default function QuantumBreakout() {
       </div>
 
       <p className="text-[10px] text-[var(--muted)] mt-2 hidden sm:block">
-        Controls: <b>Mouse</b> or <b>A / D / Arrows</b> to Steer Paddle · Hit on edges for sharp slice
+        Controls: <b>Mouse</b> or <b>A / D / Arrows</b> to Steer · Hit edges for sharp slices
       </p>
     </div>
   );
 }
+
+export default React.memo(QuantumBreakout);
